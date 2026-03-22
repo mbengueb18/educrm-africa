@@ -11,6 +11,7 @@ import {
   Loader2, X, ChevronDown, BarChart3, ArrowRight, Zap, Clock,
   CheckCircle, XCircle, Filter,
 } from "lucide-react";
+import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
 
 interface Campaign {
   id: string;
@@ -164,12 +165,12 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                       </>
                     )}
                     {campaign.status === "SENT" && (
-                      <button
-                        onClick={function() { setSelectedCampaign(campaign); }}
+                      <Link
+                        href={"/campaigns/" + campaign.id}
                         className="btn-secondary py-1.5 px-3 text-xs"
                       >
-                        <BarChart3 size={13} /> Rapport
-                      </button>
+                        <BarChart3 size={13} /> Voir details
+                      </Link>
                     )}
                   </div>
                 </div>
@@ -328,6 +329,7 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
   var [body, setBody] = useState("");
   var [rules, setRules] = useState<SegmentRule[]>([]);
   var [previewData, setPreviewData] = useState<{ count: number; leads: any[] } | null>(null);
+  var [emailBlocks, setEmailBlocks] = useState<EmailBlock[]>([]);
   var [isPending, startTransition] = useTransition();
 
   var addRule = function() {
@@ -486,14 +488,13 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
                 <input value={subject} onChange={function(e) { setSubject(e.target.value); }} className="input" placeholder="Ne manquez pas la rentree 2026" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                <textarea value={body} onChange={function(e) { setBody(e.target.value); }} className="input min-h-[250px] resize-y" rows={12} placeholder="Bonjour {{prenom}},..." />
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <span className="text-[10px] text-gray-400">Variables :</span>
-                {["{{prenom}}", "{{nom}}", "{{email}}"].map(function(v) {
-                  return <button key={v} onClick={function() { setBody(body + " " + v); }} className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100">{v}</button>;
-                })}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Contenu de l'email</label>
+                <EmailEditor
+                  onChange={function(blocks, html) {
+                    setEmailBlocks(blocks);
+                    setBody(JSON.stringify(blocks));
+                  }}
+                />
               </div>
             </div>
           )}
