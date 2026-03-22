@@ -1,0 +1,750 @@
+// ============================================
+// EduCRM Africa — Prisma Schema
+// Stack: Next.js 15 + Prisma 6 + PostgreSQL
+// Architecture: Multi-tenant (shared DB, shared schema)
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── MULTI-TENANT ROOT ───
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  plan      Plan     @default(STARTER)
+  settings  Json     @default("{}")  // Custom config: timezone, currency, etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campuses       Campus[]
+  users          User[]
+  leads          Lead[]
+  students       Student[]
+  pipelineStages PipelineStage[]
+  academicYears  AcademicYear[]
+  programs       Program[]
+  messageTemplates MessageTemplate[]
+  campaigns      Campaign[]
+  payments       Payment[]
+  activities     Activity[]
+  messages       Message[]
+  automations    Automation[]
+  emailCampaigns EmailCampaign[]
+
+  @@map("organizations")
+}
+
+enum Plan {
+  STARTER    // 1 campus, 500 contacts
+  GROWTH     // 3 campus, 2000 contacts
+  ENTERPRISE // Unlimited
+}
+
+// ─── CAMPUS & PROGRAMS ───
+
+model Campus {
+  id             String       @id @default(cuid())
+  name           String
+  city           String
+  country        String       @default("SN") // ISO 3166-1 alpha-2
+  address        String?
+  phone          String?
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  programs     Program[]
+  users        User[]
+  leads        Lead[]
+  students     Student[]
+
+  @@index([organizationId])
+  @@map("campuses")
+}
+
+model Program {
+  id             String       @id @default(cuid())
+  name           String       // e.g. "BTS Comptabilité", "Licence Marketing"
+  code           String?      // e.g. "BTS-COMPTA"
+  level          ProgramLevel
+  durationMonths Int          // 12, 24, 36...
+  tuitionAmount  Float        // Annual tuition in FCFA
+  currency       String       @default("XOF")
+  isActive       Boolean      @default(true)
+  campusId       String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+  students     Student[]
+  subjects     Subject[]
+
+  @@index([organizationId])
+  @@index([campusId])
+  @@map("programs")
+}
+
+enum ProgramLevel {
+  BTS
+  LICENCE
+  MASTER
+  DOCTORAT
+  CERTIFICATE
+  PROFESSIONAL
+}
+
+model AcademicYear {
+  id             String   @id @default(cuid())
+  label          String   // e.g. "2025-2026"
+  startDate      DateTime
+  endDate        DateTime
+  isCurrent      Boolean  @default(false)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[]
+  payments     Payment[]
+
+  @@unique([organizationId, label])
+  @@index([organizationId])
+  @@map("academic_years")
+}
+
+// ─── USERS & AUTH ───
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  phone          String?
+  passwordHash   String
+  role           UserRole
+  avatar         String?
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+  organizationId String
+  campusId       String?  // null = access to all campuses
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campus       Campus?      @relation(fields: [campusId], references: [id])
+  assignedLeads Lead[]      @relation("AssignedLeads")
+  activities    Activity[]
+  sentMessages  Message[]   @relation("SentMessages")
+  emailCampaigns EmailCampaign[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN   // Platform-level admin
+  ADMIN         // School admin (full access)
+  COMMERCIAL    // Sales team
+  TEACHER       // Faculty
+  ACCOUNTANT    // Finance
+  VIEWER        // Read-only
+}
+
+// ─── RECRUITMENT PIPELINE ───
+
+model PipelineStage {
+  id             String   @id @default(cuid())
+  name           String   // e.g. "Nouveau lead", "Contacté", "Dossier reçu"
+  order          Int
+  color          String   @default("#3B82F6") // Hex color for Kanban
+  isDefault      Boolean  @default(false)     // Stage for new leads
+  isWon          Boolean  @default(false)     // "Inscrit" stage
+  isLost         Boolean  @default(false)     // "Perdu" stage
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([organizationId, order])
+  @@index([organizationId])
+  @@map("pipeline_stages")
+}
+
+model Lead {
+  id             String      @id @default(cuid())
+  firstName      String
+  lastName       String
+  phone          String
+  whatsapp       String?     // May differ from phone
+  email          String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  city           String?     // City of origin
+  country        String      @default("SN")
+  
+  // Pipeline
+  stageId        String
+  score          Int         @default(0)  // 0-100 lead score
+  source         LeadSource
+  sourceDetail   String?     // e.g. "Salon Dakar 2026", "Facebook Ad #123"
+  
+  // Assignment
+  assignedToId   String?
+  programId      String?     // Desired program
+  campusId       String?
+  campaignId     String?
+  
+  // Status
+  isConverted    Boolean     @default(false) // Became a student
+  convertedAt    DateTime?
+  lostReason     String?
+
+  customFields   Json?       // Stores unmapped/custom form fields
+  
+  organizationId String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  stage        PipelineStage @relation(fields: [stageId], references: [id])
+  assignedTo   User?         @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  program      Program?      @relation(fields: [programId], references: [id])
+  campus       Campus?       @relation(fields: [campusId], references: [id])
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  student      Student?      // 1:1 if converted
+  activities   Activity[]
+  messages     Message[]
+  documents    Document[]
+
+  @@index([organizationId])
+  @@index([stageId])
+  @@index([assignedToId])
+  @@index([organizationId, createdAt])
+  @@map("leads")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum LeadSource {
+  WEBSITE
+  FACEBOOK
+  INSTAGRAM
+  WHATSAPP
+  PHONE_CALL
+  WALK_IN
+  REFERRAL
+  SALON      // Education fair
+  RADIO
+  TV
+  PARTNER    // e.g. Orientation Facile
+  IMPORT
+  OTHER
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  name           String
+  type           CampaignType
+  startDate      DateTime?
+  endDate        DateTime?
+  budget         Float?
+  currency       String   @default("XOF")
+  isActive       Boolean  @default(true)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@index([organizationId])
+  @@map("campaigns")
+}
+
+enum CampaignType {
+  SOCIAL_MEDIA
+  SALON
+  RADIO
+  TV
+  REFERRAL
+  EMAIL
+  SMS
+  WHATSAPP
+  OUTDOOR
+  OTHER
+}
+
+// ─── STUDENTS & ENROLLMENT ───
+
+model Student {
+  id             String         @id @default(cuid())
+  studentNumber  String         // Auto-generated, e.g. "EDU-2026-0001"
+  leadId         String         @unique
+  programId      String
+  campusId       String
+  status         StudentStatus  @default(ACTIVE)
+  enrollmentDate DateTime       @default(now())
+  
+  // Personal info (copied from lead, can be updated)
+  firstName      String
+  lastName       String
+  phone          String
+  whatsapp       String?
+  email          String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  address        String?
+  emergencyContact String?
+  emergencyPhone   String?
+  
+  organizationId String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  lead         Lead         @relation(fields: [leadId], references: [id])
+  program      Program      @relation(fields: [programId], references: [id])
+  campus       Campus       @relation(fields: [campusId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  enrollments  Enrollment[]
+  payments     Payment[]
+  attendances  Attendance[]
+  grades       Grade[]
+  documents    Document[]
+  activities   Activity[]
+
+  @@unique([organizationId, studentNumber])
+  @@index([organizationId])
+  @@index([programId])
+  @@map("students")
+}
+
+enum StudentStatus {
+  ACTIVE
+  SUSPENDED   // e.g. unpaid fees
+  ON_LEAVE
+  GRADUATED
+  WITHDRAWN
+  EXPELLED
+}
+
+model Enrollment {
+  id              String   @id @default(cuid())
+  studentId       String
+  academicYearId  String
+  yearOfStudy     Int      // 1, 2, 3...
+  status          EnrollmentStatus @default(ENROLLED)
+  enrolledAt      DateTime @default(now())
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  @@unique([studentId, academicYearId])
+  @@map("enrollments")
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  FAILED
+  WITHDRAWN
+}
+
+// ─── ACADEMICS ───
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?
+  coefficient Float    @default(1)
+  programId   String
+  semester    Int?     // 1, 2, etc.
+  createdAt   DateTime @default(now())
+
+  program Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  grades  Grade[]
+
+  @@index([programId])
+  @@map("subjects")
+}
+
+model Grade {
+  id        String   @id @default(cuid())
+  studentId String
+  subjectId String
+  value     Float    // 0-20 scale (French system)
+  type      GradeType @default(EXAM)
+  session   String?  // "Session 1", "Rattrapage"
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([subjectId])
+  @@map("grades")
+}
+
+enum GradeType {
+  EXAM
+  CONTINUOUS  // Contrôle continu
+  PROJECT
+  INTERNSHIP
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  studentId String
+  date      DateTime
+  status    AttendanceStatus
+  subjectId String?
+  note      String?
+  createdAt DateTime         @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date, subjectId])
+  @@index([studentId])
+  @@index([date])
+  @@map("attendances")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+// ─── PAYMENTS ───
+
+model Payment {
+  id              String        @id @default(cuid())
+  studentId       String
+  academicYearId  String
+  label           String        // "Tranche 1", "Frais d'inscription", etc.
+  amount          Float
+  currency        String        @default("XOF")
+  dueDate         DateTime
+  paidDate        DateTime?
+  paidAmount      Float?
+  method          PaymentMethod?
+  transactionRef  String?       // Mobile Money transaction ID
+  status          PaymentStatus @default(PENDING)
+  
+  organizationId  String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([studentId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  ORANGE_MONEY
+  WAVE
+  MTN_MOMO
+  CASH
+  BANK_TRANSFER
+  CHECK
+  CARD
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+// ─── COMMUNICATION ───
+
+model Message {
+  id          String          @id @default(cuid())
+  leadId      String?
+  studentId   String?         // For post-enrollment comms
+  channel     MessageChannel
+  direction   MessageDirection
+  content     String
+  mediaUrl    String?         // Attachment URL
+  templateId  String?
+  status      MessageStatus   @default(SENT)
+  externalId  String?         // WhatsApp/SMS provider message ID
+  sentById    String?         // User who sent it (null for automated)
+  sentAt      DateTime        @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+  
+  organizationId String
+  createdAt      DateTime     @default(now())
+
+  lead         Lead?             @relation(fields: [leadId], references: [id])
+  sentBy       User?             @relation("SentMessages", fields: [sentById], references: [id])
+  template     MessageTemplate?  @relation(fields: [templateId], references: [id])
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([studentId])
+  @@index([channel])
+  @@index([sentAt])
+  @@map("messages")
+}
+
+enum MessageChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  PHONE_CALL // Log only
+  IN_APP
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  REJECTED
+}
+
+model MessageTemplate {
+  id             String         @id @default(cuid())
+  name           String
+  channel        MessageChannel
+  subject        String?        // For emails
+  body           String         // With variables: {{firstName}}, {{program}}, etc.
+  variables      String[]       // List of available variables
+  category       TemplateCategory
+  isApproved     Boolean        @default(false) // WhatsApp template approval
+  whatsappId     String?        // WhatsApp Business template ID
+  organizationId String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([organizationId])
+  @@map("message_templates")
+}
+
+enum TemplateCategory {
+  RECRUITMENT      // Lead nurturing
+  ENROLLMENT       // Inscription process
+  PAYMENT_REMINDER // Rappels de paiement
+  ACADEMIC         // Notes, emploi du temps
+  GENERAL          // Announcements
+}
+
+// ─── AUTOMATIONS ───
+
+model Automation {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  trigger        AutomationTrigger
+  triggerConfig  Json            // e.g. { "stageId": "xxx" } or { "daysOverdue": 3 }
+  action         AutomationAction
+  actionConfig   Json            // e.g. { "templateId": "xxx", "channel": "WHATSAPP" }
+  isActive       Boolean         @default(true)
+  organizationId String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("automations")
+}
+
+enum AutomationTrigger {
+  LEAD_STAGE_CHANGED   // Lead moves to a specific stage
+  LEAD_NO_RESPONSE     // No response after X days
+  PAYMENT_DUE          // Payment due in X days
+  PAYMENT_OVERDUE      // Payment overdue by X days
+  ENROLLMENT_COMPLETE  // Student just enrolled
+  ATTENDANCE_ALERT     // X consecutive absences
+}
+
+enum AutomationAction {
+  SEND_WHATSAPP
+  SEND_SMS
+  SEND_EMAIL
+  ASSIGN_LEAD
+  CREATE_TASK
+  UPDATE_STATUS
+}
+
+// ─── DOCUMENTS ───
+
+model Document {
+  id        String       @id @default(cuid())
+  name      String
+  type      DocumentType
+  url       String       // Vercel Blob / R2 URL
+  mimeType  String
+  size      Int          // bytes
+  leadId    String?
+  studentId String?
+  createdAt DateTime     @default(now())
+
+  lead    Lead?    @relation(fields: [leadId], references: [id])
+  student Student? @relation(fields: [studentId], references: [id])
+
+  @@index([leadId])
+  @@index([studentId])
+  @@map("documents")
+}
+
+enum DocumentType {
+  ID_CARD
+  DIPLOMA
+  TRANSCRIPT
+  PHOTO
+  ENROLLMENT_FORM
+  RECEIPT
+  CERTIFICATE
+  OTHER
+}
+
+// ─── ACTIVITY LOG ───
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  metadata    Json?        // Additional structured data
+  userId      String?      // Who performed the action
+  leadId      String?
+  studentId   String?
+  organizationId String
+  createdAt   DateTime     @default(now())
+
+  user         User?        @relation(fields: [userId], references: [id])
+  lead         Lead?        @relation(fields: [leadId], references: [id])
+  student      Student?     @relation(fields: [studentId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([studentId])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+enum ActivityType {
+  LEAD_CREATED
+  LEAD_STAGE_CHANGED
+  LEAD_ASSIGNED
+  LEAD_SCORED
+  LEAD_CONVERTED
+  LEAD_LOST
+  MESSAGE_SENT
+  MESSAGE_RECEIVED
+  CALL_LOGGED
+  NOTE_ADDED
+  DOCUMENT_UPLOADED
+  PAYMENT_RECEIVED
+  PAYMENT_OVERDUE
+  ENROLLMENT_CREATED
+  GRADE_ENTERED
+  ATTENDANCE_MARKED
+  AUTOMATION_TRIGGERED
+}
+
+// ─── EMAIL CAMPAIGNS ───
+
+model EmailCampaign {
+  id              String               @id @default(cuid())
+  name            String
+  subject         String
+  body            String
+  status          EmailCampaignStatus  @default(DRAFT)
+  segmentRules    Json?                // Filter criteria for leads
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  completedAt     DateTime?
+  totalRecipients Int                  @default(0)
+  sentCount       Int                  @default(0)
+  deliveredCount  Int                  @default(0)
+  openedCount     Int                  @default(0)
+  clickedCount    Int                  @default(0)
+  bouncedCount    Int                  @default(0)
+  failedCount     Int                  @default(0)
+  createdById     String?
+  organizationId  String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  createdBy    User?                    @relation(fields: [createdById], references: [id])
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipients   EmailCampaignRecipient[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("email_campaigns")
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+model EmailCampaignRecipient {
+  id             String    @id @default(cuid())
+  campaignId     String
+  leadId         String
+  email          String
+  status         String    @default("PENDING") // PENDING, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  bouncedAt      DateTime?
+  brevoMessageId String?
+  openCount      Int       @default(0)
+  clickCount     Int       @default(0)
+  errorMessage   String?
+
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([brevoMessageId])
+  @@map("email_campaign_recipients")
+}

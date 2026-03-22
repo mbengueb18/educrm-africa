@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-width: 260px;
+    --header-height: 64px;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+@layer components {
+  /* Kanban columns */
+  .kanban-column {
+    @apply flex flex-col min-h-[calc(100vh-200px)] rounded-xl bg-gray-100/80 p-2.5;
+    min-width: 220px;
+    width: 220px;
+    flex-shrink: 0;
+  }
+
+  .kanban-card {
+    @apply bg-white rounded-lg p-3 shadow-card hover:shadow-card-hover 
+           transition-shadow duration-150 cursor-grab active:cursor-grabbing
+           border border-gray-100;
+  }
+
+  .kanban-card:active {
+    @apply shadow-kanban ring-2 ring-brand-300/50;
+  }
+
+  /* Stat cards */
+  .stat-card {
+    @apply bg-white rounded-xl p-5 shadow-card border border-gray-100
+           hover:shadow-card-hover transition-all duration-200;
+  }
+
+  /* Badge variants */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-blue { @apply bg-brand-100 text-brand-700; }
+  .badge-green { @apply bg-emerald-100 text-emerald-700; }
+  .badge-red { @apply bg-red-100 text-red-700; }
+  .badge-amber { @apply bg-amber-100 text-amber-700; }
+  .badge-gray { @apply bg-gray-100 text-gray-600; }
+
+  /* Input fields */
+  .input {
+    @apply w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm
+           placeholder:text-gray-400 focus:border-brand-400 focus:outline-none
+           focus:ring-2 focus:ring-brand-100 transition-colors;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 
+           text-sm font-medium transition-all duration-150 
+           focus:outline-none focus:ring-2 focus:ring-offset-2 
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 
+           focus:ring-brand-500 active:bg-brand-800;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-200 
+           hover:bg-gray-50 focus:ring-gray-300;
+  }
+  .btn-danger {
+    @apply btn bg-danger-500 text-white hover:bg-danger-600 
+           focus:ring-danger-500;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-gray-600 hover:bg-gray-100 
+           focus:ring-gray-300;
+  }
+}
