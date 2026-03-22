@@ -1,35 +1,37 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
-  const { nextUrl, auth: session } = req;
-  const isLoggedIn = !!session?.user;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
-  const isAuthPage =
-    nextUrl.pathname.startsWith("/login") ||
-    nextUrl.pathname.startsWith("/register");
-  const isApiRoute = nextUrl.pathname.startsWith("/api");
+  // Public routes - no auth needed
   const isPublicRoute =
-    nextUrl.pathname === "/" || nextUrl.pathname.startsWith("/public");
+    pathname === "/" ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/public");
 
-  // Allow API routes and public routes
-  if (isApiRoute || isPublicRoute) return NextResponse.next();
+  // Check for auth token
+  const token =
+    request.cookies.get("authjs.session-token")?.value ||
+    request.cookies.get("__Secure-authjs.session-token")?.value;
 
-  // Redirect logged-in users away from auth pages
-  if (isAuthPage && isLoggedIn) {
-    return NextResponse.redirect(new URL("/pipeline", nextUrl));
-  }
-
-  // Protect dashboard routes
-  if (!isAuthPage && !isLoggedIn) {
-    const callbackUrl = encodeURIComponent(nextUrl.pathname + nextUrl.search);
+  // Redirect to login if not authenticated
+  if (!isPublicRoute && !token) {
+    const callbackUrl = encodeURIComponent(pathname);
     return NextResponse.redirect(
-      new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl)
+      new URL(`/login?callbackUrl=${callbackUrl}`, request.url)
     );
   }
 
+  // Redirect to pipeline if already logged in and visiting login
+  if (pathname.startsWith("/login") && token) {
+    return NextResponse.redirect(new URL("/pipeline", request.url));
+  }
+
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
