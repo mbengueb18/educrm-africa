@@ -12,6 +12,7 @@ import {
   CheckCircle, XCircle, Filter,
 } from "lucide-react";
 import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
+import { quickCreateCampaign } from "./actions";
 
 interface Campaign {
   id: string;
@@ -86,9 +87,16 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campagnes email</h1>
           <p className="text-sm text-gray-500 mt-1">Creez et gerez vos campagnes de communication</p>
         </div>
-        <button onClick={function() { setShowCreate(true); }} className="btn-primary text-sm">
-          <Plus size={16} /> Nouvelle campagne
-        </button>
+        <button onClick={function() {
+          startTransition(async function() {
+            try {
+              var c = await quickCreateCampaign();
+              router.push("/campaigns/" + c.id + "/edit");
+            } catch (e: any) { toast.error(e.message); }
+          });
+        }} className="btn-primary text-sm" disabled={isPending}>
+          {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Nouvelle campagne
+      </button>
       </div>
 
       {/* Create modal */}
@@ -149,17 +157,13 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                   <div className="flex items-center gap-2 shrink-0 ml-4">
                     {campaign.status === "DRAFT" && (
                       <>
-                        <button
-                          onClick={function() { handleSend(campaign); }}
-                          disabled={isPending}
-                          className="btn-primary py-1.5 px-3 text-xs"
-                        >
+                        <Link href={"/campaigns/" + campaign.id + "/edit"} className="btn-secondary py-1.5 px-3 text-xs">
+                          Editer
+                        </Link>
+                        <button onClick={function() { handleSend(campaign); }} disabled={isPending} className="btn-primary py-1.5 px-3 text-xs">
                           <Send size={13} /> Envoyer
                         </button>
-                        <button
-                          onClick={function() { handleDelete(campaign.id); }}
-                          className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                        >
+                        <button onClick={function() { handleDelete(campaign.id); }} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">
                           <Trash2 size={15} />
                         </button>
                       </>

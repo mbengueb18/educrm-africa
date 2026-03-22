@@ -44,6 +44,57 @@ export async function createCampaign(data: {
   return campaign;
 }
 
+// ─── Quick create campaign (empty draft) ───
+export async function quickCreateCampaign() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  var campaign = await prisma.emailCampaign.create({
+    data: {
+      name: "Nouvelle campagne",
+      subject: "",
+      body: "[]",
+      segmentRules: [],
+      status: "DRAFT",
+      createdById: session.user.id,
+      organizationId: session.user.organizationId,
+    },
+  });
+
+  return campaign;
+}
+
+// ─── Update campaign draft (auto-save) ───
+export async function updateCampaignDraft(campaignId: string, data: {
+  name?: string;
+  subject?: string;
+  body?: string;
+  segmentRules?: SegmentRule[];
+}) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  var updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.subject !== undefined) updateData.subject = data.subject;
+  if (data.body !== undefined) updateData.body = data.body;
+  if (data.segmentRules !== undefined) {
+    updateData.segmentRules = data.segmentRules as any;
+    // Recount recipients
+    var where = buildWhereFromRules(data.segmentRules, session.user.organizationId);
+    where.email = { not: null };
+    var count = await prisma.lead.count({ where: where });
+    updateData.totalRecipients = count;
+  }
+
+  await prisma.emailCampaign.update({
+    where: { id: campaignId },
+    data: updateData,
+  });
+
+  return { success: true };
+}
+
 // ─── Get campaigns list ───
 export async function getCampaigns() {
   var session = await auth();
@@ -157,7 +208,18 @@ export async function sendCampaign(campaignId: string) {
     if (!lead || !lead.email) continue;
 
     var personalizedSubject = replaceVars(campaign.subject, lead);
-    var personalizedBody = replaceVars(campaign.body, lead);
+    var rawBody = campaign.body;
+    var htmlBody = "";
+    try {
+      var parsedBlocks = JSON.parse(rawBody);
+      if (Array.isArray(parsedBlocks)) {
+        htmlBody = blocksToEmailHtml(parsedBlocks, lead);
+      } else {
+        htmlBody = replaceVars(rawBody, lead);
+      }
+    } catch {
+      htmlBody = replaceVars(rawBody, lead);
+    }
 
     if (!apiKey) {
       // Demo mode
@@ -180,8 +242,8 @@ export async function sendCampaign(campaignId: string) {
           sender: { name: senderName, email: senderEmail },
           to: [{ email: lead.email, name: lead.firstName + " " + lead.lastName }],
           subject: personalizedSubject,
-          htmlContent: formatCampaignHtml(personalizedBody, personalizedSubject, senderName),
-          textContent: personalizedBody,
+          htmlContent: htmlBody.startsWith("<!DOCTYPE") ? htmlBody : formatCampaignHtml(htmlBody, personalizedSubject, senderName),
+textContent: stripHtml(htmlBody),
           headers: { "X-Campaign-Id": campaignId },
           tags: ["educrm", "campaign", campaignId],
         }),
@@ -364,4 +426,44 @@ function formatCampaignHtml(body: string, subject: string, senderName: string): 
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
     '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via EduCRM Africa</p>" +
     "</div></div></body></html>";
+}
+
+function blocksToEmailHtml(blocks: any[], lead: { firstName: string; lastName: string; email: string | null }): string {
+  var content = blocks.map(function(b: any) {
+    var type = b.type;
+    var styles = b.styles || {};
+    var raw = b.content || "";
+    var text = replaceVars(raw, lead);
+
+    switch (type) {
+      case "text":
+        return text.split("\n").map(function(line: string) {
+          return '<p style="margin:0 0 8px;line-height:1.6;font-size:' + (styles.fontSize || "15px") + ";color:" + (styles.color || "#555") + ";text-align:" + (styles.textAlign || "left") + ';">' + (line || "&nbsp;") + "</p>";
+        }).join("");
+      case "heading":
+        return '<h2 style="margin:0 0 12px;font-size:' + (styles.fontSize || "22px") + ";color:" + (styles.color || "#1B4F72") + ";font-weight:700;text-align:" + (styles.textAlign || "left") + ';">' + text + "</h2>";
+      case "button":
+        return '<div style="text-align:' + (styles.textAlign || "center") + ';padding:12px 0;"><a href="' + (styles.href || "#") + '" style="display:inline-block;padding:12px 28px;background:' + (styles.bgColor || "#1B4F72") + ";color:" + (styles.color || "white") + ";border-radius:" + (styles.borderRadius || "8px") + ';text-decoration:none;font-weight:600;font-size:14px;">' + text + "</a></div>";
+      case "image":
+        return raw ? '<div style="text-align:' + (styles.textAlign || "center") + ';padding:8px 0;"><img src="' + raw + '" alt="" style="max-width:100%;width:' + (styles.width || "100%") + ';border-radius:8px;" /></div>' : "";
+      case "divider":
+        return '<hr style="border:none;border-top:1px ' + (styles.borderStyle || "solid") + " " + (styles.color || "#e5e7eb") + ';margin:16px 0;" />';
+      case "spacer":
+        return '<div style="height:' + (styles.height || "24px") + ';"></div>';
+      default:
+        return "";
+    }
+  }).join("");
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+    '<body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#f8f9fa;padding:40px 0;">' +
+    '<div style="max-width:580px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
+    '<div style="padding:32px;">' + content + "</div>" +
+    '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
+    '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via EduCRM Africa</p>' +
+    "</div></div></body></html>";
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
