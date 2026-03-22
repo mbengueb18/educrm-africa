@@ -21,6 +21,12 @@ export async function createCampaign(data: {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifie");
 
+  // Count matching leads
+  var where = buildWhereFromRules(data.segmentRules, session.user.organizationId);
+  where.email = { not: null };
+
+  var matchingCount = await prisma.lead.count({ where: where });
+
   var campaign = await prisma.emailCampaign.create({
     data: {
       name: data.name,
@@ -28,6 +34,7 @@ export async function createCampaign(data: {
       body: data.body,
       segmentRules: data.segmentRules as any,
       status: "DRAFT",
+      totalRecipients: matchingCount,
       createdById: session.user.id,
       organizationId: session.user.organizationId,
     },
