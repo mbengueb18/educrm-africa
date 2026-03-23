@@ -13,6 +13,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
   MousePointer, Link2,
 } from "lucide-react";
+import { RichTextBlock } from "@/components/messaging/rich-text-block";
 
 interface EmailBlock {
   id: string;
@@ -45,6 +46,9 @@ var BRAND_COLOR = "#1B4F72";
 
 export function CampaignEditorClient({ campaign, stages, programs }: CampaignEditorClientProps) {
   var router = useRouter();
+  // Global selection tracking — saves selection continuously
+
+
 
   // Parse existing data
   var initialBlocks: EmailBlock[] = [];
@@ -66,11 +70,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
 
   var [name, setName] = useState(campaign.name);
   var [subject, setSubject] = useState(campaign.subject);
-  var [blocks, setBlocks] = useState<EmailBlock[]>(initialBlocks.length > 0 ? initialBlocks : [
-    { id: "d1", type: "text", content: "Bonjour {{prenom}},", styles: { fontSize: "16px", color: "#2C3E50" } },
-    { id: "d2", type: "text", content: "", styles: { fontSize: "15px", color: "#555555" } },
-    { id: "d3", type: "text", content: "Cordialement,\nL'equipe d'admission", styles: { fontSize: "15px", color: "#555555" } },
-  ]);
+  var [blocks, setBlocks] = useState<EmailBlock[]>(initialBlocks.length > 0 ? initialBlocks : []);
   var [rules, setRules] = useState<SegmentRule[]>(initialRules);
   var [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   var [previewMode, setPreviewMode] = useState(false);
@@ -531,36 +531,29 @@ function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Pa
   switch (block.type) {
     case "text":
       return (
-        <div className="px-5 py-3">
-          <textarea
-            value={block.content}
-            onChange={function(e) { onUpdate({ content: e.target.value }); }}
-            className="w-full bg-transparent border-none outline-none resize-none leading-relaxed"
-            style={{ color: block.styles.color || "#555", fontSize: block.styles.fontSize || "15px", textAlign: (block.styles.textAlign as any) || "left" }}
-            rows={Math.max(2, block.content.split("\n").length + 1)}
-            placeholder="Ecrivez votre texte..."
-          />
-        </div>
+        <RichTextBlock
+          key={block.id}
+          initialContent={block.content}
+          placeholder="Ecrivez votre texte..."
+          style={{ color: block.styles.color || "#555", fontSize: block.styles.fontSize || "15px", textAlign: (block.styles.textAlign as any) || "left" }}
+          onContentChange={function(html) { onUpdate({ content: html }); }}
+        />
       );
     case "heading":
       return (
-        <div className="px-5 py-3">
-          <input
-            value={block.content}
-            onChange={function(e) { onUpdate({ content: e.target.value }); }}
-            className="w-full bg-transparent border-none outline-none font-bold"
-            style={{ color: block.styles.color || BRAND_COLOR, fontSize: block.styles.fontSize || "22px", textAlign: (block.styles.textAlign as any) || "left" }}
-            placeholder="Votre titre..."
-          />
-        </div>
+        <RichTextBlock
+          key={block.id}
+          initialContent={block.content}
+          placeholder="Votre titre..."
+          className="font-bold"
+          style={{ color: block.styles.color || "#1B4F72", fontSize: block.styles.fontSize || "22px", textAlign: (block.styles.textAlign as any) || "left" }}
+          onContentChange={function(html) { onUpdate({ content: html }); }}
+        />
       );
     case "button":
       return (
         <div className="px-5 py-4" style={{ textAlign: (block.styles.textAlign as any) || "center" }}>
-          <span
-            className="inline-block px-7 py-3 font-semibold text-sm"
-            style={{ backgroundColor: block.styles.bgColor || BRAND_COLOR, color: block.styles.color || "white", borderRadius: block.styles.borderRadius || "8px" }}
-          >
+          <span className="inline-block px-7 py-3 font-semibold text-sm" style={{ backgroundColor: block.styles.bgColor || BRAND_COLOR, color: block.styles.color || "white", borderRadius: block.styles.borderRadius || "8px" }}>
             {block.content || "Bouton"}
           </span>
         </div>
