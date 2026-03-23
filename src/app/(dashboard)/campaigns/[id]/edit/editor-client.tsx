@@ -11,15 +11,17 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2,
+  MousePointer, Link2, LayoutGrid,
 } from "lucide-react";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
+import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
 
 interface EmailBlock {
   id: string;
-  type: "text" | "heading" | "button" | "image" | "divider" | "spacer" | "video";
+  type: "text" | "heading" | "button" | "image" | "divider" | "spacer" | "video" | "section";
   content: string;
   styles: Record<string, string>;
+  columns?: SectionColumn[];
 }
 
 interface CampaignEditorClientProps {
@@ -80,6 +82,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   var [previewData, setPreviewData] = useState<{ count: number } | null>(
     campaign.totalRecipients > 0 ? { count: campaign.totalRecipients } : null
   );
+  var [showSectionPicker, setShowSectionPicker] = useState(false);
 
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
 
@@ -122,6 +125,22 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     var newBlocks = [...blocks.slice(0, idx), newBlock, ...blocks.slice(idx)];
     setBlocks(newBlocks);
     setSelectedBlockId(newBlock.id);
+  };
+
+  var addSection = function(layoutId: string) {
+    var layout = SECTION_LAYOUTS.find(function(l) { return l.id === layoutId; });
+    if (!layout) return;
+    var newBlock: EmailBlock = {
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
+      type: "section",
+      content: layoutId,
+      styles: { bgColor: "", padding: "12px" },
+      columns: createSectionColumns(layout),
+    };
+    var idx = selectedBlockId ? blocks.findIndex(function(b) { return b.id === selectedBlockId; }) + 1 : blocks.length;
+    setBlocks([...blocks.slice(0, idx), newBlock, ...blocks.slice(idx)]);
+    setSelectedBlockId(newBlock.id);
+    setShowSectionPicker(false);
   };
 
   var updateBlock = function(id: string, updates: Partial<EmailBlock>) {
@@ -224,6 +243,15 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
             <PaletteBtn icon={Video} label="Video" onClick={function() { addBlock("video"); }} />
             <PaletteBtn icon={Minus} label="Ligne" onClick={function() { addBlock("divider"); }} />
             <PaletteBtn icon={Columns2} label="Espace" onClick={function() { addBlock("spacer"); }} />
+            <div className="relative">
+            <PaletteBtn icon={LayoutGrid} label="Section" onClick={function() { setShowSectionPicker(!showSectionPicker); }} />
+              {showSectionPicker && (
+                <SectionLayoutPicker
+                  onSelect={function(layout) { addSection(layout.id); }}
+                  onClose={function() { setShowSectionPicker(false); }}
+                />
+              )}
+            </div>
           </div>
 
           {/* Center: canvas */}
@@ -475,6 +503,58 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                   </PropField>
                 )}
 
+                {/* Section properties */}
+                {selectedBlock.type === "section" && (
+                  <>
+                    <PropField label="Disposition">
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {SECTION_LAYOUTS.map(function(layout) {
+                          var isActive = selectedBlock!.content === layout.id;
+                          return (
+                            <button
+                              key={layout.id}
+                              onClick={function() {
+                                var newCols = createSectionColumns(layout);
+                                // Preserve existing content if possible
+                                var oldCols = selectedBlock!.columns || [];
+                                for (var i = 0; i < Math.min(newCols.length, oldCols.length); i++) {
+                                  newCols[i].content = oldCols[i].content;
+                                }
+                                updateBlock(selectedBlock!.id, { content: layout.id, columns: newCols });
+                              }}
+                              className={cn("flex flex-col items-center gap-1 p-2 rounded-lg border transition-colors",
+                                isActive ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"
+                              )}
+                            >
+                              <div className="flex gap-0.5 w-full h-5">
+                                {layout.columns.map(function(w, i) {
+                                  return <div key={i} style={{ width: w }} className={cn("rounded-sm", isActive ? "bg-brand-400" : "bg-gray-300")} />;
+                                })}
+                              </div>
+                              <span className="text-[9px] text-gray-500">{layout.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </PropField>
+                    <PropField label="Couleur de fond">
+                      <div className="flex gap-2">
+                        <input type="color" value={selectedBlock.styles.bgColor || "#ffffff"} onChange={function(e) { updateStyle(selectedBlock!.id, "bgColor", e.target.value); }} className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5" />
+                        <input value={selectedBlock.styles.bgColor || ""} onChange={function(e) { updateStyle(selectedBlock!.id, "bgColor", e.target.value); }} className="input text-xs font-mono flex-1" placeholder="Transparent" />
+                      </div>
+                    </PropField>
+                    <PropField label="Espacement interne">
+                      <select value={selectedBlock.styles.padding || "12px"} onChange={function(e) { updateStyle(selectedBlock!.id, "padding", e.target.value); }} className="input text-sm">
+                        <option value="0px">Aucun</option>
+                        <option value="8px">Petit</option>
+                        <option value="12px">Moyen</option>
+                        <option value="20px">Grand</option>
+                        <option value="32px">Tres grand</option>
+                      </select>
+                    </PropField>
+                  </>
+                )}
+
                 {/* Alignment (all except spacer) */}
                 {selectedBlock.type !== "spacer" && (
                   <PropField label="Alignement">
@@ -714,7 +794,16 @@ function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Pa
       return <div className="px-5 py-4"><hr style={{ borderColor: block.styles.color || "#e5e7eb", borderStyle: (block.styles.borderStyle as any) || "solid" }} /></div>;
     case "spacer":
       return <div style={{ height: block.styles.height || "24px" }} className="flex items-center justify-center"><span className="text-[9px] text-gray-300">{block.styles.height || "24px"}</span></div>;
-    default:
+    case "section":
+      return (
+        <SectionBlock
+          columns={block.columns || []}
+          bgColor={block.styles.bgColor || ""}
+          padding={block.styles.padding || "12px"}
+          onColumnsChange={function(cols) { onUpdate({ columns: cols }); }}
+        />
+      );
+      default:
       return null;
   }
 }
@@ -753,6 +842,7 @@ function getDefaultStyles(type: string): Record<string, string> {
     case "video": return { textAlign: "center", width: "100%", thumbnail: "" };
     case "divider": return { color: "#e5e7eb", borderStyle: "solid" };
     case "spacer": return { height: "24px" };
+    case "section": return { bgColor: "", padding: "12px" };
     default: return {};
   }
 }
@@ -777,6 +867,9 @@ function blocksToPreviewHtml(blocks: EmailBlock[]): string {
         "</a></div>";
       case "divider": return '<hr style="border:none;border-top:1px ' + (b.styles.borderStyle || "solid") + " " + (b.styles.color || "#e5e7eb") + ';margin:16px 0;" />';
       case "spacer": return '<div style="height:' + (b.styles.height || "24px") + ';"></div>';
+      case "section":
+        if (!b.columns) return "";
+        return sectionToHtml(b.columns, b.styles.bgColor || "", b.styles.padding || "12px");
       default: return "";
     }
   }).join("");

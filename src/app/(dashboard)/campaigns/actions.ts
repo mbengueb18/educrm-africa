@@ -464,6 +464,18 @@ function blocksToEmailHtml(blocks: any[], lead: { firstName: string; lastName: s
         return '<hr style="border:none;border-top:1px ' + (styles.borderStyle || "solid") + " " + (styles.color || "#e5e7eb") + ';margin:16px 0;" />';
       case "spacer":
         return '<div style="height:' + (styles.height || "24px") + ';"></div>';
+      case "section":
+        if (!b.columns) return "";
+        var cellsHtml = b.columns.map(function(col: any) {
+          var widthPct = parseFloat(col.width);
+          var colContent = col.content || "&nbsp;";
+          colContent = replaceVars(colContent, lead);
+          return '<td style="width:' + widthPct + '%;vertical-align:top;padding:8px;">' +
+            '<div style="font-size:15px;line-height:1.6;color:#555;">' + colContent + "</div></td>";
+        }).join("");
+        return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="' +
+          (styles.bgColor ? "background-color:" + styles.bgColor + ";" : "") +
+          '"><tr>' + cellsHtml + "</tr></table>";
       default:
         return "";
     }
