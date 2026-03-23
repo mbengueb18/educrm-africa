@@ -17,7 +17,7 @@ import { RichTextBlock } from "@/components/messaging/rich-text-block";
 
 interface EmailBlock {
   id: string;
-  type: "text" | "heading" | "button" | "image" | "divider" | "spacer";
+  type: "text" | "heading" | "button" | "image" | "divider" | "spacer" | "video";
   content: string;
   styles: Record<string, string>;
 }
@@ -221,6 +221,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
             <PaletteBtn icon={Heading1} label="Titre" onClick={function() { addBlock("heading"); }} />
             <PaletteBtn icon={Square} label="Bouton" onClick={function() { addBlock("button"); }} />
             <PaletteBtn icon={Image} label="Image" onClick={function() { addBlock("image"); }} />
+            <PaletteBtn icon={Video} label="Video" onClick={function() { addBlock("video"); }} />
             <PaletteBtn icon={Minus} label="Ligne" onClick={function() { addBlock("divider"); }} />
             <PaletteBtn icon={Columns2} label="Espace" onClick={function() { addBlock("spacer"); }} />
           </div>
@@ -337,6 +338,33 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                     <PropField label="URL de l'image">
                       <input value={selectedBlock.content} onChange={function(e) { updateBlock(selectedBlock!.id, { content: e.target.value }); }} className="input text-sm" placeholder="https://exemple.com/image.jpg" />
                     </PropField>
+                    <PropField label="Ou uploader depuis votre ordinateur">
+                      <label className="flex items-center justify-center gap-2 px-3 py-2 bg-brand-50 text-brand-600 text-xs rounded-lg cursor-pointer hover:bg-brand-100 transition-colors">
+                        <Image size={14} />
+                        Choisir un fichier
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async function(e) {
+                            var file = e.target.files?.[0];
+                            if (!file) return;
+                            var formData = new FormData();
+                            formData.append("file", file);
+                            try {
+                              var res = await fetch("/api/upload", { method: "POST", body: formData });
+                              var data = await res.json();
+                              if (data.success) {
+                                updateBlock(selectedBlock!.id, { content: data.url });
+                                toast.success("Image uploadee");
+                              } else {
+                                toast.error(data.error);
+                              }
+                            } catch { toast.error("Erreur upload"); }
+                          }}
+                        />
+                      </label>
+                    </PropField>
                     {selectedBlock.content && (
                       <div className="rounded-lg border border-gray-200 overflow-hidden">
                         <img src={selectedBlock.content} alt="" className="w-full h-auto" onError={function(e) { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -348,6 +376,38 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                         <option value="75%">75%</option>
                         <option value="50%">50%</option>
                         <option value="200px">Petite</option>
+                      </select>
+                    </PropField>
+                  </>
+                )}
+
+                {/* Video URL */}
+                {selectedBlock.type === "video" && (
+                  <>
+                    <PropField label="URL de la video (YouTube, Vimeo)">
+                      <input value={selectedBlock.content} onChange={function(e) { updateBlock(selectedBlock!.id, { content: e.target.value }); }} className="input text-sm" placeholder="https://youtube.com/watch?v=..." />
+                    </PropField>
+                    <PropField label="Image miniature (optionnel)">
+                      <input value={selectedBlock.styles.thumbnail || ""} onChange={function(e) { updateStyle(selectedBlock!.id, "thumbnail", e.target.value); }} className="input text-sm" placeholder="https://img.youtube.com/..." />
+                      {selectedBlock.content && selectedBlock.content.includes("youtube.com") && (
+                        <button
+                          onClick={function() {
+                            var videoId = selectedBlock!.content.match(/[?&]v=([^&]+)/)?.[1] || "";
+                            if (videoId) {
+                              updateStyle(selectedBlock!.id, "thumbnail", "https://img.youtube.com/vi/" + videoId + "/maxresdefault.jpg");
+                            }
+                          }}
+                          className="text-xs text-brand-600 hover:text-brand-700 mt-1"
+                        >
+                          Auto-detecter la miniature YouTube
+                        </button>
+                      )}
+                    </PropField>
+                    <PropField label="Largeur">
+                      <select value={selectedBlock.styles.width || "100%"} onChange={function(e) { updateStyle(selectedBlock!.id, "width", e.target.value); }} className="input text-sm">
+                        <option value="100%">Pleine largeur</option>
+                        <option value="75%">75%</option>
+                        <option value="50%">50%</option>
                       </select>
                     </PropField>
                   </>
@@ -528,6 +588,30 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
 
 // ─── Block Content Renderer ───
 function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Partial<EmailBlock>) => void }) {
+  var fileInputRef = useRef<HTMLInputElement>(null);
+  var [uploading, setUploading] = useState(false);
+
+  var handleImageUpload = async function(e: React.ChangeEvent<HTMLInputElement>) {
+    var file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      var formData = new FormData();
+      formData.append("file", file);
+      var res = await fetch("/api/upload", { method: "POST", body: formData });
+      var data = await res.json();
+      if (data.success) {
+        onUpdate({ content: data.url });
+        toast.success("Image uploadee");
+      } else {
+        toast.error(data.error || "Erreur upload");
+      }
+    } catch (err) {
+      toast.error("Erreur upload");
+    }
+    setUploading(false);
+  };
+
   switch (block.type) {
     case "text":
       return (
@@ -562,11 +646,66 @@ function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Pa
       return (
         <div className="px-5 py-3" style={{ textAlign: (block.styles.textAlign as any) || "center" }}>
           {block.content ? (
-            <img src={block.content} alt="" className="rounded-lg inline-block" style={{ maxWidth: "100%", width: block.styles.width || "100%" }} onError={function(e) { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <div className="relative group/img inline-block">
+              <img src={block.content} alt="" className="rounded-lg" style={{ maxWidth: "100%", width: block.styles.width || "100%" }} onError={function(e) { (e.target as HTMLImageElement).style.display = "none"; }} />
+              <button
+                onClick={function(e) { e.stopPropagation(); onUpdate({ content: "" }); }}
+                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-opacity"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg py-10 border-2 border-dashed border-gray-200 text-center">
-              <Image size={28} className="text-gray-300 mx-auto mb-2" />
-              <p className="text-xs text-gray-400">Collez l'URL dans le panneau a droite</p>
+            <div className="bg-gray-50 rounded-lg py-8 border-2 border-dashed border-gray-200 text-center">
+              <Image size={28} className="text-gray-300 mx-auto mb-3" />
+              <p className="text-xs text-gray-400 mb-3">Ajoutez une image</p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={function(e) { e.stopPropagation(); fileInputRef.current?.click(); }}
+                  className="px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 transition-colors"
+                  disabled={uploading}
+                >
+                  {uploading ? "Upload..." : "Depuis mon ordinateur"}
+                </button>
+                <span className="text-xs text-gray-400">ou collez l'URL a droite</span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+            </div>
+          )}
+        </div>
+      );
+    case "video":
+      return (
+        <div className="px-5 py-3" style={{ textAlign: (block.styles.textAlign as any) || "center" }}>
+          {block.content ? (
+            <a href={block.content} target="_blank" rel="noopener noreferrer" className="inline-block relative group/vid" onClick={function(e) { e.preventDefault(); }}>
+              <div className="bg-gray-900 rounded-lg overflow-hidden" style={{ width: block.styles.width || "100%", minHeight: "200px" }}>
+                {block.styles.thumbnail ? (
+                  <img src={block.styles.thumbnail} alt="" className="w-full h-auto opacity-80" />
+                ) : (
+                  <div className="flex items-center justify-center py-16">
+                    <Video size={48} className="text-white/40" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+                    <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[18px] border-l-red-600 ml-1" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2 truncate max-w-[300px] mx-auto">{block.content}</p>
+            </a>
+          ) : (
+            <div className="bg-gray-900 rounded-lg py-10 border-2 border-dashed border-gray-700 text-center">
+              <Video size={36} className="text-white/40 mx-auto mb-3" />
+              <p className="text-xs text-white/50 mb-1">Ajoutez une video</p>
+              <p className="text-[10px] text-white/30">Collez l'URL YouTube ou Vimeo dans le panneau a droite</p>
             </div>
           )}
         </div>
@@ -611,6 +750,7 @@ function getDefaultStyles(type: string): Record<string, string> {
     case "heading": return { fontSize: "22px", color: BRAND_COLOR, textAlign: "left" };
     case "button": return { bgColor: BRAND_COLOR, color: "#ffffff", textAlign: "center", borderRadius: "8px", href: "#" };
     case "image": return { textAlign: "center", width: "100%" };
+    case "video": return { textAlign: "center", width: "100%", thumbnail: "" };
     case "divider": return { color: "#e5e7eb", borderStyle: "solid" };
     case "spacer": return { height: "24px" };
     default: return {};
@@ -624,6 +764,17 @@ function blocksToPreviewHtml(blocks: EmailBlock[]): string {
       case "heading": return '<h2 style="margin:0 0 12px;font-size:' + (b.styles.fontSize || "22px") + ";color:" + (b.styles.color || BRAND_COLOR) + ";font-weight:700;text-align:" + (b.styles.textAlign || "left") + ';">' + b.content + "</h2>";
       case "button": return '<div style="text-align:' + (b.styles.textAlign || "center") + ';padding:8px 0;"><a href="' + (b.styles.href || "#") + '" style="display:inline-block;padding:12px 28px;background:' + (b.styles.bgColor || BRAND_COLOR) + ";color:" + (b.styles.color || "#fff") + ";border-radius:" + (b.styles.borderRadius || "8px") + ';text-decoration:none;font-weight:600;font-size:14px;">' + b.content + "</a></div>";
       case "image": return b.content ? '<div style="text-align:' + (b.styles.textAlign || "center") + ';"><img src="' + b.content + '" style="max-width:100%;width:' + (b.styles.width || "100%") + ';border-radius:8px;" /></div>' : "";
+      case "video":
+      var thumbUrl = b.styles.thumbnail || "";
+      var videoUrl = b.content || "#";
+      if (!thumbUrl && videoUrl.includes("youtube.com")) {
+        var vid = videoUrl.match(/[?&]v=([^&]+)/)?.[1] || "";
+        if (vid) thumbUrl = "https://img.youtube.com/vi/" + vid + "/hqdefault.jpg";
+      }
+      return '<div style="text-align:' + (b.styles.textAlign || "center") + ';padding:8px 0;"><a href="' + videoUrl + '" style="display:inline-block;position:relative;text-decoration:none;">' +
+        (thumbUrl ? '<img src="' + thumbUrl + '" style="max-width:100%;width:' + (b.styles.width || "100%") + ';border-radius:8px;display:block;" />' : '<div style="width:400px;height:225px;background:#1a1a1a;border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="font-size:48px;">&#9654;</span></div>') +
+        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;background:rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;"><span style="font-size:24px;color:#e74c3c;margin-left:4px;">&#9654;</span></div>' +
+        "</a></div>";
       case "divider": return '<hr style="border:none;border-top:1px ' + (b.styles.borderStyle || "solid") + " " + (b.styles.color || "#e5e7eb") + ';margin:16px 0;" />';
       case "spacer": return '<div style="height:' + (b.styles.height || "24px") + ';"></div>';
       default: return "";
