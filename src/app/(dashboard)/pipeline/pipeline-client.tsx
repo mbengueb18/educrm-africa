@@ -6,9 +6,14 @@ import { KanbanBoard } from "@/components/pipeline/kanban-board";
 import { LeadListView } from "@/components/pipeline/lead-list-view";
 import { NewLeadModal } from "@/components/pipeline/new-lead-modal";
 import { LeadSlideOver } from "@/components/pipeline/lead-slide-over";
+import { ImportCSVModal } from "@/components/pipeline/import-csv-modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
-import { Users, UserPlus, UserCheck, TrendingUp, Kanban, List } from "lucide-react";
+import {
+  Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
+  Upload, Download,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface PipelineClientProps {
   stages: any[];
@@ -21,6 +26,7 @@ interface PipelineClientProps {
     stageBreakdown: { name: string; count: number; color: string }[];
   };
   programs: { id: string; name: string }[];
+  crmFields?: any[];
 }
 
 export function PipelineClient({
@@ -29,70 +35,113 @@ export function PipelineClient({
   users,
   stats,
   programs,
+  crmFields,
 }: PipelineClientProps) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-  const router = useRouter();
+  var [modalOpen, setModalOpen] = useState(false);
+  var [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  var [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  var [importOpen, setImportOpen] = useState(false);
 
-  const handleModalClose = useCallback((created?: boolean) => {
+  var router = useRouter();
+
+  var handleModalClose = useCallback(function(created?: boolean) {
     setModalOpen(false);
     if (created) {
       router.refresh();
     }
   }, [router]);
 
-  useEffect(() => {
-    const handler = () => setModalOpen(true);
+  var handleImportClose = useCallback(function(imported?: boolean) {
+    setImportOpen(false);
+    if (imported) {
+      router.refresh();
+    }
+  }, [router]);
+
+  useEffect(function() {
+    var handler = function() { setModalOpen(true); };
     window.addEventListener("open-new-lead", handler);
-    return () => window.removeEventListener("open-new-lead", handler);
+    return function() { window.removeEventListener("open-new-lead", handler); };
   }, []);
 
-  const conversionRate =
+  var conversionRate =
     stats.totalLeads > 0
       ? Math.round((stats.convertedMonth / (stats.totalLeads + stats.convertedMonth)) * 100)
       : 0;
 
+  var handleExport = async function() {
+  try {
+    var res = await fetch("/api/leads/export");
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "leads-educrm-" + new Date().toISOString().split("T")[0] + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    toast.error("Erreur lors de l'export");
+  }
+};
+
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             Pipeline de recrutement
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Gérez vos prospects de la prise de contact jusqu&apos;à l&apos;inscription
+            Gerez vos prospects de la prise de contact jusqu&apos;a l&apos;inscription
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-2">
+          {/* Import / Export */}
           <button
-            onClick={() => setViewMode("kanban")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-              viewMode === "kanban"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            )}
+            onClick={function() { setImportOpen(true); }}
+            className="btn-secondary py-1.5 text-xs"
           >
-            <Kanban size={14} />
-            Kanban
+            <Upload size={13} /> Importer
           </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-              viewMode === "list"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            <List size={14} />
-            Liste
+          <button onClick={handleExport} className="btn-secondary py-1.5 text-xs">
+            <Download size={13} /> Exporter
           </button>
+
+          {/* View toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={function() { setViewMode("kanban"); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                viewMode === "kanban"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <Kanban size={14} />
+              Kanban
+            </button>
+            <button
+              onClick={function() { setViewMode("list"); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                viewMode === "list"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <List size={14} />
+              Liste
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Leads actifs"
@@ -121,7 +170,7 @@ export function PipelineClient({
         />
         <StatCard
           label="Taux de conversion"
-          value={`${conversionRate}%`}
+          value={conversionRate + "%"}
           change={conversionRate > 15 ? 5 : -2}
           changeLabel="vs mois dern."
           icon={TrendingUp}
@@ -130,22 +179,24 @@ export function PipelineClient({
         />
       </div>
 
+      {/* Pipeline view */}
       {viewMode === "kanban" ? (
         <KanbanBoard
           stages={stages}
           leads={leads}
-          onAddLead={() => setModalOpen(true)}
-          onOpenLead={(id) => setSelectedLeadId(id)}
+          onAddLead={function() { setModalOpen(true); }}
+          onOpenLead={function(id) { setSelectedLeadId(id); }}
         />
       ) : (
         <LeadListView
           leads={leads}
-          stages={stages.map((s: any) => ({ id: s.id, name: s.name, color: s.color }))}
-          users={users.map((u: any) => ({ id: u.id, name: u.name }))}
-          onOpenLead={(id) => setSelectedLeadId(id)}
+          stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
+          users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+          onOpenLead={function(id) { setSelectedLeadId(id); }}
         />
       )}
 
+      {/* Modals */}
       <NewLeadModal
         open={modalOpen}
         onClose={handleModalClose}
@@ -155,9 +206,16 @@ export function PipelineClient({
 
       <LeadSlideOver
         leadId={selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
-        stages={stages.map((s: any) => ({ id: s.id, name: s.name, color: s.color }))}
-        users={users.map((u: any) => ({ id: u.id, name: u.name }))}
+        onClose={function() { setSelectedLeadId(null); }}
+        stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
+        users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+      />
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={handleImportClose}
+        programs={programs}
+        crmFields={crmFields}
       />
     </div>
   );

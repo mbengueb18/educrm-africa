@@ -3,6 +3,7 @@ import { getPipelineData, getPipelineStats } from "./actions";
 import { PipelineClient } from "./pipeline-client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getAllFieldProperties } from "@/lib/field-properties";
 
 export const metadata: Metadata = {
   title: "Pipeline",
@@ -12,7 +13,7 @@ export default async function PipelinePage() {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [pipelineData, stats, programs] = await Promise.all([
+  const [pipelineData, stats, programs, fieldProps] = await Promise.all([
     getPipelineData(),
     getPipelineStats(),
     prisma.program.findMany({
@@ -20,6 +21,7 @@ export default async function PipelinePage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    getAllFieldProperties(),
   ]);
 
   return (
@@ -29,6 +31,7 @@ export default async function PipelinePage() {
       users={pipelineData.users}
       stats={stats}
       programs={programs}
+      crmFields={fieldProps.fields}
     />
   );
 }

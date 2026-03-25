@@ -203,3 +203,257 @@ export async function getPipelineStats() {
     })),
   };
 }
+
+// ─── Update lead ───
+export async function updateLead(leadId: string, data: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  email?: string;
+  whatsapp?: string;
+  city?: string;
+  source?: string;
+  sourceDetail?: string;
+  programId?: string | null;
+  campusId?: string | null;
+  assignedToId?: string | null;
+}) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  var lead = await prisma.lead.update({
+    where: { id: leadId },
+    data: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
+      email: data.email || null,
+      whatsapp: data.whatsapp,
+      city: data.city,
+      source: data.source as any,
+      sourceDetail: data.sourceDetail,
+      programId: data.programId,
+      campusId: data.campusId,
+      assignedToId: data.assignedToId,
+    },
+  });
+
+  await prisma.activity.create({
+    data: {
+      type: "NOTE_ADDED" as any,
+      description: "Informations du lead mises a jour",
+      userId: session.user.id,
+      leadId,
+      organizationId: session.user.organizationId,
+    },
+  });
+
+  revalidatePath("/pipeline");
+  return { success: true, lead };
+}
+
+// ─── Delete lead ───
+export async function deleteLead(leadId: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  // Delete related records first
+  await prisma.activity.deleteMany({ where: { leadId } });
+  await prisma.message.deleteMany({ where: { leadId } });
+  await prisma.document.deleteMany({ where: { leadId } });
+  await prisma.emailCampaignRecipient.deleteMany({ where: { leadId } });
+
+  await prisma.lead.delete({ where: { id: leadId } });
+
+  revalidatePath("/pipeline");
+  return { success: true };
+}
+
+// ─── Delete multiple leads ───
+export async function deleteLeads(leadIds: string[]) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  for (var id of leadIds) {
+    await prisma.activity.deleteMany({ where: { leadId: id } });
+    await prisma.message.deleteMany({ where: { leadId: id } });
+    await prisma.document.deleteMany({ where: { leadId: id } });
+    await prisma.emailCampaignRecipient.deleteMany({ where: { leadId: id } });
+  }
+
+  await prisma.lead.deleteMany({
+    where: { id: { in: leadIds }, organizationId: session.user.organizationId },
+  });
+
+  revalidatePath("/pipeline");
+  return { success: true, count: leadIds.length };
+}
+
+// ─── Import leads from CSV data ───
+export async function importLeadsFromCSV(rows: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+  whatsapp?: string;
+  city?: string;
+  source?: string;
+  sourceDetail?: string;
+  programCode?: string;
+}[]) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  var { organizationId } = session.user;
+
+  var defaultStage = await prisma.pipelineStage.findFirst({
+    where: { organizationId, isDefault: true },
+  });
+  if (!defaultStage) throw new Error("Aucune etape par defaut");
+
+  var programs = await prisma.program.findMany({
+    where: { organizationId },
+    select: { id: true, code: true, name: true },
+  });
+
+  var created = 0;
+  var skipped = 0;
+  var errors: string[] = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row.firstName || !row.lastName) {
+      errors.push("Ligne " + (i + 2) + ": prenom et nom requis");
+      skipped++;
+      continue;
+    }
+    if (!row.phone && !row.email) {
+      errors.push("Ligne " + (i + 2) + ": telephone ou email requis");
+      skipped++;
+      continue;
+    }
+
+    // Check duplicate
+    var existing = await prisma.lead.findFirst({
+      where: {
+        organizationId,
+        OR: [
+          ...(row.phone ? [{ phone: row.phone }] : []),
+          ...(row.email ? [{ email: row.email }] : []),
+        ],
+      },
+    });
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    // Match program
+    var programId: string | null = null;
+    if (row.programCode) {
+      var match = programs.find(function(p) {
+        return (p.code && p.code.toLowerCase() === row.programCode!.toLowerCase()) ||
+          p.name.toLowerCase().includes(row.programCode!.toLowerCase());
+      });
+      if (match) programId = match.id;
+    }
+
+    // Map source
+    var sourceMap: Record<string, string> = {
+      "site web": "WEBSITE", "website": "WEBSITE", "web": "WEBSITE",
+      "facebook": "FACEBOOK", "fb": "FACEBOOK",
+      "instagram": "INSTAGRAM", "insta": "INSTAGRAM",
+      "whatsapp": "WHATSAPP", "wa": "WHATSAPP",
+      "salon": "SALON", "forum": "SALON",
+      "parrainage": "REFERRAL", "referral": "REFERRAL",
+      "import": "IMPORT",
+    };
+    var source = "IMPORT";
+    if (row.source) {
+      source = sourceMap[row.source.toLowerCase()] || "IMPORT";
+    }
+
+    try {
+      await prisma.lead.create({
+        data: {
+          firstName: row.firstName.trim(),
+          lastName: row.lastName.trim(),
+          phone: row.phone?.trim() || "N/A",
+          email: row.email?.trim() || null,
+          whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
+          city: row.city?.trim() || null,
+          source: source as any,
+          sourceDetail: row.sourceDetail?.trim() || "Import CSV",
+          stageId: defaultStage.id,
+          programId,
+          organizationId,
+        },
+      });
+      created++;
+    } catch (err: any) {
+      errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
+      skipped++;
+    }
+  }
+
+  revalidatePath("/pipeline");
+  return { created, skipped, errors, total: rows.length };
+}
+
+// ─── Export leads as CSV string ───
+export async function exportLeadsCSV() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifie");
+
+  var leads = await prisma.lead.findMany({
+    where: { organizationId: session.user.organizationId },
+    include: {
+      stage: { select: { name: true } },
+      program: { select: { name: true, code: true } },
+      campus: { select: { name: true, city: true } },
+      assignedTo: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  var headers = [
+    "Prenom", "Nom", "Telephone", "Email", "WhatsApp", "Ville",
+    "Source", "Detail source", "Filiere", "Campus", "Etape",
+    "Score", "Assigne a", "Date creation", "Converti"
+  ];
+
+  var rows = leads.map(function(l) {
+    return [
+      l.firstName,
+      l.lastName,
+      l.phone,
+      l.email || "",
+      l.whatsapp || "",
+      l.city || "",
+      l.source,
+      l.sourceDetail || "",
+      l.program?.name || "",
+      l.campus?.city || "",
+      l.stage?.name || "",
+      String(l.score),
+      l.assignedTo?.name || "",
+      l.createdAt.toISOString().split("T")[0],
+      l.isConverted ? "Oui" : "Non",
+    ];
+  });
+
+  // Build CSV with BOM for Excel
+  var csvContent = "\uFEFF" + headers.join(";") + "\n" +
+    rows.map(function(row) {
+      return row.map(function(cell) {
+        // Escape cells containing separator or quotes
+        if (cell.includes(";") || cell.includes('"') || cell.includes("\n")) {
+          return '"' + cell.replace(/"/g, '""') + '"';
+        }
+        return cell;
+      }).join(";");
+    }).join("\n");
+
+  return csvContent;
+}
