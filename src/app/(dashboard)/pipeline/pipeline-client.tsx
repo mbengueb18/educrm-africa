@@ -14,6 +14,7 @@ import {
   Upload, Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
 
 interface PipelineClientProps {
   stages: any[];
@@ -41,6 +42,7 @@ export function PipelineClient({
   var [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   var [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   var [importOpen, setImportOpen] = useState(false);
+  var [exportOpen, setExportOpen] = useState(false);
 
   var router = useRouter();
 
@@ -69,21 +71,8 @@ export function PipelineClient({
       ? Math.round((stats.convertedMonth / (stats.totalLeads + stats.convertedMonth)) * 100)
       : 0;
 
-  var handleExport = async function() {
-  try {
-    var res = await fetch("/api/leads/export");
-    var blob = await res.blob();
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "leads-educrm-" + new Date().toISOString().split("T")[0] + ".csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    toast.error("Erreur lors de l'export");
-  }
+  var handleExport = function() {
+  setExportOpen(true);
 };
 
   return (
@@ -215,6 +204,11 @@ export function PipelineClient({
         open={importOpen}
         onClose={handleImportClose}
         programs={programs}
+        crmFields={crmFields}
+      />
+      <ExportCSVModal
+        open={exportOpen}
+        onClose={function() { setExportOpen(false); }}
         crmFields={crmFields}
       />
     </div>
