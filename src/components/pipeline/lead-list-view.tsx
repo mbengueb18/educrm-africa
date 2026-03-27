@@ -339,12 +339,22 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
             Colonnes
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-4">
           {selectedLeads.size > 0 && (
             <>
               <span className="text-xs text-brand-600 font-medium">
                 {selectedLeads.size} selectionne{selectedLeads.size > 1 ? "s" : ""}
               </span>
+              {selectedLeads.size < sorted.length && (
+                <button onClick={toggleSelectAll} className="text-xs text-brand-600 hover:text-brand-700 font-medium underline">
+                  Tout selectionner ({sorted.length})
+                </button>
+              )}
+              {selectedLeads.size > 0 && (
+                <button onClick={function() { setSelectedLeads(new Set()); }} className="text-xs text-gray-500 hover:text-gray-700 font-medium underline">
+                  Deselectionner
+                </button>
+              )}
               <button
                 onClick={() => setBulkEmailOpen(true)}
                 className="btn-primary py-1.5 px-3 text-xs"
