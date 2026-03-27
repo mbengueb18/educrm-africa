@@ -463,6 +463,21 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
           <>
             <InfoRow icon={Megaphone} label="Source" value={sourceLabels[lead.source] || lead.source} />
             {lead.sourceDetail && <InfoRow icon={Tag} label="Detail" value={lead.sourceDetail} />}
+            {customFields._trafficChannel && (
+              <InfoRow icon={Tag} label="Canal" value={customFields._trafficChannel} />
+            )}
+            {customFields._trafficSource && customFields._trafficSource !== (sourceLabels[lead.source] || lead.source) && (
+              <InfoRow icon={Tag} label="Source origine" value={customFields._trafficSource} />
+            )}
+            {customFields._trafficMedium && customFields._trafficMedium !== "none" && (
+              <InfoRow icon={Tag} label="Medium" value={customFields._trafficMedium} />
+            )}
+            {customFields._utmCampaign && (
+              <InfoRow icon={Tag} label="Campagne UTM" value={customFields._utmCampaign} />
+            )}
+            {customFields._referrer && (
+              <InfoRow icon={Tag} label="Referrer" value={customFields._referrer} />
+            )}
             {lead.campaign && <InfoRow icon={Megaphone} label="Campagne" value={lead.campaign.name} />}
             <InfoRow icon={Calendar} label="Cree le" value={formatDateTime(lead.createdAt)} />
           </>
