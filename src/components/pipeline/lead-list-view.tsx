@@ -6,9 +6,13 @@ import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import {
   Search, Filter, ChevronDown, ChevronUp, ChevronRight,
   Phone, MessageCircle, Mail, SlidersHorizontal, X,
-  Download, Columns3, Check, Send,
+  Download, Columns3, Check, Send, Trash2, Loader2, UserPlus,
 } from "lucide-react";
 import { BulkEmailModal } from "@/components/messaging/bulk-email-modal";
+import { deleteLeads, assignLead } from "@/app/(dashboard)/pipeline/actions";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+
 
 interface Lead {
   id: string;
@@ -88,6 +92,10 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
   const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  var [deleting, setDeleting] = useState(false);
+  var [assigning, setAssigning] = useState(false);
+  var [showAssignMenu, setShowAssignMenu] = useState(false);
+  var router = useRouter();
 
   useEffect(() => {
     getCustomFields().then(setCustomFieldsConfig).catch(() => {});
@@ -181,6 +189,38 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
     var next = new Set(selectedLeads);
     if (next.has(id)) next.delete(id); else next.add(id);
     setSelectedLeads(next);
+  };
+
+  var handleBulkDelete = async function() {
+    if (!confirm("Supprimer " + selectedLeads.size + " lead(s) ? Cette action est irreversible.")) return;
+    setDeleting(true);
+    try {
+      var result = await deleteLeads(Array.from(selectedLeads));
+      toast.success(result.count + " lead(s) supprime(s)");
+      setSelectedLeads(new Set());
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de la suppression");
+    }
+    setDeleting(false);
+  };
+
+  var handleBulkAssign = async function(userId: string | null) {
+    setAssigning(true);
+    setShowAssignMenu(false);
+    try {
+      var ids = Array.from(selectedLeads);
+      for (var i = 0; i < ids.length; i++) {
+        await assignLead(ids[i], userId);
+      }
+      var userName = userId ? users.find(function(u) { return u.id === userId; })?.name || "utilisateur" : "personne";
+      toast.success(ids.length + " lead(s) assigne(s) a " + userName);
+      setSelectedLeads(new Set());
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de l'assignation");
+    }
+    setAssigning(false);
   };
 
   const activeFiltersCount = [filterStage, filterSource, filterAssigned].filter(Boolean).length;
@@ -311,6 +351,54 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
               >
                 <Send size={13} />
                 Envoyer un email
+              </button>
+
+              <div className="relative">
+                <button
+                  onClick={function() { setShowAssignMenu(!showAssignMenu); }}
+                  disabled={assigning}
+                  className="btn-secondary py-1.5 px-3 text-xs"
+                >
+                  {assigning ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                  Assigner
+                </button>
+                {showAssignMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={function() { setShowAssignMenu(false); }} />
+                    <div className="absolute top-full right-0 mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-52 animate-scale-in">
+                      <button
+                        onClick={function() { handleBulkAssign(null); }}
+                        className="w-full text-left px-4 py-2 text-xs text-gray-500 hover:bg-gray-50"
+                      >
+                        Desassigner
+                      </button>
+                      <div className="h-px bg-gray-100 my-1" />
+                      {users.map(function(u) {
+                        return (
+                          <button
+                            key={u.id}
+                            onClick={function() { handleBulkAssign(u.id); }}
+                            className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-brand-50 hover:text-brand-700 flex items-center gap-2"
+                          >
+                            <div className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center">
+                              {getInitials(u.name)}
+                            </div>
+                            {u.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                className="btn-secondary py-1.5 px-3 text-xs text-red-600 border-red-200 hover:bg-red-50"
+              >
+                {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                Supprimer
               </button>
             </>
           )}
