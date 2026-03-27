@@ -15,7 +15,7 @@ function corsResponse(data: any, status: number) {
 }
 
 // Known EduCRM core field names — everything else is a custom field
-const CORE_FIELDS = new Set([
+var CORE_FIELDS = new Set([
   "firstName", "first_name", "prenom", "prénom", "fname",
   "lastName", "last_name", "nom", "lname", "surname", "nom_famille",
   "name", "fullname", "full_name", "nom_complet",
@@ -30,9 +30,14 @@ const CORE_FIELDS = new Set([
   "formId", "form_id", "formName", "form_name",
   // Internal tracking fields
   "_capturedBy", "_pageUrl", "_raw", "_formId", "_pageTitle",
+  // Traffic source fields
+  "_referrer", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+  "_utm_source", "_utm_medium", "_utm_campaign",
+  "gclid", "fbclid", "msclkid", "ttclid", "dclid", "li_fat_id",
+  "_gclid", "_fbclid", "_msclkid", "_ttclid",
 ]);
 
-const leadSchema = z.object({}).passthrough();
+var leadSchema = z.object({}).passthrough();
 
 function normalizeFields(data: Record<string, any>) {
   return {
@@ -51,8 +56,8 @@ function normalizeFields(data: Record<string, any>) {
 }
 
 function mapSource(source: string): string {
-  const s = source.toUpperCase().trim();
-  const map: Record<string, string> = {
+  var s = source.toUpperCase().trim();
+  var map: Record<string, string> = {
     WEBSITE: "WEBSITE", WEB: "WEBSITE", SITE: "WEBSITE", "SITE WEB": "WEBSITE",
     FACEBOOK: "FACEBOOK", FB: "FACEBOOK",
     INSTAGRAM: "INSTAGRAM", INSTA: "INSTAGRAM",
@@ -72,27 +77,23 @@ function extractCustomFields(
   rawData: Record<string, any>,
   orgCustomFieldsConfig: any[]
 ): Record<string, any> {
-  const custom: Record<string, any> = {};
+  var custom: Record<string, any> = {};
 
-  for (const [key, value] of Object.entries(rawData)) {
+  for (var [key, value] of Object.entries(rawData)) {
     if (!value || typeof value !== "string" || !value.trim()) continue;
     if (key.startsWith("_")) continue;
 
-    const keyLower = key.toLowerCase();
+    var keyLower = key.toLowerCase();
 
-    // Skip core fields
     if (CORE_FIELDS.has(key) || CORE_FIELDS.has(keyLower)) continue;
 
-    // Check if this field is mapped in org config
-    const configMatch = orgCustomFieldsConfig.find((cf: any) =>
-      cf.mappedFormFields.some((mf: string) => mf.toLowerCase() === keyLower)
-    );
+    var configMatch = orgCustomFieldsConfig.find(function(cf: any) {
+      return cf.mappedFormFields.some(function(mf: string) { return mf.toLowerCase() === keyLower; });
+    });
 
     if (configMatch) {
-      // Store with the configured key
       custom[configMatch.key] = value.trim();
     } else {
-      // Store with original key (will show as unmapped in CRM)
       custom[key] = value.trim();
     }
   }
@@ -100,48 +101,201 @@ function extractCustomFields(
   return custom;
 }
 
+// ─── Classify traffic source from referrer, UTMs, click IDs ───
+function classifyTrafficSource(data: Record<string, any>): {
+  channel: string;
+  source: string;
+  medium: string;
+  detail: string;
+} {
+  var referrer = (data._referrer || data.referrer || "").toLowerCase();
+  var utmSource = (data.utm_source || data._utm_source || "").toLowerCase();
+  var utmMedium = (data.utm_medium || data._utm_medium || "").toLowerCase();
+  var utmCampaign = data.utm_campaign || data._utm_campaign || "";
+  var gclid = data.gclid || data._gclid || "";
+  var fbclid = data.fbclid || data._fbclid || "";
+  var msclkid = data.msclkid || data._msclkid || "";
+  var ttclid = data.ttclid || data._ttclid || "";
+
+  // 1. Paid ads (click IDs take priority)
+  if (gclid) {
+    return { channel: "SEA", source: "Google Ads", medium: "cpc", detail: utmCampaign || "Google Ads (gclid)" };
+  }
+  if (msclkid) {
+    return { channel: "SEA", source: "Microsoft Ads", medium: "cpc", detail: utmCampaign || "Bing Ads (msclkid)" };
+  }
+  if (ttclid) {
+    return { channel: "SOCIAL_ADS", source: "TikTok Ads", medium: "paid_social", detail: utmCampaign || "TikTok Ads" };
+  }
+
+  // 2. UTM-based classification
+  if (utmMedium === "cpc" || utmMedium === "ppc" || utmMedium === "paid" || utmMedium === "paid_social") {
+    var src = utmSource || "unknown";
+    if (src.includes("google")) return { channel: "SEA", source: "Google Ads", medium: utmMedium, detail: utmCampaign || "Google Ads (UTM)" };
+    if (src.includes("facebook") || src.includes("fb")) return { channel: "SOCIAL_ADS", source: "Facebook Ads", medium: utmMedium, detail: utmCampaign || "Facebook Ads" };
+    if (src.includes("instagram")) return { channel: "SOCIAL_ADS", source: "Instagram Ads", medium: utmMedium, detail: utmCampaign || "Instagram Ads" };
+    if (src.includes("linkedin")) return { channel: "SOCIAL_ADS", source: "LinkedIn Ads", medium: utmMedium, detail: utmCampaign || "LinkedIn Ads" };
+    if (src.includes("tiktok")) return { channel: "SOCIAL_ADS", source: "TikTok Ads", medium: utmMedium, detail: utmCampaign || "TikTok Ads" };
+    return { channel: "SEA", source: src, medium: utmMedium, detail: utmCampaign || "Publicite payante" };
+  }
+
+  if (utmMedium === "email" || utmSource === "brevo" || utmSource === "mailchimp" || utmSource === "newsletter") {
+    return { channel: "EMAIL", source: utmSource || "email", medium: "email", detail: utmCampaign || "Campagne email" };
+  }
+
+  // 3. Facebook click ID without paid UTM = organic social
+  if (fbclid) {
+    return { channel: "SOCIAL_ORGANIC", source: "Facebook", medium: "organic_social", detail: "Facebook organique (fbclid)" };
+  }
+
+  // 4. Referrer-based classification
+  if (referrer) {
+    // Search engines (SEO)
+    var searchEngines = [
+      { pattern: "google.", source: "Google" },
+      { pattern: "bing.com", source: "Bing" },
+      { pattern: "yahoo.com", source: "Yahoo" },
+      { pattern: "duckduckgo.com", source: "DuckDuckGo" },
+      { pattern: "baidu.com", source: "Baidu" },
+      { pattern: "yandex.", source: "Yandex" },
+      { pattern: "ecosia.org", source: "Ecosia" },
+    ];
+    for (var se of searchEngines) {
+      if (referrer.includes(se.pattern)) {
+        return { channel: "SEO", source: se.source, medium: "organic", detail: "Recherche organique " + se.source };
+      }
+    }
+
+    // LLM / AI referrals
+    var llmSources = [
+      { pattern: "chatgpt.com", source: "ChatGPT" },
+      { pattern: "chat.openai.com", source: "ChatGPT" },
+      { pattern: "claude.ai", source: "Claude" },
+      { pattern: "perplexity.ai", source: "Perplexity" },
+      { pattern: "gemini.google.com", source: "Gemini" },
+      { pattern: "bard.google.com", source: "Gemini" },
+      { pattern: "copilot.microsoft.com", source: "Copilot" },
+      { pattern: "you.com", source: "You.com" },
+      { pattern: "phind.com", source: "Phind" },
+    ];
+    for (var llm of llmSources) {
+      if (referrer.includes(llm.pattern)) {
+        return { channel: "LLM", source: llm.source, medium: "ai_referral", detail: "Referral IA " + llm.source };
+      }
+    }
+
+    // Social media (organic)
+    var socialMedia = [
+      { pattern: "facebook.com", source: "Facebook" },
+      { pattern: "fb.com", source: "Facebook" },
+      { pattern: "l.facebook.com", source: "Facebook" },
+      { pattern: "instagram.com", source: "Instagram" },
+      { pattern: "l.instagram.com", source: "Instagram" },
+      { pattern: "linkedin.com", source: "LinkedIn" },
+      { pattern: "twitter.com", source: "Twitter/X" },
+      { pattern: "x.com", source: "Twitter/X" },
+      { pattern: "t.co", source: "Twitter/X" },
+      { pattern: "tiktok.com", source: "TikTok" },
+      { pattern: "youtube.com", source: "YouTube" },
+      { pattern: "youtu.be", source: "YouTube" },
+      { pattern: "whatsapp.com", source: "WhatsApp" },
+      { pattern: "wa.me", source: "WhatsApp" },
+      { pattern: "telegram.org", source: "Telegram" },
+      { pattern: "t.me", source: "Telegram" },
+      { pattern: "snapchat.com", source: "Snapchat" },
+      { pattern: "pinterest.com", source: "Pinterest" },
+    ];
+    for (var sm of socialMedia) {
+      if (referrer.includes(sm.pattern)) {
+        return { channel: "SOCIAL_ORGANIC", source: sm.source, medium: "organic_social", detail: sm.source + " organique" };
+      }
+    }
+
+    // Email providers
+    var emailProviders = [
+      { pattern: "mail.google.com", source: "Gmail" },
+      { pattern: "outlook.", source: "Outlook" },
+      { pattern: "mail.yahoo.", source: "Yahoo Mail" },
+    ];
+    for (var ep of emailProviders) {
+      if (referrer.includes(ep.pattern)) {
+        return { channel: "EMAIL", source: ep.source, medium: "email", detail: "Ouvert depuis " + ep.source };
+      }
+    }
+
+    // Other referral
+    try {
+      var domain = new URL(referrer.startsWith("http") ? referrer : "https://" + referrer).hostname;
+      return { channel: "REFERRAL", source: domain, medium: "referral", detail: "Referral depuis " + domain };
+    } catch {
+      return { channel: "REFERRAL", source: referrer.slice(0, 50), medium: "referral", detail: "Referral" };
+    }
+  }
+
+  // 5. Direct access
+  if (utmSource) {
+    return { channel: "OTHER", source: utmSource, medium: utmMedium || "unknown", detail: utmCampaign || utmSource };
+  }
+
+  return { channel: "DIRECT", source: "Acces direct", medium: "none", detail: "URL saisie ou favori" };
+}
+
+function mapSocialToSource(social: string): string {
+  var map: Record<string, string> = {
+    "Facebook": "FACEBOOK",
+    "Instagram": "INSTAGRAM",
+    "WhatsApp": "WHATSAPP",
+    "Twitter/X": "OTHER",
+    "LinkedIn": "OTHER",
+    "TikTok": "OTHER",
+    "YouTube": "OTHER",
+  };
+  return map[social] || "WEBSITE";
+}
+
+// ─── POST: Ingest lead ───
 export async function POST(request: NextRequest) {
   try {
-    const apiKey =
+    var apiKey =
       request.headers.get("x-api-key") ||
       request.headers.get("authorization")?.replace("Bearer ", "") ||
       "";
 
-    const organizationId = await validateApiKey(apiKey);
+    var organizationId = await validateApiKey(apiKey);
     if (!organizationId) {
       return corsResponse(
-        { error: "Clé API invalide ou manquante", code: "UNAUTHORIZED" },
+        { error: "Cle API invalide ou manquante", code: "UNAUTHORIZED" },
         401
       );
     }
 
-    let rawData: Record<string, any>;
-    const contentType = request.headers.get("content-type") || "";
+    var rawData: Record<string, any>;
+    var contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
       rawData = await request.json();
     } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
-      const formData = await request.formData();
+      var formData = await request.formData();
       rawData = Object.fromEntries(formData.entries());
     } else {
-      rawData = await request.json().catch(() => ({}));
+      rawData = await request.json().catch(function() { return {}; });
     }
 
-    const parsed = leadSchema.safeParse(rawData);
+    var parsed = leadSchema.safeParse(rawData);
     if (!parsed.success) {
       return corsResponse(
-        { error: "Données invalides", details: parsed.error.flatten(), code: "VALIDATION_ERROR" },
+        { error: "Donnees invalides", details: parsed.error.flatten(), code: "VALIDATION_ERROR" },
         400
       );
     }
 
-    const fields = normalizeFields(parsed.data);
+    var fields = normalizeFields(parsed.data);
 
     // Handle full name split
     if (!fields.firstName && !fields.lastName) {
-      const fullName = rawData.name || rawData.fullname || rawData.full_name || rawData.nom_complet || "";
+      var fullName = rawData.name || rawData.fullname || rawData.full_name || rawData.nom_complet || "";
       if (fullName) {
-        const parts = fullName.trim().split(/\s+/);
+        var parts = fullName.trim().split(/\s+/);
         fields.firstName = parts[0] || "";
         fields.lastName = parts.slice(1).join(" ") || parts[0] || "";
       }
@@ -149,7 +303,7 @@ export async function POST(request: NextRequest) {
 
     if (!fields.firstName || !fields.lastName) {
       return corsResponse(
-        { error: "Prénom et nom sont requis", code: "MISSING_FIELDS" },
+        { error: "Prenom et nom sont requis", code: "MISSING_FIELDS" },
         400
       );
     }
@@ -161,18 +315,47 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Get org config for custom field mappings ───
-    const org = await prisma.organization.findUnique({
+    var org = await prisma.organization.findUnique({
       where: { id: organizationId },
       select: { settings: true },
     });
-    const orgSettings = (org?.settings as any) || {};
-    const customFieldsConfig = orgSettings.customFields || [];
+    var orgSettings = (org?.settings as any) || {};
+    var customFieldsConfig = orgSettings.customFields || [];
 
     // ─── Extract custom fields ───
-    const customFields = extractCustomFields(parsed.data, customFieldsConfig);
+    var customFields = extractCustomFields(parsed.data, customFieldsConfig);
+
+    // ─── Classify traffic source ───
+    var trafficSource = classifyTrafficSource(parsed.data);
+
+    // Override source if WEBSITE with more specific info
+    if (fields.source === "WEBSITE" || !fields.source) {
+      var channelToSource: Record<string, string> = {
+        "SEA": "WEBSITE", "SEO": "WEBSITE", "LLM": "WEBSITE",
+        "SOCIAL_ORGANIC": mapSocialToSource(trafficSource.source),
+        "SOCIAL_ADS": mapSocialToSource(trafficSource.source),
+        "EMAIL": "WEBSITE", "REFERRAL": "WEBSITE", "DIRECT": "WEBSITE", "OTHER": "WEBSITE",
+      };
+      fields.source = channelToSource[trafficSource.channel] || "WEBSITE";
+      fields.sourceDetail = trafficSource.detail + (fields.sourceDetail ? " | " + fields.sourceDetail : "");
+    }
+
+    // Store traffic data in custom fields
+    var trafficCustom: Record<string, string> = {
+      _trafficChannel: trafficSource.channel,
+      _trafficSource: trafficSource.source,
+      _trafficMedium: trafficSource.medium,
+      _trafficDetail: trafficSource.detail,
+    };
+    if (parsed.data._referrer) trafficCustom._referrer = String(parsed.data._referrer).slice(0, 500);
+    if (parsed.data.utm_source) trafficCustom._utmSource = String(parsed.data.utm_source);
+    if (parsed.data.utm_medium) trafficCustom._utmMedium = String(parsed.data.utm_medium);
+    if (parsed.data.utm_campaign) trafficCustom._utmCampaign = String(parsed.data.utm_campaign);
+
+    var allCustomFields = { ...customFields, ...trafficCustom };
 
     // ─── Find default pipeline stage ───
-    const defaultStage = await prisma.pipelineStage.findFirst({
+    var defaultStage = await prisma.pipelineStage.findFirst({
       where: { organizationId, isDefault: true },
     });
     if (!defaultStage) {
@@ -183,9 +366,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Match program ───
-    let programId: string | null = null;
+    var programId: string | null = null;
     if (fields.programCode) {
-      const program = await prisma.program.findFirst({
+      var program = await prisma.program.findFirst({
         where: {
           organizationId,
           OR: [
@@ -198,9 +381,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Match campus ───
-    let campusId: string | null = null;
+    var campusId: string | null = null;
     if (fields.campusCity) {
-      const campus = await prisma.campus.findFirst({
+      var campus = await prisma.campus.findFirst({
         where: {
           organizationId,
           OR: [
@@ -213,8 +396,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Duplicate check ───
-    const oneDayAgo = new Date(Date.now() - 86_400_000);
-    const existing = await prisma.lead.findFirst({
+    var oneDayAgo = new Date(Date.now() - 86_400_000);
+    var existing = await prisma.lead.findFirst({
       where: {
         organizationId,
         createdAt: { gte: oneDayAgo },
@@ -227,11 +410,11 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       // Update custom fields on existing lead if new data
-      if (Object.keys(customFields).length > 0) {
-        const existingCustom = (existing.customFields as any) || {};
+      if (Object.keys(allCustomFields).length > 0) {
+        var existingCustom = (existing.customFields as any) || {};
         await prisma.lead.update({
           where: { id: existing.id },
-          data: { customFields: { ...existingCustom, ...customFields } },
+          data: { customFields: { ...existingCustom, ...allCustomFields } },
         });
       }
 
@@ -239,15 +422,16 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           duplicate: true,
-          message: "Lead existant mis à jour avec les champs supplémentaires",
+          message: "Lead existant mis a jour avec les champs supplementaires",
           leadId: existing.id,
+          trafficSource: trafficSource,
         },
         200
       );
     }
 
     // ─── Create lead ───
-    const lead = await prisma.lead.create({
+    var lead = await prisma.lead.create({
       data: {
         firstName: fields.firstName,
         lastName: fields.lastName,
@@ -261,20 +445,21 @@ export async function POST(request: NextRequest) {
         programId,
         campusId,
         organizationId,
-        customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
+        customFields: Object.keys(allCustomFields).length > 0 ? allCustomFields : undefined,
       },
     });
 
     await prisma.activity.create({
       data: {
         type: "LEAD_CREATED",
-        description: `Lead capturé via formulaire web: ${fields.firstName} ${fields.lastName}`,
+        description: "Lead capture via " + trafficSource.channel + " (" + trafficSource.source + "): " + fields.firstName + " " + fields.lastName,
         leadId: lead.id,
         organizationId,
         metadata: {
           source: "api",
           formName: rawData.formName || rawData.form_name || null,
           customFieldsCaptured: Object.keys(customFields),
+          trafficSource: trafficSource,
         },
       },
     });
@@ -283,8 +468,9 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         leadId: lead.id,
-        message: `Lead ${fields.firstName} ${fields.lastName} créé avec succès`,
+        message: "Lead " + fields.firstName + " " + fields.lastName + " cree avec succes",
         customFieldsCaptured: Object.keys(customFields),
+        trafficSource: trafficSource,
       },
       201
     );

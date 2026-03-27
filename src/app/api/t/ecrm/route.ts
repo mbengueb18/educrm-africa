@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// EduCRM Tracking Script
-// Usage (like HubSpot):
-//   <script src="https://app.educrm.africa/api/t/ecrm.js?id=ism-dakar" async defer></script>
-//   OR via GTM: same URL as a Custom HTML tag
-//
-// What it does:
-// 1. Listens to ALL form submissions on the page
-// 2. Extracts field values and maps them intelligently
-// 3. Sends to EduCRM API automatically
-// 4. No modification needed on existing forms
-
 export async function GET(request: NextRequest) {
-  const orgSlug = request.nextUrl.searchParams.get("id") || "";
-  const baseUrl = request.nextUrl.origin;
+  var orgSlug = request.nextUrl.searchParams.get("id") || "";
+  var baseUrl = request.nextUrl.origin;
 
-  const js = `
+  var js = `
 (function(){
   'use strict';
 
@@ -29,87 +18,94 @@ export async function GET(request: NextRequest) {
   ECRM.excludeForms = [];
   ECRM.capturedForms = [];
 
-  // ─── Config (can be overridden before script loads) ───
-  // <script>
-  //   window.ECRM = { apiKey: 'ecrm_xxx', debug: true, excludeForms: ['search-form'] };
-  // </script>
   if (window._ecrmConfig) {
     Object.keys(window._ecrmConfig).forEach(function(k) { ECRM[k] = window._ecrmConfig[k]; });
   }
 
-  // ─── Fetch API key from org config if not set ───
+  // ─── Capture traffic source data on page load ───
+  var trafficData = {};
+
+  function captureTrafficSource() {
+    // Referrer
+    trafficData._referrer = document.referrer || '';
+
+    // URL parameters (UTMs + click IDs)
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var trackParams = [
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+        'gclid', 'fbclid', 'msclkid', 'ttclid', 'dclid', 'li_fat_id',
+      ];
+      for (var i = 0; i < trackParams.length; i++) {
+        var val = params.get(trackParams[i]);
+        if (val) {
+          trafficData[trackParams[i]] = val;
+        }
+      }
+    } catch(e) {}
+
+    // Store in sessionStorage so it persists across pages (SPA or multi-page)
+    try {
+      var existing = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
+      // Only overwrite if we have new data (first page with params wins)
+      if (!existing._referrer && trafficData._referrer) {
+        existing._referrer = trafficData._referrer;
+      }
+      // UTMs and click IDs: first touch wins (don't overwrite)
+      var keys = Object.keys(trafficData);
+      for (var j = 0; j < keys.length; j++) {
+        if (!existing[keys[j]]) {
+          existing[keys[j]] = trafficData[keys[j]];
+        }
+      }
+      sessionStorage.setItem('_ecrm_traffic', JSON.stringify(existing));
+      trafficData = existing;
+    } catch(e) {}
+
+    log('info', 'Traffic source captured:', trafficData);
+  }
+
+  // ─── Fetch API key ───
   function init() {
-    if (ECRM.apiKey) {
-      attachListeners();
-      return;
-    }
-    // Try to get key from a meta tag
+    captureTrafficSource();
+
+    if (ECRM.apiKey) { attachListeners(); return; }
     var meta = document.querySelector('meta[name="educrm-key"]');
-    if (meta) {
-      ECRM.apiKey = meta.getAttribute('content');
-      attachListeners();
-      return;
-    }
-    // Try from data attribute on the script tag
-    var scripts = document.querySelectorAll('script[src*="ecrm.js"]');
+    if (meta) { ECRM.apiKey = meta.getAttribute('content'); attachListeners(); return; }
+    var scripts = document.querySelectorAll('script[src*="ecrm"]');
     for (var i = 0; i < scripts.length; i++) {
       var key = scripts[i].getAttribute('data-key');
-      if (key) {
-        ECRM.apiKey = key;
-        attachListeners();
-        return;
-      }
+      if (key) { ECRM.apiKey = key; attachListeners(); return; }
     }
-    log('warn', 'Clé API manquante. Ajoutez data-key="ecrm_xxx" au script ou window._ecrmConfig = { apiKey: "ecrm_xxx" }');
+    log('warn', 'Cle API manquante. Ajoutez data-key="ecrm_xxx" au script.');
   }
 
   // ─── Field name mapping ───
-  // Maps common HTML field names/ids to EduCRM fields
   var FIELD_MAP = {
-    // First name
-    firstName: 'firstName', first_name: 'firstName', prenom: 'firstName', prénom: 'firstName',
-    'first-name': 'firstName', fname: 'firstName', given_name: 'firstName', givenname: 'firstName',
-    'your-name': 'firstName', firstname: 'firstName', prenom_etudiant: 'firstName',
-
-    // Last name
+    firstName: 'firstName', first_name: 'firstName', prenom: 'firstName', 'first-name': 'firstName',
+    fname: 'firstName', given_name: 'firstName', firstname: 'firstName', prenom_etudiant: 'firstName',
     lastName: 'lastName', last_name: 'lastName', nom: 'lastName', 'last-name': 'lastName',
-    lname: 'lastName', family_name: 'lastName', familyname: 'lastName', surname: 'lastName',
-    lastname: 'lastName', nom_famille: 'lastName', nom_etudiant: 'lastName',
-
-    // Full name (will be split)
+    lname: 'lastName', family_name: 'lastName', surname: 'lastName', lastname: 'lastName',
+    nom_famille: 'lastName', nom_etudiant: 'lastName',
     name: '_fullName', fullname: '_fullName', full_name: '_fullName',
-    'your-name': '_fullName', nom_complet: '_fullName', nom_prenom: '_fullName',
-
-    // Phone
+    nom_complet: '_fullName', nom_prenom: '_fullName',
     phone: 'phone', telephone: 'phone', tel: 'phone', mobile: 'phone',
-    'your-phone': 'phone', 'phone-number': 'phone', phone_number: 'phone',
-    portable: 'phone', cellulaire: 'phone', numero: 'phone', whatsapp: 'whatsapp',
-
-    // Email
+    'phone-number': 'phone', phone_number: 'phone', portable: 'phone',
+    cellulaire: 'phone', numero: 'phone', whatsapp: 'whatsapp',
     email: 'email', 'e-mail': 'email', mail: 'email', courriel: 'email',
-    'your-email': 'email', email_address: 'email', emailaddress: 'email',
-
-    // City
-    city: 'city', ville: 'city', town: 'city', localite: 'city', localité: 'city',
+    'your-email': 'email', email_address: 'email',
+    city: 'city', ville: 'city', town: 'city', localite: 'city',
     adresse: 'city', address: 'city', location: 'city',
-
-    // Program / Formation
-    formation: 'filiere', filiere: 'filiere', filière: 'filiere', program: 'filiere',
-    programme: 'filiere', cursus: 'filiere', diplome: 'filiere', diplôme: 'filiere',
+    formation: 'filiere', filiere: 'filiere', program: 'filiere',
+    programme: 'filiere', cursus: 'filiere', diplome: 'filiere',
     niveau: 'niveau', level: 'niveau', cycle: 'niveau',
-    specialite: 'filiere', spécialité: 'filiere',
-
-    // Campus
-    campus: 'campus', site: 'campus', etablissement: 'campus',
-
-    // Message
-    message: 'message', msg: 'message', commentaire: 'message', commentaires: 'message',
-    comments: 'message', comment: 'message', 'your-message': 'message',
-    question: 'message', demande: 'message', objet: 'message', sujet: 'message',
-    subject: 'message', motif: 'message',
+    specialite: 'filiere', campus: 'campus', site: 'campus',
+    message: 'message', msg: 'message', commentaire: 'message',
+    comments: 'message', comment: 'message', question: 'message',
+    demande: 'message', objet: 'message', sujet: 'message', subject: 'message',
   };
 
-  // ─── Extract form data intelligently ───
+  // ─── Extract form data ───
   function extractFormData(form) {
     var data = {};
     var raw = {};
@@ -118,7 +114,8 @@ export async function GET(request: NextRequest) {
     for (var i = 0; i < elements.length; i++) {
       var el = elements[i];
       if (!el.name && !el.id) continue;
-      if (el.type === 'submit' || el.type === 'button' || el.type === 'hidden' && !el.name) continue;
+      if (el.type === 'submit' || el.type === 'button') continue;
+      if (el.type === 'hidden' && !el.name) continue;
       if (el.type === 'password' || el.type === 'file') continue;
       if (el.type === 'checkbox' && !el.checked) continue;
       if (el.type === 'radio' && !el.checked) continue;
@@ -129,35 +126,21 @@ export async function GET(request: NextRequest) {
 
       raw[key] = value;
 
-      // Try to match by field name
       var mapped = FIELD_MAP[key];
-      if (mapped) {
-        data[mapped] = value;
-        continue;
-      }
+      if (mapped) { data[mapped] = value; continue; }
 
-      // Try to match by partial name (e.g. "contact_phone" contains "phone")
       var partialMatch = findPartialMatch(key);
-      if (partialMatch) {
-        data[partialMatch] = value;
-        continue;
-      }
+      if (partialMatch) { data[partialMatch] = value; continue; }
 
-      // Try to match by placeholder or label
       var placeholder = (el.placeholder || '').toLowerCase();
       var labelText = getLabelText(el);
       var hintMatch = findPartialMatch(placeholder) || findPartialMatch(labelText);
-      if (hintMatch) {
-        data[hintMatch] = value;
-        continue;
-      }
+      if (hintMatch) { data[hintMatch] = value; continue; }
 
-      // Detect by value pattern
       if (!data.email && isEmail(value)) { data.email = value; continue; }
       if (!data.phone && isPhone(value)) { data.phone = value; continue; }
     }
 
-    // Handle full name → split into first/last
     if (data._fullName && (!data.firstName || !data.lastName)) {
       var parts = data._fullName.trim().split(/\\s+/);
       if (!data.firstName) data.firstName = parts[0] || '';
@@ -165,7 +148,6 @@ export async function GET(request: NextRequest) {
       delete data._fullName;
     }
 
-    // Store unmapped fields as metadata
     data._raw = raw;
     data._formId = form.id || form.getAttribute('name') || form.action || '';
     data._pageUrl = window.location.href;
@@ -177,19 +159,18 @@ export async function GET(request: NextRequest) {
   function findPartialMatch(text) {
     if (!text) return null;
     text = text.toLowerCase();
-    // Priority order matters — check specific terms first
     var priorities = [
       ['whatsapp', 'whatsapp'],
-      ['prénom', 'firstName'], ['prenom', 'firstName'], ['first', 'firstName'], ['fname', 'firstName'],
+      ['prenom', 'firstName'], ['first', 'firstName'], ['fname', 'firstName'],
       ['nom_famille', 'lastName'], ['nom de famille', 'lastName'], ['last', 'lastName'], ['lname', 'lastName'], ['surname', 'lastName'],
       ['nom_complet', '_fullName'], ['full', '_fullName'],
-      ['téléphone', 'phone'], ['telephone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
+      ['telephone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
       ['e-mail', 'email'], ['email', 'email'], ['mail', 'email'], ['courriel', 'email'],
       ['ville', 'city'], ['city', 'city'],
-      ['formation', 'filiere'], ['filière', 'filiere'], ['filiere', 'filiere'], ['programme', 'filiere'], ['diplôme', 'filiere'],
+      ['formation', 'filiere'], ['filiere', 'filiere'], ['programme', 'filiere'],
       ['campus', 'campus'],
       ['message', 'message'], ['commentaire', 'message'], ['question', 'message'],
-      ['nom', 'lastName'], // "nom" alone = lastName (after checking nom_complet, nom_famille)
+      ['nom', 'lastName'],
     ];
     for (var i = 0; i < priorities.length; i++) {
       if (text.indexOf(priorities[i][0]) !== -1) return priorities[i][1];
@@ -212,25 +193,18 @@ export async function GET(request: NextRequest) {
 
   // ─── Should we capture this form? ───
   function shouldCapture(form) {
-    // Skip search forms
     if (form.role === 'search') return false;
     if (form.id && /search|login|signin|register|signup|password|reset|checkout|payment|cart/i.test(form.id)) return false;
     if (form.action && /search|login|signin|register|signup|password|reset|checkout|payment|cart/i.test(form.action)) return false;
     if (form.className && /search/i.test(form.className)) return false;
-
-    // Skip excluded forms
     if (ECRM.excludeForms.indexOf(form.id) !== -1) return false;
     if (ECRM.excludeForms.indexOf(form.getAttribute('name')) !== -1) return false;
 
-    // Must have at least one contact field (name, email, or phone)
     var elements = form.elements;
     var hasContact = false;
     for (var i = 0; i < elements.length; i++) {
       var key = ((elements[i].name || elements[i].id || '') + ' ' + (elements[i].placeholder || '')).toLowerCase();
-      if (/email|mail|phone|tel|nom|name|prenom|prénom/.test(key)) {
-        hasContact = true;
-        break;
-      }
+      if (/email|mail|phone|tel|nom|name|prenom/.test(key)) { hasContact = true; break; }
     }
     return hasContact;
   }
@@ -238,39 +212,58 @@ export async function GET(request: NextRequest) {
   // ─── Send to EduCRM ───
   function sendLead(data) {
     var payload = {
-    firstName: data.firstName || '',
-    lastName: data.lastName || '',
-    phone: data.phone || '',
-    email: data.email || '',
-    whatsapp: data.whatsapp || '',
-    city: data.city || '',
-    filiere: data.filiere || '',
-    campus: data.campus || '',
-    source: 'WEBSITE',
-    sourceDetail: data._pageTitle || data._formId || '',
-    formName: data._formId || 'Auto-captured',
-    message: data.message || '',
-    niveau: data.niveau || '',
-    _capturedBy: 'ecrm-tracker',
-    _pageUrl: data._pageUrl || '',
-  };
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      phone: data.phone || '',
+      email: data.email || '',
+      whatsapp: data.whatsapp || '',
+      city: data.city || '',
+      filiere: data.filiere || '',
+      campus: data.campus || '',
+      source: 'WEBSITE',
+      sourceDetail: data._pageTitle || data._formId || '',
+      formName: data._formId || 'Auto-captured',
+      message: data.message || '',
+      niveau: data.niveau || '',
+      _capturedBy: 'ecrm-tracker',
+      _pageUrl: data._pageUrl || '',
+    };
 
-  // Add all raw form fields so the API can capture custom fields
-  if (data._raw) {
-    Object.keys(data._raw).forEach(function(key) {
-      if (!payload[key]) {
-        payload[key] = data._raw[key];
+    // ─── Inject traffic source data ───
+    var traffic = trafficData || {};
+    try {
+      var stored = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
+      // Merge: stored data takes priority (first touch)
+      var tKeys = Object.keys(stored);
+      for (var t = 0; t < tKeys.length; t++) {
+        if (!traffic[tKeys[t]]) traffic[tKeys[t]] = stored[tKeys[t]];
       }
-    });
-  }
+    } catch(e) {}
 
-    // Don't send if no name AND no contact
+    // Add traffic data to payload
+    if (traffic._referrer) payload._referrer = traffic._referrer;
+    if (traffic.utm_source) payload.utm_source = traffic.utm_source;
+    if (traffic.utm_medium) payload.utm_medium = traffic.utm_medium;
+    if (traffic.utm_campaign) payload.utm_campaign = traffic.utm_campaign;
+    if (traffic.utm_content) payload.utm_content = traffic.utm_content;
+    if (traffic.utm_term) payload.utm_term = traffic.utm_term;
+    if (traffic.gclid) payload.gclid = traffic.gclid;
+    if (traffic.fbclid) payload.fbclid = traffic.fbclid;
+    if (traffic.msclkid) payload.msclkid = traffic.msclkid;
+    if (traffic.ttclid) payload.ttclid = traffic.ttclid;
+
+    // Add raw form fields for custom field capture
+    if (data._raw) {
+      Object.keys(data._raw).forEach(function(key) {
+        if (!payload[key]) payload[key] = data._raw[key];
+      });
+    }
+
     if (!payload.firstName && !payload.lastName && !payload.email && !payload.phone) {
-      log('info', 'Formulaire ignoré: aucun champ identifiant détecté', data._raw);
+      log('info', 'Formulaire ignore: aucun champ identifiant detecte', data._raw);
       return;
     }
 
-    // If only lastName and no firstName, try to split
     if (payload.lastName && !payload.firstName) {
       var parts = payload.lastName.split(/\\s+/);
       if (parts.length > 1) {
@@ -279,7 +272,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    log('info', 'Lead capturé:', payload);
+    log('info', 'Lead capture avec source:', {
+      lead: payload.firstName + ' ' + payload.lastName,
+      referrer: payload._referrer || 'direct',
+      utm_source: payload.utm_source || 'none',
+      utm_medium: payload.utm_medium || 'none',
+      gclid: payload.gclid ? 'present' : 'none',
+      fbclid: payload.fbclid ? 'present' : 'none',
+    });
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', ECRM.endpoint, true);
@@ -288,68 +288,35 @@ export async function GET(request: NextRequest) {
     xhr.onload = function() {
       if (xhr.status >= 200 && xhr.status < 300) {
         var result = JSON.parse(xhr.responseText);
-        log('info', 'Lead envoyé:', result);
+        log('info', 'Lead envoye:', result);
         ECRM.capturedForms.push({ timestamp: new Date().toISOString(), data: payload, result: result });
-        // Push to dataLayer for GTM
         if (window.dataLayer) {
           window.dataLayer.push({
             event: 'educrm_lead_captured',
             ecrmLeadId: result.leadId,
             ecrmDuplicate: result.duplicate || false,
+            ecrmTrafficChannel: result.trafficSource ? result.trafficSource.channel : 'unknown',
           });
         }
       } else {
         log('warn', 'Erreur envoi lead:', xhr.status, xhr.responseText);
       }
     };
-    xhr.onerror = function() { log('warn', 'Erreur réseau envoi lead'); };
+    xhr.onerror = function() { log('warn', 'Erreur reseau envoi lead'); };
     xhr.send(JSON.stringify(payload));
   }
 
   // ─── Attach form listeners ───
   function attachListeners() {
-    log('info', 'EduCRM Tracker initialisé (org: ' + ECRM.orgSlug + ')');
+    log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', traffic: ' + (trafficData.utm_source || trafficData._referrer || 'direct') + ')');
 
-    // Listen to all form submissions
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      if (!shouldCapture(form)) {
-        log('info', 'Formulaire ignoré:', form.id || form.action);
-        return;
-      }
+      if (!shouldCapture(form)) { log('info', 'Formulaire ignore:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);
-    }, true); // useCapture = true to fire before other handlers
-
-    // Also intercept AJAX form submissions (React, Vue, etc.)
-    interceptFetch();
-    interceptXHR();
-
-    // Track page view
-    trackPageView();
-  }
-
-  // ─── Intercept fetch() for SPA forms ───
-  function interceptFetch() {
-    if (!window.fetch || ECRM._fetchPatched) return;
-    ECRM._fetchPatched = true;
-    var originalFetch = window.fetch;
-    window.fetch = function() {
-      // We don't intercept fetch — just let it through
-      // Form capture via submit event is sufficient for most cases
-      return originalFetch.apply(this, arguments);
-    };
-  }
-
-  // ─── Intercept XHR (for jQuery.ajax forms) ───
-  function interceptXHR() {
-    // Not needed for MVP — submit event capture handles 95% of cases
-  }
-
-  // ─── Track page view (for lead journey) ───
-  function trackPageView() {
-    // Future: track which pages leads visit before converting
+    }, true);
   }
 
   // ─── Logging ───
@@ -364,6 +331,7 @@ export async function GET(request: NextRequest) {
   // ─── Public API ───
   ECRM.track = function(data) { sendLead(data); };
   ECRM.identify = function(data) { sendLead(data); };
+  ECRM.getTrafficSource = function() { return trafficData; };
 
   // ─── Init ───
   if (document.readyState === 'loading') {
