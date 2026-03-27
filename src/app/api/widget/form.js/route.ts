@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
     programs.forEach(function(p) {
       opts += '<option value="' + (p.code || p.name) + '">' + (p.code ? p.code + ' — ' : '') + p.name + '</option>';
     });
-    return '<div class="ecrm-field"><label>' + L.program + '</label><select name="filiere">' + opts + '</select></div>';
+    return '<div class="ecrm-field"><label>' + L.program + '</label><select name="filière">' + opts + '</select></div>';
   }
 
   function buildCampusSelect(campuses) {

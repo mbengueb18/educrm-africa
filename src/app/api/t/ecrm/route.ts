@@ -77,29 +77,29 @@ export async function GET(request: NextRequest) {
       var key = scripts[i].getAttribute('data-key');
       if (key) { ECRM.apiKey = key; attachListeners(); return; }
     }
-    log('warn', 'Cle API manquante. Ajoutez data-key="ecrm_xxx" au script.');
+    log('warn', 'Clé API manquante. Ajoutez data-key="ecrm_xxx" au script.');
   }
 
   // ─── Field name mapping ───
   var FIELD_MAP = {
     firstName: 'firstName', first_name: 'firstName', prenom: 'firstName', 'first-name': 'firstName',
-    fname: 'firstName', given_name: 'firstName', firstname: 'firstName', prenom_etudiant: 'firstName',
+    fname: 'firstName', given_name: 'firstName', firstname: 'firstName', prenom_étudiant: 'firstName',
     lastName: 'lastName', last_name: 'lastName', nom: 'lastName', 'last-name': 'lastName',
     lname: 'lastName', family_name: 'lastName', surname: 'lastName', lastname: 'lastName',
-    nom_famille: 'lastName', nom_etudiant: 'lastName',
+    nom_famille: 'lastName', nom_étudiant: 'lastName',
     name: '_fullName', fullname: '_fullName', full_name: '_fullName',
     nom_complet: '_fullName', nom_prenom: '_fullName',
-    phone: 'phone', telephone: 'phone', tel: 'phone', mobile: 'phone',
+    phone: 'phone', téléphone: 'phone', tel: 'phone', mobile: 'phone',
     'phone-number': 'phone', phone_number: 'phone', portable: 'phone',
     cellulaire: 'phone', numero: 'phone', whatsapp: 'whatsapp',
     email: 'email', 'e-mail': 'email', mail: 'email', courriel: 'email',
     'your-email': 'email', email_address: 'email',
     city: 'city', ville: 'city', town: 'city', localite: 'city',
     adresse: 'city', address: 'city', location: 'city',
-    formation: 'filiere', filiere: 'filiere', program: 'filiere',
-    programme: 'filiere', cursus: 'filiere', diplome: 'filiere',
+    formation: 'filière', filière: 'filière', program: 'filière',
+    programme: 'filière', cursus: 'filière', diplome: 'filière',
     niveau: 'niveau', level: 'niveau', cycle: 'niveau',
-    specialite: 'filiere', campus: 'campus', site: 'campus',
+    specialite: 'filière', campus: 'campus', site: 'campus',
     message: 'message', msg: 'message', commentaire: 'message',
     comments: 'message', comment: 'message', question: 'message',
     demande: 'message', objet: 'message', sujet: 'message', subject: 'message',
@@ -164,10 +164,10 @@ export async function GET(request: NextRequest) {
       ['prenom', 'firstName'], ['first', 'firstName'], ['fname', 'firstName'],
       ['nom_famille', 'lastName'], ['nom de famille', 'lastName'], ['last', 'lastName'], ['lname', 'lastName'], ['surname', 'lastName'],
       ['nom_complet', '_fullName'], ['full', '_fullName'],
-      ['telephone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
+      ['téléphone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
       ['e-mail', 'email'], ['email', 'email'], ['mail', 'email'], ['courriel', 'email'],
       ['ville', 'city'], ['city', 'city'],
-      ['formation', 'filiere'], ['filiere', 'filiere'], ['programme', 'filiere'],
+      ['formation', 'filière'], ['filière', 'filière'], ['programme', 'filière'],
       ['campus', 'campus'],
       ['message', 'message'], ['commentaire', 'message'], ['question', 'message'],
       ['nom', 'lastName'],
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
       email: data.email || '',
       whatsapp: data.whatsapp || '',
       city: data.city || '',
-      filiere: data.filiere || '',
+      filière: data.filière || '',
       campus: data.campus || '',
       source: 'WEBSITE',
       sourceDetail: data._pageTitle || data._formId || '',
@@ -260,7 +260,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!payload.firstName && !payload.lastName && !payload.email && !payload.phone) {
-      log('info', 'Formulaire ignore: aucun champ identifiant detecte', data._raw);
+      log('info', 'Formulaire ignoré: aucun champ identifiant detecte', data._raw);
       return;
     }
 
@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    log('info', 'Lead capture avec source:', {
+    log('info', 'Lead capturé avec source:', {
       lead: payload.firstName + ' ' + payload.lastName,
       referrer: payload._referrer || 'direct',
       utm_source: payload.utm_source || 'none',
@@ -302,7 +302,7 @@ export async function GET(request: NextRequest) {
         log('warn', 'Erreur envoi lead:', xhr.status, xhr.responseText);
       }
     };
-    xhr.onerror = function() { log('warn', 'Erreur reseau envoi lead'); };
+    xhr.onerror = function() { log('warn', 'Erreur réseau envoi lead'); };
     xhr.send(JSON.stringify(payload));
   }
 
@@ -313,7 +313,7 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      if (!shouldCapture(form)) { log('info', 'Formulaire ignore:', form.id || form.action); return; }
+      if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);
     }, true);

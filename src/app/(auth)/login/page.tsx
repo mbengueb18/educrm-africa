@@ -141,7 +141,7 @@ function LoginForm() {
                 required
                 autoComplete="email"
                 className="input"
-                placeholder="vous@ecole.sn"
+                placeholder="vous@école.sn"
               />
             </div>
 

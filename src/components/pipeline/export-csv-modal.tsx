@@ -15,9 +15,9 @@ interface ExportCSVModalProps {
 }
 
 var DEFAULT_FIELDS = [
-  { key: "firstName", label: "Prenom", group: "Contact", checked: true },
+  { key: "firstName", label: "Prénom", group: "Contact", checked: true },
   { key: "lastName", label: "Nom", group: "Contact", checked: true },
-  { key: "phone", label: "Telephone", group: "Contact", checked: true },
+  { key: "phone", label: "Téléphone", group: "Contact", checked: true },
   { key: "email", label: "Email", group: "Contact", checked: true },
   { key: "whatsapp", label: "WhatsApp", group: "Contact", checked: false },
   { key: "city", label: "Ville", group: "Contact", checked: true },
@@ -25,12 +25,12 @@ var DEFAULT_FIELDS = [
   { key: "dateOfBirth", label: "Date de naissance", group: "Contact", checked: false },
   { key: "source", label: "Source", group: "Acquisition", checked: true },
   { key: "sourceDetail", label: "Detail source", group: "Acquisition", checked: false },
-  { key: "programName", label: "Filiere", group: "Formation", checked: true },
+  { key: "programName", label: "Filière", group: "Formation", checked: true },
   { key: "campusCity", label: "Campus", group: "Formation", checked: true },
-  { key: "stageName", label: "Etape", group: "Pipeline", checked: true },
+  { key: "stageName", label: "Étape", group: "Pipeline", checked: true },
   { key: "score", label: "Score", group: "Pipeline", checked: true },
   { key: "assignedToName", label: "Assigne a", group: "Pipeline", checked: false },
-  { key: "createdAt", label: "Date creation", group: "Pipeline", checked: true },
+  { key: "createdAt", label: "Date création", group: "Pipeline", checked: true },
   { key: "isConverted", label: "Converti", group: "Pipeline", checked: false },
 ];
 
@@ -47,7 +47,7 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
           allFields.push({
             key: "custom_" + cf.key,
             label: cf.label,
-            group: "Personnalises",
+            group: "Personnalisés",
             checked: false,
           });
         }
@@ -100,7 +100,7 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
   var handleExport = async function() {
     var selected = fields.filter(function(f) { return f.checked; });
     if (selected.length === 0) {
-      toast.error("Selectionnez au moins un champ");
+      toast.error("Sélectionnez au moins un champ");
       return;
     }
 
@@ -118,7 +118,7 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success(selected.length + " champs exportes");
+      toast.success(selected.length + " champs exportés");
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de l'export");
@@ -138,7 +138,7 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
             <FileSpreadsheet size={20} className="text-brand-600" />
             <div>
               <h2 className="text-lg font-bold text-gray-900">Exporter les leads</h2>
-              <p className="text-xs text-gray-500">Choisissez les champs a inclure dans le CSV</p>
+              <p className="text-xs text-gray-500">Choisissez les champs à inclure dans le CSV</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
@@ -148,11 +148,11 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
 
         {/* Select all / none */}
         <div className="flex items-center justify-between px-6 py-2.5 bg-gray-50 border-b border-gray-100">
-          <span className="text-xs text-gray-500">{selectedCount} / {fields.length} champs selectionnes</span>
+          <span className="text-xs text-gray-500">{selectedCount} / {fields.length} champs sélectionnés</span>
           <div className="flex items-center gap-2">
-            <button onClick={selectAll} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Tout selectionner</button>
+            <button onClick={selectAll} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Tout sélectionner</button>
             <span className="text-gray-300">|</span>
-            <button onClick={deselectAll} className="text-xs text-gray-500 hover:text-gray-700">Tout deselectionner</button>
+            <button onClick={deselectAll} className="text-xs text-gray-500 hover:text-gray-700">Tout desélectionner</button>
           </div>
         </div>
 
@@ -179,7 +179,7 @@ export function ExportCSVModal({ open, onClose, crmFields }: ExportCSVModalProps
                       allChecked ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     )}
                   >
-                    {allChecked ? "Deselectionner" : "Tout cocher"}
+                    {allChecked ? "Desélectionner" : "Tout cocher"}
                   </button>
                 </div>
 

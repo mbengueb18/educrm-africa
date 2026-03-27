@@ -19,12 +19,12 @@ var CORE_FIELDS = new Set([
   "firstName", "first_name", "prenom", "prénom", "fname",
   "lastName", "last_name", "nom", "lname", "surname", "nom_famille",
   "name", "fullname", "full_name", "nom_complet",
-  "phone", "telephone", "tel", "mobile", "portable",
+  "phone", "téléphone", "tel", "mobile", "portable",
   "email", "e-mail", "mail", "courriel", "email_candidat",
   "whatsapp",
   "city", "ville", "town", "adresse", "address",
   "source", "sourceDetail", "source_detail",
-  "programCode", "program_code", "filiere", "filière", "formation", "programme",
+  "programCode", "program_code", "filière", "filière", "formation", "programme",
   "campusCity", "campus_city", "campus", "campus_choix",
   "message", "comments", "commentaire", "motivation",
   "formId", "form_id", "formName", "form_name",
@@ -43,13 +43,13 @@ function normalizeFields(data: Record<string, any>) {
   return {
     firstName: data.firstName || data.first_name || data.prenom || data.prénom || data.fname || "",
     lastName: data.lastName || data.last_name || data.nom || data.lname || data.surname || data.nom_famille || "",
-    phone: data.phone || data.telephone || data.tel || data.mobile || data.portable || "",
+    phone: data.phone || data.téléphone || data.tel || data.mobile || data.portable || "",
     email: data.email || data["e-mail"] || data.mail || data.courriel || data.email_candidat || "",
-    whatsapp: data.whatsapp || data.phone || data.telephone || data.tel || data.portable || "",
+    whatsapp: data.whatsapp || data.phone || data.téléphone || data.tel || data.portable || "",
     city: data.city || data.ville || data.town || data.adresse || data.address || "",
     source: mapSource(data.source || "WEBSITE"),
     sourceDetail: data.sourceDetail || data.source_detail || data.formName || data.form_name || data.form_id || data.formId || "",
-    programCode: data.programCode || data.program_code || data.filiere || data.filière || data.formation || data.programme || "",
+    programCode: data.programCode || data.program_code || data.filière || data.filière || data.formation || data.programme || "",
     campusCity: data.campusCity || data.campus_city || data.campus || data.campus_choix || "",
     message: data.message || data.comments || data.commentaire || data.motivation || "",
   };
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     var organizationId = await validateApiKey(apiKey);
     if (!organizationId) {
       return corsResponse(
-        { error: "Cle API invalide ou manquante", code: "UNAUTHORIZED" },
+        { error: "Clé API invalide ou manquante", code: "UNAUTHORIZED" },
         401
       );
     }
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
     var parsed = leadSchema.safeParse(rawData);
     if (!parsed.success) {
       return corsResponse(
-        { error: "Donnees invalides", details: parsed.error.flatten(), code: "VALIDATION_ERROR" },
+        { error: "Données invalides", details: parsed.error.flatten(), code: "VALIDATION_ERROR" },
         400
       );
     }
@@ -422,7 +422,7 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           duplicate: true,
-          message: "Lead existant mis a jour avec les champs supplementaires",
+          message: "Lead existant mis à jour avec les champs supplementaires",
           leadId: existing.id,
           trafficSource: trafficSource,
         },
@@ -452,7 +452,7 @@ export async function POST(request: NextRequest) {
     await prisma.activity.create({
       data: {
         type: "LEAD_CREATED",
-        description: "Lead capture via " + trafficSource.channel + " (" + trafficSource.source + "): " + fields.firstName + " " + fields.lastName,
+        description: "Lead capturé via " + trafficSource.channel + " (" + trafficSource.source + "): " + fields.firstName + " " + fields.lastName,
         leadId: lead.id,
         organizationId,
         metadata: {
@@ -468,7 +468,7 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         leadId: lead.id,
-        message: "Lead " + fields.firstName + " " + fields.lastName + " cree avec succes",
+        message: "Lead " + fields.firstName + " " + fields.lastName + " créé avec succes",
         customFieldsCaptured: Object.keys(customFields),
         trafficSource: trafficSource,
       },

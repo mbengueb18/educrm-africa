@@ -52,18 +52,18 @@ interface Props {
 var STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Send }> = {
   DRAFT: { label: "Brouillon", color: "badge-gray", icon: Clock },
   SENDING: { label: "En cours", color: "badge-amber", icon: Loader2 },
-  SENT: { label: "Envoye", color: "badge-green", icon: CheckCircle },
+  SENT: { label: "Envoyé", color: "badge-green", icon: CheckCircle },
   CANCELLED: { label: "Annule", color: "badge-red", icon: XCircle },
 };
 
 var RECIPIENT_STATUS: Record<string, { label: string; color: string; icon: typeof Send }> = {
   PENDING: { label: "En attente", color: "text-gray-500 bg-gray-50", icon: Clock },
-  SENT: { label: "Envoye", color: "text-blue-600 bg-blue-50", icon: Send },
+  SENT: { label: "Envoyé", color: "text-blue-600 bg-blue-50", icon: Send },
   DELIVERED: { label: "Delivre", color: "text-emerald-600 bg-emerald-50", icon: CheckCircle },
   OPENED: { label: "Ouvert", color: "text-purple-600 bg-purple-50", icon: Eye },
   CLICKED: { label: "Clique", color: "text-indigo-600 bg-indigo-50", icon: MousePointer },
   BOUNCED: { label: "Rebond", color: "text-amber-600 bg-amber-50", icon: AlertTriangle },
-  FAILED: { label: "Echoue", color: "text-red-600 bg-red-50", icon: XCircle },
+  FAILED: { label: "Échoué", color: "text-red-600 bg-red-50", icon: XCircle },
 };
 
 var TABS = [
@@ -99,7 +99,7 @@ export function CampaignDetailClient({ campaign }: Props) {
           </div>
           <p className="text-sm text-gray-500">
             {campaign.createdBy ? "Par " + campaign.createdBy.name : ""}
-            {campaign.sentAt ? " — Envoye le " + formatDateTime(campaign.sentAt) : " — Cree le " + formatDate(campaign.createdAt)}
+            {campaign.sentAt ? " — Envoye le " + formatDateTime(campaign.sentAt) : " — Créé le " + formatDate(campaign.createdAt)}
           </p>
         </div>
       </div>
@@ -235,7 +235,7 @@ function ContentTab({ campaign }: { campaign: Campaign }) {
 
       {/* Email preview */}
       <div className="bg-gray-100 rounded-xl p-6">
-        <p className="text-xs text-gray-500 mb-3 text-center">Apercu de l'email</p>
+        <p className="text-xs text-gray-500 mb-3 text-center">Aperçu de l'email</p>
         <div className="max-w-[600px] mx-auto bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div style={{ backgroundColor: "#1B4F72", padding: "20px 28px" }}>
             <p style={{ color: "white", fontSize: "16px", fontWeight: 600, margin: 0 }}>{campaign.subject}</p>

@@ -22,9 +22,9 @@ export interface FieldProperty {
 }
 
 const SYSTEM_FIELDS: Omit<FieldProperty, "fillCount" | "totalLeads" | "fillRate" | "sampleValues">[] = [
-  { key: "firstName", label: "Prenom", group: "contact", type: "text", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["firstName", "first_name", "prenom", "fname"] },
+  { key: "firstName", label: "Prénom", group: "contact", type: "text", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["firstName", "first_name", "prenom", "fname"] },
   { key: "lastName", label: "Nom", group: "contact", type: "text", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["lastName", "last_name", "nom", "lname", "surname", "nom_famille"] },
-  { key: "phone", label: "Telephone", group: "contact", type: "phone", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["phone", "telephone", "tel", "mobile", "portable"] },
+  { key: "phone", label: "Téléphone", group: "contact", type: "phone", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["phone", "téléphone", "tel", "mobile", "portable"] },
   { key: "email", label: "Email", group: "contact", type: "email", source: "system", isEditable: false, showInCard: false, showInList: true, mappedFormFields: ["email", "mail", "courriel"] },
   { key: "whatsapp", label: "WhatsApp", group: "contact", type: "phone", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: ["whatsapp"] },
   { key: "city", label: "Ville", group: "contact", type: "text", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["city", "ville", "town", "adresse"] },
@@ -33,9 +33,9 @@ const SYSTEM_FIELDS: Omit<FieldProperty, "fillCount" | "totalLeads" | "fillRate"
   { key: "source", label: "Source", group: "acquisition", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["source"] },
   { key: "sourceDetail", label: "Detail source", group: "acquisition", type: "text", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: ["sourceDetail", "source_detail", "formName"] },
   { key: "campaignId", label: "Campagne", group: "acquisition", type: "select", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: [] },
-  { key: "programId", label: "Filiere souhaitee", group: "formation", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["filiere", "formation", "programme", "programCode"] },
+  { key: "programId", label: "Filière souhaitée", group: "formation", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["filière", "formation", "programme", "programCode"] },
   { key: "campusId", label: "Campus", group: "formation", type: "select", source: "system", isEditable: false, showInCard: false, showInList: true, mappedFormFields: ["campus", "campusCity", "campus_choix"] },
-  { key: "stageId", label: "Etape pipeline", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: [] },
+  { key: "stageId", label: "Étape pipeline", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: [] },
   { key: "score", label: "Score", group: "pipeline", type: "number", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: [] },
   { key: "assignedToId", label: "Commercial assigne", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: false, mappedFormFields: [] },
 ];
@@ -46,7 +46,7 @@ export async function getAllFieldProperties(): Promise<{
   groups: { key: string; label: string; count: number }[];
 }> {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   const organizationId = session.user.organizationId;
 
@@ -186,7 +186,7 @@ export async function getAllFieldProperties(): Promise<{
     acquisition: "Acquisition",
     formation: "Formation",
     pipeline: "Pipeline",
-    custom: "Personnalises",
+    custom: "Personnalisés",
     unmapped: "Non mappes",
   };
 

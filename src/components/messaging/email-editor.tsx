@@ -120,7 +120,7 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72" }:
           <ToolbarButton icon={Image} label="Image" onClick={function() { addBlock("image"); }} />
           <ToolbarButton icon={Video} label="Video" onClick={function() { addBlock("video"); }} />
           <div className="w-px h-5 bg-gray-300 mx-1" />
-          <ToolbarButton icon={Minus} label="Separateur" onClick={function() { addBlock("divider"); }} />
+          <ToolbarButton icon={Minus} label="Séparateur" onClick={function() { addBlock("divider"); }} />
           <ToolbarButton icon={Columns2} label="Espacement" onClick={function() { addBlock("spacer"); }} />
         </div>
         <div className="flex items-center gap-1">
@@ -131,7 +131,7 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72" }:
             )}
           >
             {previewMode ? <Code size={13} /> : <Eye size={13} />}
-            {previewMode ? "Editer" : "Apercu"}
+            {previewMode ? "Editer" : "Aperçu"}
           </button>
         </div>
       </div>
@@ -142,7 +142,7 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72" }:
           {previewMode ? (
             <div className="max-w-[580px] mx-auto bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div style={{ backgroundColor: brandColor, padding: "20px 28px" }}>
-                <p style={{ color: "white", fontSize: "16px", fontWeight: 600, margin: 0 }}>Apercu de l'email</p>
+                <p style={{ color: "white", fontSize: "16px", fontWeight: 600, margin: 0 }}>Aperçu de l'email</p>
               </div>
               <div className="p-6" dangerouslySetInnerHTML={{ __html: blocksToPreviewHtml(blocks, brandColor) }} />
             </div>
@@ -218,7 +218,7 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72" }:
           ) : (
             <div className="text-center py-8">
               <Palette size={24} className="text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">Selectionnez un bloc pour modifier ses proprietes</p>
+              <p className="text-sm text-gray-400">Sélectionnez un bloc pour modifier ses proprietes</p>
             </div>
           )}
         </div>
@@ -335,7 +335,7 @@ function BlockProperties({ block, brandColor, onUpdate, onDelete, onMove }: {
 
   var BLOCK_LABELS: Record<string, string> = {
     text: "Texte", heading: "Titre", button: "Bouton", image: "Image",
-    video: "Video", divider: "Separateur", spacer: "Espacement", columns: "Colonnes",
+    video: "Video", divider: "Séparateur", spacer: "Espacement", columns: "Colonnes",
   };
 
   return (

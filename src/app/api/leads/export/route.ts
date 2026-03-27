@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     var session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: "Non authentifie" }, { status: 401 });
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
     // Get selected fields from query
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     var fieldMap: Record<string, { header: string; getValue: (l: any) => string }> = {
       firstName: { header: "Prenom", getValue: function(l) { return l.firstName; } },
       lastName: { header: "Nom", getValue: function(l) { return l.lastName; } },
-      phone: { header: "Telephone", getValue: function(l) { return l.phone; } },
+      phone: { header: "Téléphone", getValue: function(l) { return l.phone; } },
       email: { header: "Email", getValue: function(l) { return l.email || ""; } },
       whatsapp: { header: "WhatsApp", getValue: function(l) { return l.whatsapp || ""; } },
       city: { header: "Ville", getValue: function(l) { return l.city || ""; } },
@@ -45,12 +45,12 @@ export async function GET(request: NextRequest) {
       dateOfBirth: { header: "Date de naissance", getValue: function(l) { return l.dateOfBirth ? new Date(l.dateOfBirth).toISOString().split("T")[0] : ""; } },
       source: { header: "Source", getValue: function(l) { return l.source; } },
       sourceDetail: { header: "Detail source", getValue: function(l) { return l.sourceDetail || ""; } },
-      programName: { header: "Filiere", getValue: function(l) { return l.program?.name || ""; } },
+      programName: { header: "Filière", getValue: function(l) { return l.program?.name || ""; } },
       campusCity: { header: "Campus", getValue: function(l) { return l.campus?.city || ""; } },
-      stageName: { header: "Etape", getValue: function(l) { return l.stage?.name || ""; } },
+      stageName: { header: "Étape", getValue: function(l) { return l.stage?.name || ""; } },
       score: { header: "Score", getValue: function(l) { return String(l.score); } },
       assignedToName: { header: "Assigne a", getValue: function(l) { return l.assignedTo?.name || ""; } },
-      createdAt: { header: "Date creation", getValue: function(l) { return l.createdAt.toISOString().split("T")[0]; } },
+      createdAt: { header: "Date création", getValue: function(l) { return l.createdAt.toISOString().split("T")[0]; } },
       isConverted: { header: "Converti", getValue: function(l) { return l.isConverted ? "Oui" : "Non"; } },
     };
 

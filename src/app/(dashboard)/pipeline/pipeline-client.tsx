@@ -84,7 +84,7 @@ export function PipelineClient({
             Pipeline de recrutement
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Gerez vos prospects de la prise de contact jusqu&apos;a l&apos;inscription
+            Gérez vos prospects de la prise de contact jusqu&apos;a l&apos;inscription
           </p>
         </div>
 

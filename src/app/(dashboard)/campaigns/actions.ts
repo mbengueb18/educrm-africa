@@ -19,7 +19,7 @@ export async function createCampaign(data: {
   segmentRules: SegmentRule[];
 }) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   // Count matching leads
   var where = buildWhereFromRules(data.segmentRules, session.user.organizationId);
@@ -47,7 +47,7 @@ export async function createCampaign(data: {
 // ─── Quick create campaign (empty draft) ───
 export async function quickCreateCampaign() {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var campaign = await prisma.emailCampaign.create({
     data: {
@@ -72,7 +72,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   segmentRules?: SegmentRule[];
 }) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name;
@@ -98,7 +98,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
 // ─── Get campaigns list ───
 export async function getCampaigns() {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   return prisma.emailCampaign.findMany({
     where: { organizationId: session.user.organizationId },
@@ -113,7 +113,7 @@ export async function getCampaigns() {
 // ─── Get campaign detail with recipients ───
 export async function getCampaignDetail(campaignId: string) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var campaign = await prisma.emailCampaign.findUnique({
     where: { id: campaignId },
@@ -133,7 +133,7 @@ export async function getCampaignDetail(campaignId: string) {
 // ─── Preview segment (count matching leads) ───
 export async function previewSegment(rules: SegmentRule[]) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var where = buildWhereFromRules(rules, session.user.organizationId);
   where.email = { not: null };
@@ -150,7 +150,7 @@ export async function previewSegment(rules: SegmentRule[]) {
 // ─── Send campaign ───
 export async function sendCampaign(campaignId: string) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var campaign = await prisma.emailCampaign.findUnique({
     where: { id: campaignId },
@@ -271,7 +271,7 @@ textContent: stripHtml(htmlBody),
     } catch (err: any) {
       await prisma.emailCampaignRecipient.update({
         where: { id: recipient.id },
-        data: { status: "FAILED", errorMessage: err.message || "Erreur reseau" },
+        data: { status: "FAILED", errorMessage: err.message || "Erreur réseau" },
       });
       failedCount++;
     }
@@ -300,7 +300,7 @@ textContent: stripHtml(htmlBody),
 // ─── Delete campaign ───
 export async function deleteCampaign(campaignId: string) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   await prisma.emailCampaign.delete({ where: { id: campaignId } });
   revalidatePath("/campaigns");
@@ -309,7 +309,7 @@ export async function deleteCampaign(campaignId: string) {
 // ─── Get campaign stats (for dashboard) ───
 export async function getCampaignStats() {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var campaigns = await prisma.emailCampaign.findMany({
     where: { organizationId: session.user.organizationId, status: "SENT" },

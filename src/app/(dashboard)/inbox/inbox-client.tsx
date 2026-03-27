@@ -272,8 +272,8 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                             msg.status === "SENT" || msg.status === "DELIVERED" ? "text-emerald-500" :
                             msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
                           )}>
-                            {msg.status === "SENT" ? "Envoye" : msg.status === "DELIVERED" ? "Recu" :
-                             msg.status === "FAILED" ? "Echoue" : msg.status === "QUEUED" ? "En attente" : msg.status}
+                            {msg.status === "SENT" ? "Envoyé" : msg.status === "DELIVERED" ? "Reçu" :
+                             msg.status === "FAILED" ? "Échoué" : msg.status === "QUEUED" ? "En attente" : msg.status}
                           </span>
                         </div>
                       </div>
@@ -289,7 +289,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               </div>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">Inbox</h3>
               <p className="text-sm text-gray-500 max-w-sm">
-                Selectionnez une conversation ou envoyez un email depuis la fiche d'un lead.
+                Sélectionnez une conversation ou envoyez un email depuis la fiche d'un lead.
               </p>
             </div>
           )}

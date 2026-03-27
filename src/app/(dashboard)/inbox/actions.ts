@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 // ─── Send email to a lead ───
 export async function sendEmailToLead(leadId: string, subject: string, body: string) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
@@ -41,7 +41,7 @@ export async function sendBulkEmailToLeads(
   body: string
 ) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -73,7 +73,7 @@ export async function sendBulkEmailToLeads(
 // ─── Get messages for a lead ───
 export async function getLeadMessages(leadId: string) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   return prisma.message.findMany({
     where: { leadId, organizationId: session.user.organizationId },
@@ -91,7 +91,7 @@ export async function getInboxMessages(params?: {
   limit?: number;
 }) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var where: any = { organizationId: session.user.organizationId };
   if (params?.channel) where.channel = params.channel;
@@ -139,7 +139,7 @@ export async function getInboxMessages(params?: {
 // ─── Add internal note to lead ───
 export async function addLeadNote(leadId: string, content: string) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   await prisma.activity.create({
     data: {
@@ -158,7 +158,7 @@ export async function addLeadNote(leadId: string, content: string) {
 // ─── Get email templates ───
 export async function getEmailTemplates() {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   return prisma.messageTemplate.findMany({
     where: {
@@ -172,7 +172,7 @@ export async function getEmailTemplates() {
 // ─── Save email template ───
 export async function saveEmailTemplate(name: string, subject: string, body: string, category: string) {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   const template = await prisma.messageTemplate.create({
     data: {

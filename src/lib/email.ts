@@ -137,7 +137,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       },
     });
 
-    return { success: false, dbMessageId: msg.id, error: error.message || "Erreur reseau" };
+    return { success: false, dbMessageId: msg.id, error: error.message || "Erreur réseau" };
   }
 }
 

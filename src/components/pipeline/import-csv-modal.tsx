@@ -34,7 +34,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
              f.group === "acquisition" ? "Acquisition" :
              f.group === "formation" ? "Formation" :
              f.group === "pipeline" ? "Pipeline" :
-             f.group === "custom" ? "Personnalises" :
+             f.group === "custom" ? "Personnalisés" :
              f.group === "unmapped" ? "Non mappes" : f.group,
       required: f.key === "firstName" || f.key === "lastName",
       source: f.source,
@@ -46,15 +46,15 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
 
   if (CRM_FIELDS.length === 0) {
     CRM_FIELDS = [
-      { key: "firstName", label: "Prenom", group: "Contact", required: true, source: "system" },
+      { key: "firstName", label: "Prénom", group: "Contact", required: true, source: "system" },
       { key: "lastName", label: "Nom", group: "Contact", required: true, source: "system" },
-      { key: "phone", label: "Telephone", group: "Contact", required: false, source: "system" },
+      { key: "phone", label: "Téléphone", group: "Contact", required: false, source: "system" },
       { key: "email", label: "Email", group: "Contact", required: false, source: "system" },
       { key: "whatsapp", label: "WhatsApp", group: "Contact", required: false, source: "system" },
       { key: "city", label: "Ville", group: "Contact", required: false, source: "system" },
       { key: "source", label: "Source", group: "Acquisition", required: false, source: "system" },
       { key: "sourceDetail", label: "Detail source", group: "Acquisition", required: false, source: "system" },
-      { key: "programId", label: "Filiere", group: "Formation", required: false, source: "system" },
+      { key: "programId", label: "Filière", group: "Formation", required: false, source: "system" },
       { key: "campusId", label: "Campus", group: "Formation", required: false, source: "system" },
     ];
   }
@@ -105,7 +105,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
       var text = ev.target?.result as string;
       var lines = text.split("\n").filter(function(l) { return l.trim(); });
       if (lines.length < 2) {
-        toast.error("Le fichier doit contenir au moins un en-tete et une ligne de donnees");
+        toast.error("Le fichier doit contenir au moins un en-tete et une ligne de données");
         return;
       }
       setRawLines(lines);
@@ -210,9 +210,9 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
             <div>
               <h2 className="text-lg font-bold text-gray-900">Importer des leads</h2>
               <p className="text-xs text-gray-500">
-                {step === 1 && "Selectionnez votre fichier CSV"}
+                {step === 1 && "Sélectionnez votre fichier CSV"}
                 {step === 2 && "Mappez les colonnes avec les champs du CRM"}
-                {step === 3 && "Verifiez les donnees avant l'import"}
+                {step === 3 && "Vérifiez les données avant l'import"}
                 {step === 4 && "Import en cours..."}
               </p>
             </div>
@@ -260,11 +260,11 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                   <p className="text-xs font-medium text-gray-600 mb-2">Format attendu :</p>
                   <div className="text-xs text-gray-500 space-y-1">
-                    <p>Fichier CSV ou TXT avec separateur virgule (,) ou point-virgule (;)</p>
+                    <p>Fichier CSV ou TXT avec séparateur virgule (,) ou point-virgule (;)</p>
                     <p>La premiere ligne doit contenir les en-tetes de colonnes</p>
                   </div>
                   <div className="mt-3 p-2 bg-white rounded border border-gray-200 font-mono text-[10px] text-gray-500">
-                    Prenom;Nom;Telephone;Email;Ville;Filiere<br />
+                    Prenom;Nom;Téléphone;Email;Ville;Filière<br />
                     Fatou;Diallo;+221771234567;fatou@email.com;Dakar;Marketing Digital
                   </div>
                 </div>
@@ -282,7 +282,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                   <span className="text-xs text-gray-400">{dataRows.length} lignes</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Separateur :</span>
+                  <span className="text-xs text-gray-500">Séparateur :</span>
                   <select value={separator} onChange={function(e) { handleSeparatorChange(e.target.value); }} className="text-xs border border-gray-200 rounded px-2 py-1">
                     <option value=";">Point-virgule (;)</option>
                     <option value=",">Virgule (,)</option>
@@ -294,7 +294,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
               {columns.some(function(c) { return c.autoMapped; }) && (
                 <div className="flex items-center gap-2 mb-4 p-2.5 bg-emerald-50 rounded-lg border border-emerald-200">
                   <Zap size={14} className="text-emerald-600" />
-                  <span className="text-xs text-emerald-700">{columns.filter(function(c) { return c.autoMapped; }).length} colonnes mappees automatiquement</span>
+                  <span className="text-xs text-emerald-700">{columns.filter(function(c) { return c.autoMapped; }).length} colonnes mappées automatiquement</span>
                 </div>
               )}
 
@@ -304,7 +304,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                   <div className="text-xs text-amber-700">
                     {!hasFirstName && <p>Mappez une colonne vers "Prenom" (requis)</p>}
                     {!hasLastName && <p>Mappez une colonne vers "Nom" (requis)</p>}
-                    {!hasContact && <p>Mappez une colonne vers "Telephone" ou "Email" (au moins un requis)</p>}
+                    {!hasContact && <p>Mappez une colonne vers "Téléphone" ou "Email" (au moins un requis)</p>}
                   </div>
                 </div>
               )}
@@ -316,7 +316,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3 w-[30%]">Colonne du fichier</th>
                       <th className="text-center text-xs text-gray-400 px-2 py-3 w-[30px]"></th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3 w-[35%]">Champ EduCRM</th>
-                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3 w-[35%]">Apercu</th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3 w-[35%]">Aperçu</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -350,7 +350,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                                       var isUsed = columns.some(function(c, ci) { return ci !== idx && c.mappedTo === f.key; });
                                       return (
                                         <option key={f.key} value={f.key} disabled={isUsed}>
-                                          {f.label} {f.required ? "*" : ""} {isUsed ? "(deja mappe)" : ""}
+                                          {f.label} {f.required ? "*" : ""} {isUsed ? "(déjà mappé)" : ""}
                                         </option>
                                       );
                                     })}
@@ -359,7 +359,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                               })}
                             </select>
                             {col.autoMapped && (
-                              <span className="text-[10px] text-emerald-600 flex items-center gap-0.5 mt-1"><Zap size={9} /> Auto-detecte</span>
+                              <span className="text-[10px] text-emerald-600 flex items-center gap-0.5 mt-1"><Zap size={9} /> Auto-détecté</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
@@ -376,8 +376,8 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 </table>
               </div>
               <div className="flex items-center justify-between mt-4 text-xs text-gray-500">
-                <span>{mappedCount} / {columns.length} colonnes mappees</span>
-                <span>{dataRows.length} leads a importer</span>
+                <span>{mappedCount} / {columns.length} colonnes mappées</span>
+                <span>{dataRows.length} leads à importer</span>
               </div>
             </div>
           )}
@@ -387,7 +387,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
             <div>
               <div className="flex items-center gap-2 mb-4 p-2.5 bg-blue-50 rounded-lg border border-blue-200">
                 <Eye size={14} className="text-blue-600" />
-                <span className="text-xs text-blue-700">Apercu des 10 premiers leads. Verifiez que les donnees sont correctement mappees.</span>
+                <span className="text-xs text-blue-700">Aperçu des 10 premiers leads. Vérifiez que les données sont correctement mappees.</span>
               </div>
               <div className="border border-gray-200 rounded-xl overflow-x-auto">
                 <table className="w-full text-sm">
@@ -429,18 +429,18 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 <div className="text-center">
                   <Loader2 size={40} className="text-brand-600 animate-spin mx-auto mb-4" />
                   <p className="text-sm font-medium text-gray-700">Import en cours...</p>
-                  <p className="text-xs text-gray-400 mt-1">{dataRows.length} leads a traiter</p>
+                  <p className="text-xs text-gray-400 mt-1">{dataRows.length} leads à traiter</p>
                 </div>
               ) : result ? (
                 <div className="text-center w-full max-w-md">
                   <div className={cn("w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4", result.created > 0 ? "bg-emerald-100" : "bg-red-100")}>
                     {result.created > 0 ? <Check size={32} className="text-emerald-600" /> : <AlertCircle size={32} className="text-red-600" />}
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Import termine</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Import terminé</h3>
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-emerald-50 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-emerald-700">{result.created}</div>
-                      <div className="text-xs text-emerald-600">Leads crees</div>
+                      <div className="text-xs text-emerald-600">Leads créés</div>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-gray-500">{result.skipped}</div>
@@ -471,7 +471,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
             <div className="flex items-center gap-2">
               {step === 2 && (
                 <button onClick={function() { setStep(3); }} disabled={!canProceed} className={cn("btn-primary py-2 text-sm", !canProceed && "opacity-50 cursor-not-allowed")}>
-                  Apercu <ArrowRight size={14} />
+                  Aperçu <ArrowRight size={14} />
                 </button>
               )}
               {step === 3 && (

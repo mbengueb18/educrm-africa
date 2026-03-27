@@ -66,17 +66,17 @@ const DEFAULT_COLUMNS = ["name", "phone", "email", "stage", "source", "program",
 // All available system columns
 const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "name", label: "Nom complet", group: "Contact" },
-  { key: "phone", label: "Telephone", group: "Contact" },
+  { key: "phone", label: "Téléphone", group: "Contact" },
   { key: "email", label: "Email", group: "Contact" },
   { key: "city", label: "Ville", group: "Contact" },
   { key: "whatsapp", label: "WhatsApp", group: "Contact" },
-  { key: "stage", label: "Etape", group: "Pipeline" },
+  { key: "stage", label: "Étape", group: "Pipeline" },
   { key: "score", label: "Score", group: "Pipeline" },
   { key: "assignedTo", label: "Commercial", group: "Pipeline" },
   { key: "source", label: "Source", group: "Acquisition" },
-  { key: "program", label: "Filiere", group: "Formation" },
-  { key: "createdAt", label: "Date creation", group: "Dates" },
-  { key: "updatedAt", label: "Derniere maj", group: "Dates" },
+  { key: "program", label: "Filière", group: "Formation" },
+  { key: "createdAt", label: "Date création", group: "Dates" },
+  { key: "updatedAt", label: "Dernière maj", group: "Dates" },
 ];
 
 export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewProps) {
@@ -123,7 +123,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
   // Custom field columns
   const customColumns = customFieldsConfig
     .filter((cf) => cf.showInList)
-    .map((cf) => ({ key: "custom_" + cf.key, label: cf.label, group: "Personnalises" }));
+    .map((cf) => ({ key: "custom_" + cf.key, label: cf.label, group: "Personnalisés" }));
 
   const allAvailableColumns = [...ALL_COLUMNS, ...customColumns];
 
@@ -196,7 +196,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
     setDeleting(true);
     try {
       var result = await deleteLeads(Array.from(selectedLeads));
-      toast.success(result.count + " lead(s) supprime(s)");
+      toast.success(result.count + " lead(s) supprimé(s)");
       setSelectedLeads(new Set());
       router.refresh();
     } catch (err: any) {
@@ -214,7 +214,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
         await assignLead(ids[i], userId);
       }
       var userName = userId ? users.find(function(u) { return u.id === userId; })?.name || "utilisateur" : "personne";
-      toast.success(ids.length + " lead(s) assigne(s) a " + userName);
+      toast.success(ids.length + " lead(s) assigné(s) a " + userName);
       setSelectedLeads(new Set());
       router.refresh();
     } catch (err: any) {
@@ -343,16 +343,16 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
           {selectedLeads.size > 0 && (
             <>
               <span className="text-xs text-brand-600 font-medium">
-                {selectedLeads.size} selectionne{selectedLeads.size > 1 ? "s" : ""}
+                {selectedLeads.size} sélectionné{selectedLeads.size > 1 ? "s" : ""}
               </span>
               {selectedLeads.size < sorted.length && (
                 <button onClick={toggleSelectAll} className="text-xs text-brand-600 hover:text-brand-700 font-medium underline">
-                  Tout selectionner ({sorted.length})
+                  Tout sélectionner ({sorted.length})
                 </button>
               )}
               {selectedLeads.size > 0 && (
                 <button onClick={function() { setSelectedLeads(new Set()); }} className="text-xs text-gray-500 hover:text-gray-700 font-medium underline">
-                  Deselectionner
+                  Désélectionner
                 </button>
               )}
               <button
@@ -380,7 +380,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
                         onClick={function() { handleBulkAssign(null); }}
                         className="w-full text-left px-4 py-2 text-xs text-gray-500 hover:bg-gray-50"
                       >
-                        Desassigner
+                        Désassigner
                       </button>
                       <div className="h-px bg-gray-100 my-1" />
                       {users.map(function(u) {
@@ -432,7 +432,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Etape</label>
+              <label className="text-xs text-gray-500 mb-1 block">Étape</label>
               <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="input text-sm py-1.5">
                 <option value="">Toutes</option>
                 {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -463,7 +463,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-semibold text-gray-700">Colonnes visibles</h4>
             <button onClick={() => updateColumns(DEFAULT_COLUMNS)} className="text-xs text-brand-600 hover:text-brand-700 font-medium">
-              Reinitialiser
+              Réinitialiser
             </button>
           </div>
           <div className="flex flex-wrap gap-2">

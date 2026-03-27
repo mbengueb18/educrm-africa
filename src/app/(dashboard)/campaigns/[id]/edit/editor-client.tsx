@@ -175,9 +175,9 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   };
 
   var FIELD_OPTIONS = [
-    { value: "stageId", label: "Etape", type: "select", options: stages.map(function(s) { return { value: s.id, label: s.name }; }) },
+    { value: "stageId", label: "Étape", type: "select", options: stages.map(function(s) { return { value: s.id, label: s.name }; }) },
     { value: "source", label: "Source", type: "select", options: SOURCE_OPTIONS },
-    { value: "programId", label: "Filiere", type: "select", options: programs.map(function(p) { return { value: p.id, label: p.name }; }) },
+    { value: "programId", label: "Filière", type: "select", options: programs.map(function(p) { return { value: p.id, label: p.name }; }) },
     { value: "score", label: "Score", type: "number", options: [] },
     { value: "city", label: "Ville", type: "text", options: [] },
   ];
@@ -335,7 +335,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                 onClick={function() { setPreviewMode(!previewMode); }}
                 className="btn-secondary py-1.5 text-xs mx-auto"
               >
-                {previewMode ? <><Code size={13} /> Mode edition</> : <><Eye size={13} /> Apercu email</>}
+                {previewMode ? <><Code size={13} /> Mode edition</> : <><Eye size={13} /> Aperçu email</>}
               </button>
             </div>
           </div>
@@ -345,7 +345,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
             {selectedBlock ? (
               <div className="p-4 space-y-4">
                 <h4 className="text-sm font-semibold text-gray-700">
-                  {({ text: "Texte", heading: "Titre", button: "Bouton", image: "Image", divider: "Separateur", spacer: "Espace" } as any)[selectedBlock.type]}
+                  {({ text: "Texte", heading: "Titre", button: "Bouton", image: "Image", divider: "Séparateur", spacer: "Espace" } as any)[selectedBlock.type]}
                 </h4>
 
                 {/* Content for button */}
@@ -427,7 +427,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                           }}
                           className="text-xs text-brand-600 hover:text-brand-700 mt-1"
                         >
-                          Auto-detecter la miniature YouTube
+                          Auto-détectér la miniature YouTube
                         </button>
                       )}
                     </PropField>

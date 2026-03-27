@@ -48,7 +48,7 @@ const SOURCE_OPTIONS = [
 const STATUS_STYLES: Record<string, { label: string; color: string; icon: typeof Send }> = {
   DRAFT: { label: "Brouillon", color: "badge-gray", icon: Clock },
   SENDING: { label: "En cours", color: "badge-amber", icon: Loader2 },
-  SENT: { label: "Envoye", color: "badge-green", icon: CheckCircle },
+  SENT: { label: "Envoyé", color: "badge-green", icon: CheckCircle },
   CANCELLED: { label: "Annule", color: "badge-red", icon: XCircle },
 };
 
@@ -85,7 +85,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campagnes email</h1>
-          <p className="text-sm text-gray-500 mt-1">Creez et gerez vos campagnes de communication</p>
+          <p className="text-sm text-gray-500 mt-1">Creez et gérez vos campagnes de communication</p>
         </div>
         <button onClick={function() {
           startTransition(async function() {
@@ -150,7 +150,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                     <p className="text-sm text-gray-500 truncate">{campaign.subject}</p>
                     <p className="text-xs text-gray-400 mt-1">
                       {campaign.createdBy ? "Par " + campaign.createdBy.name + " — " : ""}
-                      {campaign.sentAt ? "Envoye le " + formatDate(campaign.sentAt) : "Cree le " + formatDate(campaign.createdAt)}
+                      {campaign.sentAt ? "Envoye le " + formatDate(campaign.sentAt) : "Créé le " + formatDate(campaign.createdAt)}
                     </p>
                   </div>
 
@@ -372,9 +372,9 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
   };
 
   var FIELD_OPTIONS = [
-    { value: "stageId", label: "Etape pipeline", type: "select", options: stages.map(function(s) { return { value: s.id, label: s.name }; }) },
+    { value: "stageId", label: "Étape pipeline", type: "select", options: stages.map(function(s) { return { value: s.id, label: s.name }; }) },
     { value: "source", label: "Source", type: "select", options: SOURCE_OPTIONS },
-    { value: "programId", label: "Filiere", type: "select", options: programs.map(function(p) { return { value: p.id, label: (p.code ? p.code + " — " : "") + p.name }; }) },
+    { value: "programId", label: "Filière", type: "select", options: programs.map(function(p) { return { value: p.id, label: (p.code ? p.code + " — " : "") + p.name }; }) },
     { value: "score", label: "Score", type: "number", options: [] },
     { value: "city", label: "Ville", type: "text", options: [] },
   ];
@@ -387,7 +387,7 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Nouvelle campagne email</h2>
-            <p className="text-sm text-gray-500">Etape {step} sur 2</p>
+            <p className="text-sm text-gray-500">Étape {step} sur 2</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={20} />

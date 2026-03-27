@@ -21,12 +21,12 @@ const BULK_TEMPLATES = [
   {
     name: "Relance generale",
     subject: "Ne manquez pas la rentree 2026 — ISM Dakar",
-    body: "Bonjour {{prenom}},\n\nNous vous avions contacte recemment au sujet de votre interet pour nos formations. Les inscriptions pour la rentree 2026 sont toujours ouvertes mais les places sont limitees.\n\nSouhaitez-vous :\n- Planifier un entretien avec notre equipe ?\n- Recevoir des informations supplementaires sur une filiere ?\n- Visiter notre campus ?\n\nRepondez simplement a cet email et nous vous recontacterons.\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
+    body: "Bonjour {{prenom}},\n\nNous vous avions contacte recemment au sujet de votre interet pour nos formations. Les inscriptions pour la rentree 2026 sont toujours ouvertes mais les places sont limitees.\n\nSouhaitez-vous :\n- Planifier un entretien avec notre equipe ?\n- Recevoir des informations supplementaires sur une filière ?\n- Visiter notre campus ?\n\nRepondez simplement a cet email et nous vous recontacterons.\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
   },
   {
     name: "Invitation salon",
     subject: "Invitation — Journee portes ouvertes ISM Dakar",
-    body: "Bonjour {{prenom}},\n\nNous avons le plaisir de vous inviter a notre prochaine journee portes ouvertes :\n\n[DATE] - [HEURE]\nCampus Dakar — Plateau\n12 Rue Felix Faure\n\nAu programme :\n- Presentation des filieres\n- Rencontre avec les enseignants\n- Temoignages d'anciens etudiants\n- Visite du campus\n\nL'entree est libre. Venez nombreux !\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
+    body: "Bonjour {{prenom}},\n\nNous avons le plaisir de vous inviter a notre prochaine journee portes ouvertes :\n\n[DATE] - [HEURE]\nCampus Dakar — Plateau\n12 Rue Felix Faure\n\nAu programme :\n- Presentation des filières\n- Rencontre avec les enseignants\n- Temoignages d'anciens étudiants\n- Visite du campus\n\nL'entree est libre. Venez nombreux !\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
   },
   {
     name: "Rappel dossier",
@@ -67,7 +67,7 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
         );
         setResult(res);
         if (res.sent > 0) {
-          toast.success(res.sent + " email" + (res.sent > 1 ? "s" : "") + " envoye" + (res.sent > 1 ? "s" : ""));
+          toast.success(res.sent + " email" + (res.sent > 1 ? "s" : "") + " envoyé" + (res.sent > 1 ? "s" : ""));
         }
         if (res.failed > 0) {
           toast.error(res.failed + " echec" + (res.failed > 1 ? "s" : ""));

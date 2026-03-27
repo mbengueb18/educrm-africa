@@ -111,9 +111,9 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
       try {
         await moveLeadToStage(leadId, stageId);
         setLead(function(prev) { return prev ? { ...prev, stageId, stage: stages.find(function(s) { return s.id === stageId; }) || prev.stage } as any : null; });
-        toast.success("Etape mise a jour");
+        toast.success("Étape mise à jour");
       } catch {
-        toast.error("Erreur lors du changement d'etape");
+        toast.error("Erreur lors du changement d'étape");
       }
     });
   };
@@ -126,7 +126,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
         await assignLead(leadId, userId || null);
         var user = users.find(function(u) { return u.id === userId; });
         setLead(function(prev) { return prev ? { ...prev, assignedToId: userId || null, assignedTo: user ? { ...user, avatar: null, email: "" } : null } as any : null; });
-        toast.success(userId ? "Lead assigne" : "Lead desassigne");
+        toast.success(userId ? "Lead assigné" : "Lead désassigné");
       } catch {
         toast.error("Erreur");
       }
@@ -139,7 +139,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
     setDeleting(true);
     try {
       await deleteLead(leadId);
-      toast.success("Lead supprime");
+      toast.success("Lead supprimé");
       onClose();
       router.refresh();
     } catch (err: any) {
@@ -226,7 +226,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
               <div className="px-5 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Trash2 size={14} className="text-red-600" />
-                  <span className="text-sm text-red-700 font-medium">Supprimer ce lead et toutes ses donnees ?</span>
+                  <span className="text-sm text-red-700 font-medium">Supprimer ce lead et toutes ses données ?</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={function() { setShowDeleteConfirm(false); }} className="px-3 py-1.5 text-xs text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50" disabled={deleting}>
@@ -243,7 +243,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
             {/* Stage & Assignment */}
             <div className="flex items-center gap-3 px-5 py-3 bg-gray-50/80 border-b border-gray-100">
               <div className="flex-1">
-                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Etape</label>
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Étape</label>
                 <select value={lead.stageId} onChange={function(e) { handleStageChange(e.target.value); }} disabled={isPending} className="input py-1.5 text-xs mt-0.5">
                   {stages.map(function(s) { return <option key={s.id} value={s.id}>{s.name}</option>; })}
                 </select>
@@ -336,10 +336,10 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
     try {
       await updateLead(lead.id, editData);
       onLeadUpdate({ ...lead, ...editData, email: editData.email || null, whatsapp: editData.whatsapp || null, city: editData.city || null, sourceDetail: editData.sourceDetail || null } as any);
-      toast.success("Lead mis a jour");
+      toast.success("Lead mis à jour");
       setEditMode(false);
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la mise a jour");
+      toast.error(err.message || "Erreur lors de la mise à jour");
     }
     setSaving(false);
   };
@@ -403,14 +403,14 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
           <div className="space-y-3">
             <EditRow label="Prenom" value={editData.firstName} onChange={function(v) { setEditData({ ...editData, firstName: v }); }} />
             <EditRow label="Nom" value={editData.lastName} onChange={function(v) { setEditData({ ...editData, lastName: v }); }} />
-            <EditRow label="Telephone" value={editData.phone} onChange={function(v) { setEditData({ ...editData, phone: v }); }} />
+            <EditRow label="Téléphone" value={editData.phone} onChange={function(v) { setEditData({ ...editData, phone: v }); }} />
             <EditRow label="Email" value={editData.email} onChange={function(v) { setEditData({ ...editData, email: v }); }} type="email" />
             <EditRow label="WhatsApp" value={editData.whatsapp} onChange={function(v) { setEditData({ ...editData, whatsapp: v }); }} />
             <EditRow label="Ville" value={editData.city} onChange={function(v) { setEditData({ ...editData, city: v }); }} />
           </div>
         ) : (
           <>
-            <InfoRow icon={Phone} label="Telephone" value={formatPhone(lead.phone)} />
+            <InfoRow icon={Phone} label="Téléphone" value={formatPhone(lead.phone)} />
             {lead.whatsapp && lead.whatsapp !== lead.phone && (
               <InfoRow icon={MessageCircle} label="WhatsApp" value={formatPhone(lead.whatsapp)} />
             )}
@@ -423,11 +423,11 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       </Section>
 
       {lead.program && (
-        <Section title="Formation souhaitee">
-          <InfoRow icon={GraduationCap} label="Filiere" value={lead.program.name} />
+        <Section title="Formation souhaitée">
+          <InfoRow icon={GraduationCap} label="Filière" value={lead.program.name} />
           {lead.program.code && <InfoRow icon={Tag} label="Code" value={lead.program.code} />}
           <InfoRow icon={Tag} label="Niveau" value={lead.program.level} />
-          <InfoRow icon={Tag} label="Frais de scolarite" value={formatCFA(lead.program.tuitionAmount)} />
+          <InfoRow icon={Tag} label="Frais de scolarité" value={formatCFA(lead.program.tuitionAmount)} />
         </Section>
       )}
 
@@ -439,7 +439,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       )}
 
       {allCustom.length > 0 && (
-        <Section title="Informations complementaires">
+        <Section title="Informations complémentaires">
           {allCustom.map(function(cf, i) {
             return <InfoRow key={i} icon={Tag} label={cf.label} value={cf.value} />;
           })}
@@ -479,7 +479,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
               <InfoRow icon={Tag} label="Referrer" value={customFields._referrer} />
             )}
             {lead.campaign && <InfoRow icon={Megaphone} label="Campagne" value={lead.campaign.name} />}
-            <InfoRow icon={Calendar} label="Cree le" value={formatDateTime(lead.createdAt)} />
+            <InfoRow icon={Calendar} label="Créé le" value={formatDateTime(lead.createdAt)} />
           </>
         )}
       </Section>
@@ -507,7 +507,7 @@ function ActivityTab({ activities }: { activities: LeadDetail["activities"] }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center px-6">
         <Activity size={32} className="text-gray-300 mb-3" />
-        <p className="text-sm text-gray-400">Aucune activite enregistree</p>
+        <p className="text-sm text-gray-400">Aucune activité enregistrée</p>
       </div>
     );
   }
@@ -595,7 +595,7 @@ function MessagesTab({ messages, count, lead }: { messages: LeadDetail["messages
                       msg.status === "DELIVERED" || msg.status === "READ" ? "text-emerald-500" :
                       msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
                     )}>
-                      {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Recu" : msg.status === "SENT" ? "Envoye" : msg.status === "FAILED" ? "Echoue" : msg.status}
+                      {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Reçu" : msg.status === "SENT" ? "Envoyé" : msg.status === "FAILED" ? "Échoué" : msg.status}
                     </span>
                   </div>
                 </div>

@@ -219,7 +219,7 @@ export async function updateLead(leadId: string, data: {
   assignedToId?: string | null;
 }) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var lead = await prisma.lead.update({
     where: { id: leadId },
@@ -255,7 +255,7 @@ export async function updateLead(leadId: string, data: {
 // ─── Delete lead ───
 export async function deleteLead(leadId: string) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   // Delete related records first
   await prisma.activity.deleteMany({ where: { leadId } });
@@ -272,7 +272,7 @@ export async function deleteLead(leadId: string) {
 // ─── Delete multiple leads ───
 export async function deleteLeads(leadIds: string[]) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   for (var id of leadIds) {
     await prisma.activity.deleteMany({ where: { leadId: id } });
@@ -302,14 +302,14 @@ export async function importLeadsFromCSV(rows: {
   programCode?: string;
 }[]) {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var { organizationId } = session.user;
 
   var defaultStage = await prisma.pipelineStage.findFirst({
     where: { organizationId, isDefault: true },
   });
-  if (!defaultStage) throw new Error("Aucune etape par defaut");
+  if (!defaultStage) throw new Error("Aucune étape par défaut");
 
   var programs = await prisma.program.findMany({
     where: { organizationId },
@@ -328,7 +328,7 @@ export async function importLeadsFromCSV(rows: {
       continue;
     }
     if (!row.phone && !row.email) {
-      errors.push("Ligne " + (i + 2) + ": telephone ou email requis");
+      errors.push("Ligne " + (i + 2) + ": téléphone ou email requis");
       skipped++;
       continue;
     }
@@ -404,7 +404,7 @@ export async function importLeadsFromCSV(rows: {
 // ─── Export leads as CSV string ───
 export async function exportLeadsCSV() {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifie");
+  if (!session?.user) throw new Error("Non authentifié");
 
   var leads = await prisma.lead.findMany({
     where: { organizationId: session.user.organizationId },
@@ -418,9 +418,9 @@ export async function exportLeadsCSV() {
   });
 
   var headers = [
-    "Prenom", "Nom", "Telephone", "Email", "WhatsApp", "Ville",
-    "Source", "Detail source", "Filiere", "Campus", "Etape",
-    "Score", "Assigne a", "Date creation", "Converti"
+    "Prenom", "Nom", "Téléphone", "Email", "WhatsApp", "Ville",
+    "Source", "Detail source", "Filière", "Campus", "Étape",
+    "Score", "Assigne a", "Date création", "Converti"
   ];
 
   var rows = leads.map(function(l) {

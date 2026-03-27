@@ -89,7 +89,7 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
     phone: "+221 77 123 45 67",
     email: "amadou@email.com",
     ville: "Dakar",
-    filiere: "BTS-CG",
+    filière: "BTS-CG",
     source: "website",
     formName: "Demande brochure"
   })
@@ -210,11 +210,11 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
                   <FieldRow field="Prénom" names="firstName, first_name, prenom, prénom, fname, your-name" />
                   <FieldRow field="Nom" names="lastName, last_name, nom, lname, surname, nom_famille" />
                   <FieldRow field="Nom complet" names="name, fullname, full_name, nom_complet (auto-split)" />
-                  <FieldRow field="Téléphone" names="phone, telephone, tel, mobile, portable, your-phone" />
+                  <FieldRow field="Téléphone" names="phone, téléphone, tel, mobile, portable, your-phone" />
                   <FieldRow field="Email" names="email, e-mail, mail, courriel, your-email" />
                   <FieldRow field="Ville" names="city, ville, town, localite, adresse, address" />
-                  <FieldRow field="Filière" names="formation, filiere, filière, program, programme, diplome, specialite" />
-                  <FieldRow field="Campus" names="campus, site, etablissement" />
+                  <FieldRow field="Filière" names="formation, filière, filière, program, programme, diplome, specialite" />
+                  <FieldRow field="Campus" names="campus, site, établissement" />
                   <FieldRow field="Message" names="message, commentaire, comments, question, demande, sujet" />
                 </tbody>
               </table>
@@ -470,7 +470,7 @@ Content-Type: application/x-www-form-urlencoded`} />
             <DocSection title="Champs acceptés" content={`Champs obligatoires :
 • firstName (ou first_name, prenom) — Prénom
 • lastName (ou last_name, nom) — Nom  
-• phone (ou telephone, tel) — Téléphone
+• phone (ou téléphone, tel) — Téléphone
   OU email — Au moins un moyen de contact
 
 Champs optionnels :
@@ -479,7 +479,7 @@ Champs optionnels :
 • city (ou ville) — Ville
 • source — Source (website, facebook, instagram, salon, referral...)
 • sourceDetail (ou source_detail) — Détail de la source
-• filiere (ou programCode) — Code filière (ex: BTS-CG)
+• filière (ou programCode) — Code filière (ex: BTS-CG)
 • campus (ou campusCity) — Ville du campus
 • message — Message du prospect
 • formName (ou form_name) — Nom du formulaire`} />
