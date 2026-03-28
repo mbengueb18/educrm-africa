@@ -10,7 +10,7 @@ interface OverdueTask {
   title: string;
   type: string;
   priority: string;
-  dueDate: Date;
+  dueDate: Date | null;
   lead: { firstName: string; lastName: string } | null;
   assignedTo: { name: string };
 }
@@ -134,7 +134,8 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderPr
                                     )}
                                     <span className="text-[10px] text-gray-400">{TYPE_LABELS[task.type] || task.type}</span>
                                   </div>
-                                  <div className="flex items-center gap-1 mt-1 text-[10px] text-red-500 font-medium">
+                                  <div className="flex items-center gap-1 mt-1 text-[10px]
+                                   text-red-500 font-medium">
                                     <Clock size={10} />
                                     Échéance dépassée : {formatRelative(task.dueDate)}
                                   </div>
