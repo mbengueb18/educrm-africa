@@ -39,6 +39,7 @@ model Organization {
   messages       Message[]
   automations    Automation[]
   emailCampaigns EmailCampaign[]
+  tasks          Task[]
 
   @@map("organizations")
 }
@@ -147,6 +148,8 @@ model User {
   activities    Activity[]
   sentMessages  Message[]   @relation("SentMessages")
   emailCampaigns EmailCampaign[]
+  assignedTasks Task[]      @relation("AssignedTasks")
+  createdTasks  Task[]      @relation("CreatedTasks")
 
   @@index([organizationId])
   @@index([email])
@@ -229,6 +232,7 @@ model Lead {
   activities   Activity[]
   messages     Message[]
   documents    Document[]
+  tasks        Task[]
 
   @@index([organizationId])
   @@index([stageId])
@@ -683,6 +687,64 @@ enum ActivityType {
   GRADE_ENTERED
   ATTENDANCE_MARKED
   AUTOMATION_TRIGGERED
+}
+
+// ─── TASKS ───
+
+model Task {
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  type           TaskType     @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  status         TaskStatus   @default(TODO)
+  dueDate        DateTime?
+  completedAt    DateTime?
+  reminderAt     DateTime?
+  
+  // Relations
+  leadId         String?
+  assignedToId   String
+  createdById    String?
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  assignedTo   User         @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  createdBy    User?        @relation("CreatedTasks", fields: [createdById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([assignedToId])
+  @@index([leadId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+enum TaskType {
+  TODO          // Tâche générale
+  CALL          // Rappeler le lead
+  EMAIL         // Envoyer un email
+  MEETING       // Rendez-vous
+  FOLLOW_UP     // Relance
+  DOCUMENT      // Demander/envoyer un document
+  OTHER
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }
 
 // ─── EMAIL CAMPAIGNS ───

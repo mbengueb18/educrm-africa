@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronLeft,
   School,
+  ListTodo,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,6 +30,10 @@ const navItems = [
     href: "/pipeline",
     icon: Kanban,
     badge: "12",
+  },
+  { label: "Tâches",
+    href: "/tasks", 
+    icon: ListTodo 
   },
   {
     label: "Inbox",

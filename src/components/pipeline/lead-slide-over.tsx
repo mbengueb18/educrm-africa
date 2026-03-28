@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { moveLeadToStage, assignLead, updateLeadScore, updateLead, deleteLead } from "@/app/(dashboard)/pipeline/actions";
+import { createTask } from "@/app/(dashboard)/tasks/actions";
 import { cn, formatCFA, formatDate, formatDateTime, formatRelative, formatPhone, getInitials, getScoreBg } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,8 @@ import {
   Trash2,
   Check,
   XCircle,
+  ListTodo, 
+  Plus,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
@@ -77,6 +80,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
   var [isPending, startTransition] = useTransition();
   var [deleting, setDeleting] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  var [showTaskForm, setShowTaskForm] = useState(false);
   var router = useRouter();
 
   useEffect(function() {
@@ -204,6 +208,9 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                       <Mail size={13} /> Email
                     </a>
                   )}
+                  <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50">
+                    <ListTodo size={13} /> Tâche
+                  </button>
                 </div>
               </div>
 
@@ -220,6 +227,19 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                 </button>
               </div>
             </div>
+
+            {/* Quick task form */}
+            {showTaskForm && lead && (
+              <QuickTaskForm
+                leadId={lead.id}
+                leadName={lead.firstName + " " + lead.lastName}
+                users={users}
+                onClose={function(created?: boolean) {
+                  setShowTaskForm(false);
+                  if (created) router.refresh();
+                }}
+              />
+            )}
 
             {/* Delete confirmation */}
             {showDeleteConfirm && (
@@ -639,6 +659,115 @@ function EditRow({ label, value, onChange, type }: { label: string; value: strin
         className="input text-sm py-1.5 w-full"
         placeholder={label}
       />
+    </div>
+  );
+}
+  function QuickTaskForm({ leadId, leadName, users, onClose }: {
+  leadId: string;
+  leadName: string;
+  users: { id: string; name: string }[];
+  onClose: (created?: boolean) => void;
+}) {
+  var [title, setTitle] = useState("");
+  var [type, setType] = useState("FOLLOW_UP");
+  var [priority, setPriority] = useState("MEDIUM");
+  var [dueDate, setDueDate] = useState("");
+  var [assignedToId, setAssignedToId] = useState(users[0]?.id || "");
+  var [saving, setSaving] = useState(false);
+  var [reminderMinutes, setReminderMinutes] = useState("");
+
+  var quickTitles = [
+    { label: "Appeler", value: "Appeler " + leadName, type: "CALL" },
+    { label: "Rappeler", value: "Rappeler " + leadName, type: "CALL" },
+    { label: "Relancer", value: "Relancer " + leadName, type: "FOLLOW_UP" },
+    { label: "Envoyer doc", value: "Envoyer documents à " + leadName, type: "DOCUMENT" },
+    { label: "RDV", value: "Rendez-vous avec " + leadName, type: "MEETING" },
+  ];
+
+  var handleSubmit = async function() {
+    if (!title.trim()) { toast.error("Le titre est requis"); return; }
+    setSaving(true);
+    try {
+      var reminderAt: string | undefined = undefined;
+      if (dueDate && reminderMinutes) {
+        var due = new Date(dueDate).getTime();
+        reminderAt = new Date(due - parseInt(reminderMinutes) * 60000).toISOString();
+      }
+      await createTask({
+        title: title.trim(),
+        type,
+        priority,
+        dueDate: dueDate || undefined,
+        reminderAt,
+        leadId,
+        assignedToId,
+      });
+      toast.success("Tâche créée");
+      onClose(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="px-5 py-3 bg-amber-50/50 border-b border-amber-200">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+          <ListTodo size={13} /> Nouvelle tâche pour {leadName}
+        </span>
+        <button onClick={function() { onClose(); }} className="text-gray-400 hover:text-gray-600">
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Quick titles */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {quickTitles.map(function(qt) {
+          return (
+            <button key={qt.label} onClick={function() { setTitle(qt.value); setType(qt.type); }}
+              className={cn("text-[10px] px-2 py-1 rounded-full border transition-colors",
+                title === qt.value ? "bg-amber-200 text-amber-800 border-amber-300" : "bg-white text-gray-600 border-gray-200 hover:border-amber-300"
+              )}>
+              {qt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <input type="text" value={title} onChange={function(e) { setTitle(e.target.value); }} className="input text-sm mb-2 w-full" placeholder="Titre de la tâche..." />
+
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <select value={priority} onChange={function(e) { setPriority(e.target.value); }} className="input text-xs py-1.5">
+          <option value="LOW">Basse</option>
+          <option value="MEDIUM">Moyenne</option>
+          <option value="HIGH">Haute</option>
+          <option value="URGENT">Urgente</option>
+        </select>
+        <select value={assignedToId} onChange={function(e) { setAssignedToId(e.target.value); }} className="input text-xs py-1.5">
+          {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
+        </select>
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <input type="datetime-local" value={dueDate} onChange={function(e) { setDueDate(e.target.value); }} className="input text-xs py-1.5" placeholder="Échéance" />
+        <select value={reminderMinutes} onChange={function(e) { setReminderMinutes(e.target.value); }} className="input text-xs py-1.5" disabled={!dueDate}>
+          <option value="">Pas de rappel</option>
+          <option value="15">15 min avant</option>
+          <option value="30">30 min avant</option>
+          <option value="60">1h avant</option>
+          <option value="120">2h avant</option>
+          <option value="1440">1 jour avant</option>
+          <option value="2880">2 jours avant</option>
+        </select>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={function() { onClose(); }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
+        <button onClick={handleSubmit} disabled={saving || !title.trim()} className="btn-primary py-1.5 px-3 text-xs">
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+          Créer
+        </button>
+      </div>
     </div>
   );
 }
