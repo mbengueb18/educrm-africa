@@ -137,7 +137,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderPr
                                   <div className="flex items-center gap-1 mt-1 text-[10px]
                                    text-red-500 font-medium">
                                     <Clock size={10} />
-                                    Échéance dépassée : {formatRelative(task.dueDate)}
+                                    Échéance dépassée : {task.dueDate ? formatRelative(task.dueDate) : ""}
                                   </div>
                                 </div>
                                 <span className={cn("text-[10px] font-semibold", PRIORITY_COLORS[task.priority])}>
@@ -174,7 +174,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderPr
                                   </div>
                                   <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600">
                                     <Clock size={10} />
-                                    Prévu : {new Date(task.dueDate).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                    Prévu : {task.dueDate ? new Date(task.dueDate).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : ""}
                                   </div>
                                 </div>
                               </a>
