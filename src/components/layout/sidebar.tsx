@@ -17,6 +17,7 @@ import {
   School,
   ListTodo,
   Phone,
+  CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -39,6 +40,9 @@ const navItems = [
   { label: "Appels", 
     href: "/calls", 
     icon: Phone },
+  { label: "Rendez-vous", 
+    href: "/appointments", 
+    icon: CalendarDays },
   {
     label: "Inbox",
     href: "/inbox",

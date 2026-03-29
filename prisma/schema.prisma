@@ -41,6 +41,7 @@ model Organization {
   emailCampaigns EmailCampaign[]
   tasks          Task[]
   calls          Call[]
+  appointments   Appointment[]
 
   @@map("organizations")
 }
@@ -152,6 +153,8 @@ model User {
   assignedTasks Task[]      @relation("AssignedTasks")
   createdTasks  Task[]      @relation("CreatedTasks")
   calls         Call[]       @relation("UserCalls")
+  assignedAppointments Appointment[] @relation("AssignedAppointments")
+  createdAppointments  Appointment[] @relation("CreatedAppointments")
 
 
   @@index([organizationId])
@@ -237,6 +240,7 @@ model Lead {
   documents    Document[]
   tasks        Task[]
   calls        Call[]
+  appointments Appointment[]
 
   @@index([organizationId])
   @@index([stageId])
@@ -857,4 +861,61 @@ enum CallOutcome {
   CALLBACK      // Rappeler plus tard
   WRONG_NUMBER  // Mauvais numéro
   NOT_INTERESTED // Pas intéressé
+}
+
+// ─── APPOINTMENTS ───
+
+model Appointment {
+  id             String              @id @default(cuid())
+  title          String
+  description    String?
+  type           AppointmentType     @default(IN_PERSON)
+  status         AppointmentStatus   @default(SCHEDULED)
+  
+  startAt        DateTime
+  endAt          DateTime
+  location       String?             // Adresse physique ou lien visio
+  meetingUrl     String?             // Google Meet / Zoom / Teams link
+  meetingProvider String?            // google_meet, zoom, teams
+  
+  leadId         String?
+  assignedToId   String
+  createdById    String?
+  organizationId String
+  
+  // External calendar sync
+  googleEventId  String?
+  outlookEventId String?
+  
+  reminderAt     DateTime?
+  notes          String?
+  
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  assignedTo   User         @relation("AssignedAppointments", fields: [assignedToId], references: [id])
+  createdBy    User?        @relation("CreatedAppointments", fields: [createdById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([assignedToId])
+  @@index([leadId])
+  @@index([startAt])
+  @@map("appointments")
+}
+
+enum AppointmentType {
+  IN_PERSON     // En présentiel
+  PHONE         // Par téléphone
+  VIDEO_CALL    // Visioconférence
+}
+
+enum AppointmentStatus {
+  SCHEDULED     // Planifié
+  CONFIRMED     // Confirmé
+  IN_PROGRESS   // En cours
+  COMPLETED     // Terminé
+  CANCELLED     // Annulé
+  NO_SHOW       // Absent
 }
