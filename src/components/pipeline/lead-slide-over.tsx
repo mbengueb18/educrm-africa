@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
+import { ConvertLeadModal } from "@/components/pipeline/convert-lead-modal";
 
 type LeadDetail = Awaited<ReturnType<typeof getLeadDetail>>;
 
@@ -80,6 +81,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
   var [isPending, startTransition] = useTransition();
   var [deleting, setDeleting] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  var [showConvert, setShowConvert] = useState(false);
   var [showTaskForm, setShowTaskForm] = useState(false);
   var router = useRouter();
 
@@ -211,6 +213,11 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                   <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50">
                     <ListTodo size={13} /> Tâche
                   </button>
+                  {!lead.isConverted && (
+                    <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                      <GraduationCap size={13} /> Convertir
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -305,6 +312,32 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
           </>
         )}
       </div>
+
+      {showConvert && lead && (
+        <ConvertLeadModal
+          open={showConvert}
+          onClose={function(converted?: boolean) {
+            setShowConvert(false);
+            if (converted) {
+              onClose();
+              router.refresh();
+            }
+          }}
+          lead={{
+            id: lead.id,
+            firstName: lead.firstName,
+            lastName: lead.lastName,
+            phone: lead.phone,
+            email: lead.email,
+            whatsapp: lead.whatsapp,
+            city: lead.city,
+            gender: lead.gender,
+            dateOfBirth: lead.dateOfBirth,
+            programId: lead.programId || null,
+            campusId: lead.campusId || null,
+          }}
+        />
+      )}
 
       <style jsx global>{`
         @keyframes slideInRight {
