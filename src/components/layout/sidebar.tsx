@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   School,
   ListTodo,
+  Phone,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -35,6 +36,9 @@ const navItems = [
     href: "/tasks", 
     icon: ListTodo 
   },
+  { label: "Appels", 
+    href: "/calls", 
+    icon: Phone },
   {
     label: "Inbox",
     href: "/inbox",
