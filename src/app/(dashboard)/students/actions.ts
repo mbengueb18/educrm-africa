@@ -5,187 +5,176 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // ─── Get all students ───
-export async function getStudents() {
-  const session = await auth();
+export async function getStudents(filters?: {
+  status?: string;
+  programId?: string;
+  campusId?: string;
+  search?: string;
+}) {
+  var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  return prisma.student.findMany({
-    where: { organizationId: session.user.organizationId },
+  var where: any = { organizationId: session.user.organizationId };
+
+  if (filters?.status) where.status = filters.status;
+  if (filters?.programId) where.programId = filters.programId;
+  if (filters?.campusId) where.campusId = filters.campusId;
+  if (filters?.search) {
+    var q = filters.search;
+    where.OR = [
+      { firstName: { contains: q, mode: "insensitive" } },
+      { lastName: { contains: q, mode: "insensitive" } },
+      { studentNumber: { contains: q, mode: "insensitive" } },
+      { email: { contains: q, mode: "insensitive" } },
+      { phone: { contains: q } },
+    ];
+  }
+
+  var students = await prisma.student.findMany({
+    where,
     include: {
-      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true } },
+      program: { select: { id: true, name: true, code: true, level: true } },
       campus: { select: { id: true, name: true, city: true } },
-      lead: { select: { source: true } },
-      _count: { select: { payments: true, attendances: true, grades: true } },
+      lead: { select: { id: true, source: true, sourceDetail: true } },
+      _count: { select: { payments: true, enrollments: true } },
     },
     orderBy: { createdAt: "desc" },
   });
-}
 
-// ─── Convert lead to student ───
-export async function convertLeadToStudent(leadId: string, programId: string, campusId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-
-  const { organizationId } = session.user;
-
-  // Get lead
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-  if (!lead) throw new Error("Lead introuvable");
-  if (lead.isConverted) throw new Error("Ce lead est déjà converti");
-
-  // Get current academic year
-  const academicYear = await prisma.academicYear.findFirst({
-    where: { organizationId, isCurrent: true },
-  });
-  if (!academicYear) throw new Error("Aucune année académique active");
-
-  // Get "Inscrit" stage
-  const inscritStage = await prisma.pipelineStage.findFirst({
-    where: { organizationId, isWon: true },
-  });
-
-  // Generate student number
-  const count = await prisma.student.count({ where: { organizationId } });
-  const year = new Date().getFullYear();
-  const studentNumber = `EDU-${year}-${String(count + 1).padStart(4, "0")}`;
-
-  // Transaction: create student + update lead + create enrollment + create payment plan
-  const student = await prisma.$transaction(async (tx) => {
-    // Create student
-    const student = await tx.student.create({
-      data: {
-        studentNumber,
-        leadId,
-        programId,
-        campusId,
-        firstName: lead.firstName,
-        lastName: lead.lastName,
-        phone: lead.phone,
-        whatsapp: lead.whatsapp,
-        email: lead.email,
-        gender: lead.gender,
-        dateOfBirth: lead.dateOfBirth,
-        organizationId,
-      },
-    });
-
-    // Mark lead as converted
-    await tx.lead.update({
-      where: { id: leadId },
-      data: {
-        isConverted: true,
-        convertedAt: new Date(),
-        stageId: inscritStage?.id || lead.stageId,
-      },
-    });
-
-    // Create enrollment
-    await tx.enrollment.create({
-      data: {
-        studentId: student.id,
-        academicYearId: academicYear.id,
-        yearOfStudy: 1,
-      },
-    });
-
-    // Get program tuition to create payment plan
-    const program = await tx.program.findUnique({ where: { id: programId } });
-    if (program) {
-      const tranches = 3;
-      const amount = Math.round(program.tuitionAmount / tranches);
-      const now = new Date();
-
-      for (let i = 0; i < tranches; i++) {
-        const dueDate = new Date(now);
-        dueDate.setMonth(dueDate.getMonth() + i * 2); // Every 2 months
-
-        await tx.payment.create({
-          data: {
-            studentId: student.id,
-            academicYearId: academicYear.id,
-            label: i === 0 ? "Frais d'inscription + Tranche 1" : `Tranche ${i + 1}`,
-            amount,
-            dueDate,
-            status: "PENDING",
-            organizationId,
-          },
-        });
-      }
-    }
-
-    // Log activity
-    await tx.activity.create({
-      data: {
-        type: "LEAD_CONVERTED",
-        description: `${lead.firstName} ${lead.lastName} converti en étudiant (${studentNumber})`,
-        userId: session.user.id,
-        leadId,
-        studentId: student.id,
-        organizationId,
-      },
-    });
-
-    return student;
-  });
-
-  revalidatePath("/pipeline");
-  revalidatePath("/students");
-  revalidatePath("/payments");
-
-  return student;
+  return students;
 }
 
 // ─── Get student detail ───
 export async function getStudentDetail(studentId: string) {
-  const session = await auth();
+  var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  return prisma.student.findUnique({
-    where: { id: studentId },
+  var student = await prisma.student.findFirst({
+    where: { id: studentId, organizationId: session.user.organizationId },
     include: {
-      program: true,
-      campus: true,
-      lead: { select: { source: true, sourceDetail: true, campaign: { select: { name: true } } } },
+      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true, durationMonths: true } },
+      campus: { select: { id: true, name: true, city: true } },
+      lead: { select: { id: true, source: true, sourceDetail: true, createdAt: true } },
       enrollments: {
-        include: { academicYear: true },
+        include: { academicYear: { select: { id: true, label: true, isCurrent: true } } },
         orderBy: { enrolledAt: "desc" },
       },
       payments: {
         orderBy: { dueDate: "asc" },
+        take: 20,
       },
-      grades: {
-        include: { subject: true },
+      activities: {
+        include: { user: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
-      },
-      attendances: {
-        orderBy: { date: "desc" },
-        take: 30,
+        take: 20,
       },
       documents: {
         orderBy: { createdAt: "desc" },
-      },
-      activities: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: { user: { select: { name: true } } },
+        take: 10,
       },
     },
   });
+
+  return student;
 }
 
 // ─── Get student stats ───
 export async function getStudentStats() {
-  const session = await auth();
+  var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  const { organizationId } = session.user;
+  var orgId = session.user.organizationId;
 
-  const [total, active, graduated, suspended] = await Promise.all([
-    prisma.student.count({ where: { organizationId } }),
-    prisma.student.count({ where: { organizationId, status: "ACTIVE" } }),
-    prisma.student.count({ where: { organizationId, status: "GRADUATED" } }),
-    prisma.student.count({ where: { organizationId, status: "SUSPENDED" } }),
+  var [total, active, suspended, graduated, withdrawn, thisMonth] = await Promise.all([
+    prisma.student.count({ where: { organizationId: orgId } }),
+    prisma.student.count({ where: { organizationId: orgId, status: "ACTIVE" } }),
+    prisma.student.count({ where: { organizationId: orgId, status: "SUSPENDED" } }),
+    prisma.student.count({ where: { organizationId: orgId, status: "GRADUATED" } }),
+    prisma.student.count({ where: { organizationId: orgId, status: { in: ["WITHDRAWN", "EXPELLED"] } } }),
+    prisma.student.count({
+      where: {
+        organizationId: orgId,
+        createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+      },
+    }),
   ]);
 
-  return { total, active, graduated, suspended };
+  return { total, active, suspended, graduated, withdrawn, thisMonth };
+}
+
+// ─── Update student ───
+export async function updateStudent(studentId: string, data: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  email?: string;
+  whatsapp?: string;
+  gender?: string;
+  dateOfBirth?: string | null;
+  address?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  status?: string;
+  programId?: string;
+  campusId?: string;
+}) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var updateData: any = {};
+  if (data.firstName !== undefined) updateData.firstName = data.firstName;
+  if (data.lastName !== undefined) updateData.lastName = data.lastName;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.email !== undefined) updateData.email = data.email || null;
+  if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp || null;
+  if (data.gender !== undefined) updateData.gender = data.gender || null;
+  if (data.dateOfBirth !== undefined) updateData.dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+  if (data.address !== undefined) updateData.address = data.address || null;
+  if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact || null;
+  if (data.emergencyPhone !== undefined) updateData.emergencyPhone = data.emergencyPhone || null;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.programId !== undefined) updateData.programId = data.programId;
+  if (data.campusId !== undefined) updateData.campusId = data.campusId;
+
+  var student = await prisma.student.update({
+    where: { id: studentId },
+    data: updateData,
+  });
+
+  revalidatePath("/students");
+  return { success: true, student };
+}
+
+// ─── Delete student ───
+export async function deleteStudent(studentId: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  // Get student to un-convert the lead
+  var student = await prisma.student.findFirst({
+    where: { id: studentId, organizationId: session.user.organizationId },
+    select: { leadId: true },
+  });
+
+  // Delete related records
+  await prisma.enrollment.deleteMany({ where: { studentId } });
+  await prisma.payment.deleteMany({ where: { studentId } });
+  await prisma.attendance.deleteMany({ where: { studentId } });
+  await prisma.grade.deleteMany({ where: { studentId } });
+  await prisma.document.deleteMany({ where: { studentId } });
+  await prisma.activity.deleteMany({ where: { studentId } });
+
+  await prisma.student.delete({ where: { id: studentId } });
+
+  // Revert lead conversion
+  if (student?.leadId) {
+    await prisma.lead.update({
+      where: { id: student.leadId },
+      data: { isConverted: false, convertedAt: null },
+    });
+  }
+
+  revalidatePath("/students");
+  revalidatePath("/pipeline");
+  return { success: true };
 }
