@@ -187,10 +187,10 @@ export default function LandingPage() {
               onMouseLeave={(e) => (e.currentTarget.style.color = COLORS.gray)}
               >{item}</a>
             ))}
-            <a href="/login" style={{
+            <a href="https://app.talibcrm.com/login" style={{
               textDecoration: "none", color: COLORS.brand, fontSize: 14, fontWeight: 600,
             }}>Se connecter</a>
-            <a href="/signup" style={{
+            <a href="https://app.talibcrm.com/signup" style={{
               textDecoration: "none", background: COLORS.brand, color: "#fff",
               padding: "10px 24px", borderRadius: 10, fontSize: 14, fontWeight: 600,
               transition: "all 0.2s", boxShadow: `0 2px 8px ${COLORS.brand}40`,
@@ -252,7 +252,7 @@ export default function LandingPage() {
             </p>
 
             <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-              <a href="/signup" style={{
+              <a href="https://app.talibcrm.com/signup" style={{
                 textDecoration: "none", background: COLORS.brand, color: "#fff",
                 padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 600,
                 display: "inline-flex", alignItems: "center", gap: 10,
@@ -431,7 +431,7 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <a href="/login" style={{
+                <a href="https://app.talibcrm.com/login" style={{
                   display: "block", textAlign: "center", textDecoration: "none",
                   padding: "14px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600,
                   background: plan.popular ? COLORS.brand : "transparent",
@@ -505,7 +505,7 @@ export default function LandingPage() {
             Commencez gratuitement, sans engagement.
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-            <a href="/signup" style={{
+            <a href="https://app.talibcrm.com/signup" style={{
               textDecoration: "none", background: COLORS.accent, color: COLORS.dark,
               padding: "16px 40px", borderRadius: 12, fontSize: 16, fontWeight: 700,
               display: "inline-flex", alignItems: "center", gap: 10,
