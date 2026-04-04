@@ -5,15 +5,15 @@ import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizon
 export const metadata: Metadata = { title: "Paramètres" };
 
 const settingsMenu = [
-  { label: "Organisation", description: "Nom, logo, paramètres généraux", icon: Building2, href: "#" },
-  { label: "Équipe", description: "Utilisateurs, rôles et permissions", icon: Users, href: "#" },
-  { label: "Pipeline", description: "Étapes, scoring, automatisations", icon: Settings, href: "#" },
+  { label: "Organisation", description: "Nom, logo, paramètres généraux", icon: Building2, href: "/settings/organization" },
+  { label: "Équipe", description: "Utilisateurs, rôles et permissions", icon: Users, href: "/settings/users" },
+  { label: "Pipeline", description: "Étapes du pipeline de recrutement", icon: Settings, href: "/settings/pipeline" },
   { label: "Champs personnalisés", description: "Champs customs captés depuis les formulaires", icon: SlidersHorizontal, href: "/settings/custom-fields" },
   { label: "Propriétés", description: "Vue d'ensemble de tous les champs collectés", icon: Database, href: "/settings/properties" },
-  { label: "Intégrations", description: "WhatsApp, SMS, email, paiements", icon: Plug, href: "/settings/integrations" },
-  { label: "Notifications", description: "Alertes, rappels, préférences", icon: Bell, href: "#" },
-  { label: "Apparence", description: "Thème, langue, personnalisation", icon: Palette, href: "#" },
-  { label: "Sécurité", description: "Mot de passe, 2FA, sessions", icon: Shield, href: "#" },
+  { label: "Intégrations", description: "Tracking, API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
+  { label: "Notifications", description: "Alertes, rappels, préférences", icon: Bell, href: "/settings/notifications" },
+  { label: "Apparence", description: "Thème, langue, personnalisation", icon: Palette, href: "/settings/appearance" },
+  { label: "Sécurité", description: "Mot de passe, 2FA, sessions", icon: Shield, href: "/settings/security" },
 ];
 
 export default function SettingsPage() {

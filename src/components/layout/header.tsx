@@ -200,18 +200,21 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderPr
           )}
         </div>
 
-        <button className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-1">
-          <div className="w-8 h-8 rounded-lg bg-brand-600 text-white text-xs font-bold flex items-center justify-center">
-            {getInitials(user.name)}
-          </div>
-          <div className="hidden sm:block text-left">
-            <p className="text-sm font-medium text-gray-900 leading-tight">{user.name}</p>
-            <p className="text-[11px] text-gray-500 leading-tight">
-              {user.role === "ADMIN" ? "Administrateur" : user.role}
-            </p>
-          </div>
-          <ChevronDown size={14} className="text-gray-400 hidden sm:block" />
-        </button>
+        <div className="relative">
+          <button onClick={function() { window.location.href = "/profile"; }}
+            className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors ml-1">
+            <div className="w-8 h-8 rounded-lg bg-brand-600 text-white text-xs font-bold flex items-center justify-center">
+              {getInitials(user.name)}
+            </div>
+            <div className="hidden sm:block text-left">
+              <p className="text-sm font-medium text-gray-900 leading-tight">{user.name}</p>
+              <p className="text-[11px] text-gray-500 leading-tight">
+                {user.role === "ADMIN" ? "Administrateur" : user.role}
+              </p>
+            </div>
+            <ChevronDown size={14} className="text-gray-400 hidden sm:block" />
+          </button>
+        </div>
       </div>
     </header>
   );

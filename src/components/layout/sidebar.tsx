@@ -18,6 +18,7 @@ import {
   ListTodo,
   Phone,
   CalendarDays,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -69,6 +70,9 @@ const navItems = [
     href: "/analytics",
     icon: BarChart3,
   },
+  { label: "Utilisateurs", 
+    href: "/users", 
+    icon: Users },
 ];
 
 const bottomItems = [
