@@ -181,26 +181,17 @@ export function SignupForm() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 20 }}>
+             <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 8 }}>Type d'établissement *</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                <select value={schoolType} onChange={function(e) { setSchoolType(e.target.value); }}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 14, outline: "none", background: "#fff", boxSizing: "border-box" as const }}
+                  onFocus={function(e) { e.currentTarget.style.borderColor = "#0E7C6B"; }}
+                  onBlur={function(e) { e.currentTarget.style.borderColor = "#e2e8f0"; }}>
+                  <option value="">Sélectionner le type...</option>
                   {SCHOOL_TYPES.map(function(type) {
-                    var isSelected = schoolType === type.value;
-                    return (
-                      <button key={type.value} type="button" onClick={function() { setSchoolType(type.value); }}
-                        style={{
-                          padding: "12px 8px", borderRadius: 10,
-                          border: isSelected ? "2px solid #0E7C6B" : "1.5px solid #e2e8f0",
-                          background: isSelected ? "#E0F2EE" : "#fff",
-                          textAlign: "center", cursor: "pointer",
-                          transition: "all 0.2s",
-                        }}>
-                        <div style={{ fontSize: 24, marginBottom: 4 }}>{type.icon}</div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: isSelected ? "#0E7C6B" : "#64748B" }}>{type.label}</div>
-                      </button>
-                    );
+                    return <option key={type.value} value={type.value}>{type.icon} {type.label}</option>;
                   })}
-                </div>
+                </select>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>

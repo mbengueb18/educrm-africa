@@ -3,6 +3,16 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   var { pathname } = request.nextUrl;
+
+  // Never intercept static files
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+  
   var hostname = request.headers.get("host") || "";
 
   // ─── MARKETING SITE (talibcrm.com) ───
