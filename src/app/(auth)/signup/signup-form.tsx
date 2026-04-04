@@ -189,8 +189,10 @@ export function SignupForm() {
                     return (
                       <button key={type.value} type="button" onClick={function() { setSchoolType(type.value); }}
                         style={{
-                          padding: "12px 8px", borderRadius: 10, border: isSelected ? "2px solid #0E7C6B" : "1.5px solid #e2e8f0",
-                          background: isSelected ? "#0E7C6B08" : "#fff", textAlign: "center", cursor: "pointer",
+                          padding: "12px 8px", borderRadius: 10,
+                          border: isSelected ? "2px solid #0E7C6B" : "1.5px solid #e2e8f0",
+                          background: isSelected ? "#E0F2EE" : "#fff",
+                          textAlign: "center", cursor: "pointer",
                           transition: "all 0.2s",
                         }}>
                         <div style={{ fontSize: 24, marginBottom: 4 }}>{type.icon}</div>
