@@ -69,10 +69,7 @@ const navItems = [
     label: "Reporting",
     href: "/analytics",
     icon: BarChart3,
-  },
-  { label: "Utilisateurs", 
-    href: "/users", 
-    icon: Users },
+  }
 ];
 
 const bottomItems = [
