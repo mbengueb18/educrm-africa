@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatPhone, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   CalendarDays, CalendarRange, List, Target, TrendingUp, Ban,
 } from "lucide-react";
 import { createAppointment, updateAppointment, deleteAppointment } from "./actions";
+import { syncAppointmentToGoogle } from "./google-sync-actions";
 
 type Appointment = {
   id: string;
@@ -549,6 +550,18 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
   var [notes, setNotes] = useState(appointment?.notes || "");
   var [saving, setSaving] = useState(false);
 
+  // Google Calendar
+  var [googleConnected, setGoogleConnected] = useState(false);
+  var [syncToGoogle, setSyncToGoogle] = useState(false);
+  var [syncing, setSyncing] = useState(false);
+
+  useEffect(function() {
+    fetch("/api/integrations/google/status").then(function(r) { return r.json(); }).then(function(data) {
+      setGoogleConnected(data.connected);
+      if (data.connected) setSyncToGoogle(true);
+    }).catch(function() {});
+  }, []);
+
   // Auto-adjust endAt when startAt changes
   var handleStartChange = function(val: string) {
     setStartAt(val);
@@ -574,7 +587,7 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
     setSaving(true);
     try {
       if (mode === "create") {
-        await createAppointment({
+        var result = await createAppointment({
           title: title.trim(),
           description: description.trim() || undefined,
           type,
@@ -588,6 +601,21 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
           notes: notes.trim() || undefined,
         });
         toast.success("Rendez-vous créé");
+        // Sync to Google Calendar
+        if (syncToGoogle && googleConnected) {
+          setSyncing(true);
+          try {
+            var syncResult = await syncAppointmentToGoogle(result.appointment.id);
+            if (syncResult.meetingUrl) {
+              toast.success("Lien Google Meet généré !");
+            } else {
+              toast.success("Synchronisé avec Google Calendar");
+            }
+          } catch (err: any) {
+            toast.error("Sync Google : " + (err.message || "Erreur"));
+          }
+          setSyncing(false);
+        }
       } else if (appointment) {
         await updateAppointment(appointment.id, {
           title: title.trim(),
@@ -698,6 +726,43 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
               </select>
             </div>
           </div>
+
+          {/* Google Calendar sync */}
+          {googleConnected && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="flex items-center gap-2">
+                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-5 h-5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Google Calendar</p>
+                  <p className="text-[10px] text-blue-600">Synchroniser ce rendez-vous</p>
+                </div>
+              </div>
+              <button type="button" onClick={function() { setSyncToGoogle(!syncToGoogle); }}
+                className={cn("w-11 h-6 rounded-full transition-colors relative", syncToGoogle ? "bg-blue-500" : "bg-gray-300")}>
+                <div className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform", syncToGoogle ? "left-[22px]" : "left-0.5")} />
+              </button>
+            </div>
+          )}
+
+          {googleConnected && syncToGoogle && type === "VIDEO_CALL" && !meetingUrl && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+              <Video size={14} className="text-emerald-600" />
+              <p className="text-xs text-emerald-700">Un lien Google Meet sera généré automatiquement</p>
+            </div>
+          )}
+
+          {!googleConnected && (
+            <a href="/api/integrations/google/connect" className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 transition-colors">
+              <div className="flex items-center gap-2">
+                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-5 h-5 opacity-50" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Connecter Google Calendar</p>
+                  <p className="text-[10px] text-gray-400">Synchronisez vos rendez-vous et générez des liens Meet</p>
+                </div>
+              </div>
+              <ChevronRight size={14} className="text-gray-400" />
+            </a>
+          )}
 
           {/* Notes */}
           <div>

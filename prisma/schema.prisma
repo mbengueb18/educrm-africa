@@ -21,49 +21,49 @@ model Organization {
   slug      String   @unique
   logo      String?
   plan      Plan     @default(STARTER)
-  settings  Json     @default("{}")  // Custom config: timezone, currency, etc.
+  settings  Json     @default("{}") // Custom config: timezone, currency, etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  campuses       Campus[]
-  users          User[]
-  leads          Lead[]
-  students       Student[]
-  pipelineStages PipelineStage[]
-  academicYears  AcademicYear[]
-  programs       Program[]
+  campuses         Campus[]
+  users            User[]
+  leads            Lead[]
+  students         Student[]
+  pipelineStages   PipelineStage[]
+  academicYears    AcademicYear[]
+  programs         Program[]
   messageTemplates MessageTemplate[]
-  campaigns      Campaign[]
-  payments       Payment[]
-  activities     Activity[]
-  messages       Message[]
-  automations    Automation[]
-  emailCampaigns EmailCampaign[]
-  tasks          Task[]
-  calls          Call[]
-  appointments   Appointment[]
+  campaigns        Campaign[]
+  payments         Payment[]
+  activities       Activity[]
+  messages         Message[]
+  automations      Automation[]
+  emailCampaigns   EmailCampaign[]
+  tasks            Task[]
+  calls            Call[]
+  appointments     Appointment[]
 
   @@map("organizations")
 }
 
 enum Plan {
-  STARTER    // 1 campus, 500 contacts
-  GROWTH     // 3 campus, 2000 contacts
+  STARTER // 1 campus, 500 contacts
+  GROWTH // 3 campus, 2000 contacts
   ENTERPRISE // Unlimited
 }
 
 // ─── CAMPUS & PROGRAMS ───
 
 model Campus {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   name           String
   city           String
-  country        String       @default("SN") // ISO 3166-1 alpha-2
+  country        String   @default("SN") // ISO 3166-1 alpha-2
   address        String?
   phone          String?
   organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   programs     Program[]
@@ -77,11 +77,11 @@ model Campus {
 
 model Program {
   id             String       @id @default(cuid())
-  name           String       // e.g. "BTS Comptabilité", "Licence Marketing"
-  code           String?      // e.g. "BTS-COMPTA"
+  name           String // e.g. "BTS Comptabilité", "Licence Marketing"
+  code           String? // e.g. "BTS-COMPTA"
   level          ProgramLevel
-  durationMonths Int          // 12, 24, 36...
-  tuitionAmount  Float        // Annual tuition in FCFA
+  durationMonths Int // 12, 24, 36...
+  tuitionAmount  Float // Annual tuition in FCFA
   currency       String       @default("XOF")
   isActive       Boolean      @default(true)
   campusId       String
@@ -111,7 +111,7 @@ enum ProgramLevel {
 
 model AcademicYear {
   id             String   @id @default(cuid())
-  label          String   // e.g. "2025-2026"
+  label          String // e.g. "2025-2026"
   startDate      DateTime
   endDate        DateTime
   isCurrent      Boolean  @default(false)
@@ -130,32 +130,32 @@ model AcademicYear {
 // ─── USERS & AUTH ───
 
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
+  id             String    @id @default(cuid())
+  email          String    @unique
   name           String
   phone          String?
   passwordHash   String
   role           UserRole
   avatar         String?
-  isActive       Boolean  @default(true)
+  isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
   organizationId String
-  campusId       String?  // null = access to all campuses
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  campusId       String? // null = access to all campuses
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  campus       Campus?      @relation(fields: [campusId], references: [id])
-  assignedLeads Lead[]      @relation("AssignedLeads")
-  activities    Activity[]
-  sentMessages  Message[]   @relation("SentMessages")
-  emailCampaigns EmailCampaign[]
-  assignedTasks Task[]      @relation("AssignedTasks")
-  createdTasks  Task[]      @relation("CreatedTasks")
-  calls         Call[]       @relation("UserCalls")
-  assignedAppointments Appointment[] @relation("AssignedAppointments")
-  createdAppointments  Appointment[] @relation("CreatedAppointments")
-
+  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campus               Campus?           @relation(fields: [campusId], references: [id])
+  assignedLeads        Lead[]            @relation("AssignedLeads")
+  activities           Activity[]
+  sentMessages         Message[]         @relation("SentMessages")
+  emailCampaigns       EmailCampaign[]
+  assignedTasks        Task[]            @relation("AssignedTasks")
+  createdTasks         Task[]            @relation("CreatedTasks")
+  calls                Call[]            @relation("UserCalls")
+  assignedAppointments Appointment[]     @relation("AssignedAppointments")
+  createdAppointments  Appointment[]     @relation("CreatedAppointments")
+  integrations         UserIntegration[]
 
   @@index([organizationId])
   @@index([email])
@@ -163,24 +163,24 @@ model User {
 }
 
 enum UserRole {
-  SUPER_ADMIN   // Platform-level admin
-  ADMIN         // School admin (full access)
-  COMMERCIAL    // Sales team
-  TEACHER       // Faculty
-  ACCOUNTANT    // Finance
-  VIEWER        // Read-only
+  SUPER_ADMIN // Platform-level admin
+  ADMIN // School admin (full access)
+  COMMERCIAL // Sales team
+  TEACHER // Faculty
+  ACCOUNTANT // Finance
+  VIEWER // Read-only
 }
 
 // ─── RECRUITMENT PIPELINE ───
 
 model PipelineStage {
   id             String   @id @default(cuid())
-  name           String   // e.g. "Nouveau lead", "Contacté", "Dossier reçu"
+  name           String // e.g. "Nouveau lead", "Contacté", "Dossier reçu"
   order          Int
   color          String   @default("#3B82F6") // Hex color for Kanban
-  isDefault      Boolean  @default(false)     // Stage for new leads
-  isWon          Boolean  @default(false)     // "Inscrit" stage
-  isLost         Boolean  @default(false)     // "Perdu" stage
+  isDefault      Boolean  @default(false) // Stage for new leads
+  isWon          Boolean  @default(false) // "Inscrit" stage
+  isLost         Boolean  @default(false) // "Perdu" stage
   organizationId String
   createdAt      DateTime @default(now())
 
@@ -193,39 +193,39 @@ model PipelineStage {
 }
 
 model Lead {
-  id             String      @id @default(cuid())
-  firstName      String
-  lastName       String
-  phone          String
-  whatsapp       String?     // May differ from phone
-  email          String?
-  gender         Gender?
-  dateOfBirth    DateTime?
-  city           String?     // City of origin
-  country        String      @default("SN")
-  
-  // Pipeline
-  stageId        String
-  score          Int         @default(0)  // 0-100 lead score
-  source         LeadSource
-  sourceDetail   String?     // e.g. "Salon Dakar 2026", "Facebook Ad #123"
-  
-  // Assignment
-  assignedToId   String?
-  programId      String?     // Desired program
-  campusId       String?
-  campaignId     String?
-  
-  // Status
-  isConverted    Boolean     @default(false) // Became a student
-  convertedAt    DateTime?
-  lostReason     String?
+  id          String    @id @default(cuid())
+  firstName   String
+  lastName    String
+  phone       String
+  whatsapp    String? // May differ from phone
+  email       String?
+  gender      Gender?
+  dateOfBirth DateTime?
+  city        String? // City of origin
+  country     String    @default("SN")
 
-  customFields   Json?       // Stores unmapped/custom form fields
-  
+  // Pipeline
+  stageId      String
+  score        Int        @default(0) // 0-100 lead score
+  source       LeadSource
+  sourceDetail String? // e.g. "Salon Dakar 2026", "Facebook Ad #123"
+
+  // Assignment
+  assignedToId String?
+  programId    String? // Desired program
+  campusId     String?
+  campaignId   String?
+
+  // Status
+  isConverted Boolean   @default(false) // Became a student
+  convertedAt DateTime?
+  lostReason  String?
+
+  customFields Json? // Stores unmapped/custom form fields
+
   organizationId String
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   stage        PipelineStage @relation(fields: [stageId], references: [id])
   assignedTo   User?         @relation("AssignedLeads", fields: [assignedToId], references: [id])
@@ -233,8 +233,8 @@ model Lead {
   campus       Campus?       @relation(fields: [campusId], references: [id])
   campaign     Campaign?     @relation(fields: [campaignId], references: [id])
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  student      Student?      // 1:1 if converted
+
+  student      Student? // 1:1 if converted
   activities   Activity[]
   messages     Message[]
   documents    Document[]
@@ -263,25 +263,25 @@ enum LeadSource {
   PHONE_CALL
   WALK_IN
   REFERRAL
-  SALON      // Education fair
+  SALON // Education fair
   RADIO
   TV
-  PARTNER    // e.g. Orientation Facile
+  PARTNER // e.g. Orientation Facile
   IMPORT
   OTHER
 }
 
 model Campaign {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   type           CampaignType
   startDate      DateTime?
   endDate        DateTime?
   budget         Float?
-  currency       String   @default("XOF")
-  isActive       Boolean  @default(true)
+  currency       String       @default("XOF")
+  isActive       Boolean      @default(true)
   organizationId String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads        Lead[]
@@ -306,41 +306,41 @@ enum CampaignType {
 // ─── STUDENTS & ENROLLMENT ───
 
 model Student {
-  id             String         @id @default(cuid())
-  studentNumber  String         // Auto-generated, e.g. "EDU-2026-0001"
-  leadId         String         @unique
+  id             String        @id @default(cuid())
+  studentNumber  String // Auto-generated, e.g. "EDU-2026-0001"
+  leadId         String        @unique
   programId      String
   campusId       String
-  status         StudentStatus  @default(ACTIVE)
-  enrollmentDate DateTime       @default(now())
-  
+  status         StudentStatus @default(ACTIVE)
+  enrollmentDate DateTime      @default(now())
+
   // Personal info (copied from lead, can be updated)
-  firstName      String
-  lastName       String
-  phone          String
-  whatsapp       String?
-  email          String?
-  gender         Gender?
-  dateOfBirth    DateTime?
-  address        String?
+  firstName        String
+  lastName         String
+  phone            String
+  whatsapp         String?
+  email            String?
+  gender           Gender?
+  dateOfBirth      DateTime?
+  address          String?
   emergencyContact String?
   emergencyPhone   String?
-  
+
   organizationId String
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lead         Lead         @relation(fields: [leadId], references: [id])
   program      Program      @relation(fields: [programId], references: [id])
   campus       Campus       @relation(fields: [campusId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  enrollments  Enrollment[]
-  payments     Payment[]
-  attendances  Attendance[]
-  grades       Grade[]
-  documents    Document[]
-  activities   Activity[]
+
+  enrollments Enrollment[]
+  payments    Payment[]
+  attendances Attendance[]
+  grades      Grade[]
+  documents   Document[]
+  activities  Activity[]
 
   @@unique([organizationId, studentNumber])
   @@index([organizationId])
@@ -350,7 +350,7 @@ model Student {
 
 enum StudentStatus {
   ACTIVE
-  SUSPENDED   // e.g. unpaid fees
+  SUSPENDED // e.g. unpaid fees
   ON_LEAVE
   GRADUATED
   WITHDRAWN
@@ -358,12 +358,12 @@ enum StudentStatus {
 }
 
 model Enrollment {
-  id              String   @id @default(cuid())
-  studentId       String
-  academicYearId  String
-  yearOfStudy     Int      // 1, 2, 3...
-  status          EnrollmentStatus @default(ENROLLED)
-  enrolledAt      DateTime @default(now())
+  id             String           @id @default(cuid())
+  studentId      String
+  academicYearId String
+  yearOfStudy    Int // 1, 2, 3...
+  status         EnrollmentStatus @default(ENROLLED)
+  enrolledAt     DateTime         @default(now())
 
   student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
@@ -387,10 +387,10 @@ model Subject {
   code        String?
   coefficient Float    @default(1)
   programId   String
-  semester    Int?     // 1, 2, etc.
+  semester    Int? // 1, 2, etc.
   createdAt   DateTime @default(now())
 
-  program Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   grades  Grade[]
 
   @@index([programId])
@@ -398,13 +398,13 @@ model Subject {
 }
 
 model Grade {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   studentId String
   subjectId String
-  value     Float    // 0-20 scale (French system)
+  value     Float // 0-20 scale (French system)
   type      GradeType @default(EXAM)
-  session   String?  // "Session 1", "Rattrapage"
-  createdAt DateTime @default(now())
+  session   String? // "Session 1", "Rattrapage"
+  createdAt DateTime  @default(now())
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
@@ -416,7 +416,7 @@ model Grade {
 
 enum GradeType {
   EXAM
-  CONTINUOUS  // Contrôle continu
+  CONTINUOUS // Contrôle continu
   PROJECT
   INTERNSHIP
 }
@@ -448,22 +448,22 @@ enum AttendanceStatus {
 // ─── PAYMENTS ───
 
 model Payment {
-  id              String        @id @default(cuid())
-  studentId       String
-  academicYearId  String
-  label           String        // "Tranche 1", "Frais d'inscription", etc.
-  amount          Float
-  currency        String        @default("XOF")
-  dueDate         DateTime
-  paidDate        DateTime?
-  paidAmount      Float?
-  method          PaymentMethod?
-  transactionRef  String?       // Mobile Money transaction ID
-  status          PaymentStatus @default(PENDING)
-  
-  organizationId  String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id             String         @id @default(cuid())
+  studentId      String
+  academicYearId String
+  label          String // "Tranche 1", "Frais d'inscription", etc.
+  amount         Float
+  currency       String         @default("XOF")
+  dueDate        DateTime
+  paidDate       DateTime?
+  paidAmount     Float?
+  method         PaymentMethod?
+  transactionRef String? // Mobile Money transaction ID
+  status         PaymentStatus  @default(PENDING)
+
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
@@ -499,28 +499,28 @@ enum PaymentStatus {
 // ─── COMMUNICATION ───
 
 model Message {
-  id          String          @id @default(cuid())
+  id          String           @id @default(cuid())
   leadId      String?
-  studentId   String?         // For post-enrollment comms
+  studentId   String? // For post-enrollment comms
   channel     MessageChannel
   direction   MessageDirection
   content     String
-  mediaUrl    String?         // Attachment URL
+  mediaUrl    String? // Attachment URL
   templateId  String?
-  status      MessageStatus   @default(SENT)
-  externalId  String?         // WhatsApp/SMS provider message ID
-  sentById    String?         // User who sent it (null for automated)
-  sentAt      DateTime        @default(now())
+  status      MessageStatus    @default(SENT)
+  externalId  String? // WhatsApp/SMS provider message ID
+  sentById    String? // User who sent it (null for automated)
+  sentAt      DateTime         @default(now())
   deliveredAt DateTime?
   readAt      DateTime?
-  
-  organizationId String
-  createdAt      DateTime     @default(now())
 
-  lead         Lead?             @relation(fields: [leadId], references: [id])
-  sentBy       User?             @relation("SentMessages", fields: [sentById], references: [id])
-  template     MessageTemplate?  @relation(fields: [templateId], references: [id])
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  lead         Lead?            @relation(fields: [leadId], references: [id])
+  sentBy       User?            @relation("SentMessages", fields: [sentById], references: [id])
+  template     MessageTemplate? @relation(fields: [templateId], references: [id])
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([leadId])
@@ -553,18 +553,18 @@ enum MessageStatus {
 }
 
 model MessageTemplate {
-  id             String         @id @default(cuid())
+  id             String           @id @default(cuid())
   name           String
   channel        MessageChannel
-  subject        String?        // For emails
-  body           String         // With variables: {{firstName}}, {{program}}, etc.
-  variables      String[]       // List of available variables
+  subject        String? // For emails
+  body           String // With variables: {{firstName}}, {{program}}, etc.
+  variables      String[] // List of available variables
   category       TemplateCategory
-  isApproved     Boolean        @default(false) // WhatsApp template approval
-  whatsappId     String?        // WhatsApp Business template ID
+  isApproved     Boolean          @default(false) // WhatsApp template approval
+  whatsappId     String? // WhatsApp Business template ID
   organizationId String
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages     Message[]
@@ -574,27 +574,27 @@ model MessageTemplate {
 }
 
 enum TemplateCategory {
-  RECRUITMENT      // Lead nurturing
-  ENROLLMENT       // Inscription process
+  RECRUITMENT // Lead nurturing
+  ENROLLMENT // Inscription process
   PAYMENT_REMINDER // Rappels de paiement
-  ACADEMIC         // Notes, emploi du temps
-  GENERAL          // Announcements
+  ACADEMIC // Notes, emploi du temps
+  GENERAL // Announcements
 }
 
 // ─── AUTOMATIONS ───
 
 model Automation {
-  id             String          @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
   description    String?
   trigger        AutomationTrigger
-  triggerConfig  Json            // e.g. { "stageId": "xxx" } or { "daysOverdue": 3 }
+  triggerConfig  Json // e.g. { "stageId": "xxx" } or { "daysOverdue": 3 }
   action         AutomationAction
-  actionConfig   Json            // e.g. { "templateId": "xxx", "channel": "WHATSAPP" }
-  isActive       Boolean         @default(true)
+  actionConfig   Json // e.g. { "templateId": "xxx", "channel": "WHATSAPP" }
+  isActive       Boolean           @default(true)
   organizationId String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -603,12 +603,12 @@ model Automation {
 }
 
 enum AutomationTrigger {
-  LEAD_STAGE_CHANGED   // Lead moves to a specific stage
-  LEAD_NO_RESPONSE     // No response after X days
-  PAYMENT_DUE          // Payment due in X days
-  PAYMENT_OVERDUE      // Payment overdue by X days
-  ENROLLMENT_COMPLETE  // Student just enrolled
-  ATTENDANCE_ALERT     // X consecutive absences
+  LEAD_STAGE_CHANGED // Lead moves to a specific stage
+  LEAD_NO_RESPONSE // No response after X days
+  PAYMENT_DUE // Payment due in X days
+  PAYMENT_OVERDUE // Payment overdue by X days
+  ENROLLMENT_COMPLETE // Student just enrolled
+  ATTENDANCE_ALERT // X consecutive absences
 }
 
 enum AutomationAction {
@@ -626,9 +626,9 @@ model Document {
   id        String       @id @default(cuid())
   name      String
   type      DocumentType
-  url       String       // Vercel Blob / R2 URL
+  url       String // Vercel Blob / R2 URL
   mimeType  String
-  size      Int          // bytes
+  size      Int // bytes
   leadId    String?
   studentId String?
   createdAt DateTime     @default(now())
@@ -655,15 +655,15 @@ enum DocumentType {
 // ─── ACTIVITY LOG ───
 
 model Activity {
-  id          String       @id @default(cuid())
-  type        ActivityType
-  description String
-  metadata    Json?        // Additional structured data
-  userId      String?      // Who performed the action
-  leadId      String?
-  studentId   String?
+  id             String       @id @default(cuid())
+  type           ActivityType
+  description    String
+  metadata       Json? // Additional structured data
+  userId         String? // Who performed the action
+  leadId         String?
+  studentId      String?
   organizationId String
-  createdAt   DateTime     @default(now())
+  createdAt      DateTime     @default(now())
 
   user         User?        @relation(fields: [userId], references: [id])
   lead         Lead?        @relation(fields: [leadId], references: [id])
@@ -700,23 +700,23 @@ enum ActivityType {
 // ─── TASKS ───
 
 model Task {
-  id             String       @id @default(cuid())
-  title          String
-  description    String?
-  type           TaskType     @default(TODO)
-  priority       TaskPriority @default(MEDIUM)
-  status         TaskStatus   @default(TODO)
-  dueDate        DateTime?
-  completedAt    DateTime?
-  reminderAt     DateTime?
-  
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  type        TaskType     @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(TODO)
+  dueDate     DateTime?
+  completedAt DateTime?
+  reminderAt  DateTime?
+
   // Relations
   leadId         String?
   assignedToId   String
   createdById    String?
   organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   assignedTo   User         @relation("AssignedTasks", fields: [assignedToId], references: [id])
@@ -732,12 +732,12 @@ model Task {
 }
 
 enum TaskType {
-  TODO          // Tâche générale
-  CALL          // Rappeler le lead
-  EMAIL         // Envoyer un email
-  MEETING       // Rendez-vous
-  FOLLOW_UP     // Relance
-  DOCUMENT      // Demander/envoyer un document
+  TODO // Tâche générale
+  CALL // Rappeler le lead
+  EMAIL // Envoyer un email
+  MEETING // Rendez-vous
+  FOLLOW_UP // Relance
+  DOCUMENT // Demander/envoyer un document
   OTHER
 }
 
@@ -758,26 +758,26 @@ enum TaskStatus {
 // ─── EMAIL CAMPAIGNS ───
 
 model EmailCampaign {
-  id              String               @id @default(cuid())
+  id              String              @id @default(cuid())
   name            String
   subject         String
   body            String
-  status          EmailCampaignStatus  @default(DRAFT)
-  segmentRules    Json?                // Filter criteria for leads
+  status          EmailCampaignStatus @default(DRAFT)
+  segmentRules    Json? // Filter criteria for leads
   scheduledAt     DateTime?
   sentAt          DateTime?
   completedAt     DateTime?
-  totalRecipients Int                  @default(0)
-  sentCount       Int                  @default(0)
-  deliveredCount  Int                  @default(0)
-  openedCount     Int                  @default(0)
-  clickedCount    Int                  @default(0)
-  bouncedCount    Int                  @default(0)
-  failedCount     Int                  @default(0)
+  totalRecipients Int                 @default(0)
+  sentCount       Int                 @default(0)
+  deliveredCount  Int                 @default(0)
+  openedCount     Int                 @default(0)
+  clickedCount    Int                 @default(0)
+  bouncedCount    Int                 @default(0)
+  failedCount     Int                 @default(0)
   createdById     String?
   organizationId  String
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   createdBy    User?                    @relation(fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -822,20 +822,20 @@ model EmailCampaignRecipient {
 // ─── CALLS ───
 
 model Call {
-  id             String       @id @default(cuid())
-  leadId         String?
-  direction      CallDirection
-  outcome        CallOutcome
-  duration       Int?         // Durée en secondes
-  phoneNumber    String       // Numéro appelé/reçu
-  notes          String?
-  recordingUrl   String?
-  
-  calledById     String       // Commercial qui a passé/reçu l'appel
+  id           String        @id @default(cuid())
+  leadId       String?
+  direction    CallDirection
+  outcome      CallOutcome
+  duration     Int? // Durée en secondes
+  phoneNumber  String // Numéro appelé/reçu
+  notes        String?
+  recordingUrl String?
+
+  calledById     String // Commercial qui a passé/reçu l'appel
   organizationId String
-  calledAt       DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  calledAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   calledBy     User         @relation("UserCalls", fields: [calledById], references: [id])
@@ -849,49 +849,49 @@ model Call {
 }
 
 enum CallDirection {
-  INBOUND    // Appel entrant
-  OUTBOUND   // Appel sortant
+  INBOUND // Appel entrant
+  OUTBOUND // Appel sortant
 }
 
 enum CallOutcome {
-  ANSWERED      // Décroché
-  NO_ANSWER     // Pas de réponse
-  BUSY          // Occupé
-  VOICEMAIL     // Messagerie
-  CALLBACK      // Rappeler plus tard
-  WRONG_NUMBER  // Mauvais numéro
+  ANSWERED // Décroché
+  NO_ANSWER // Pas de réponse
+  BUSY // Occupé
+  VOICEMAIL // Messagerie
+  CALLBACK // Rappeler plus tard
+  WRONG_NUMBER // Mauvais numéro
   NOT_INTERESTED // Pas intéressé
 }
 
 // ─── APPOINTMENTS ───
 
 model Appointment {
-  id             String              @id @default(cuid())
-  title          String
-  description    String?
-  type           AppointmentType     @default(IN_PERSON)
-  status         AppointmentStatus   @default(SCHEDULED)
-  
-  startAt        DateTime
-  endAt          DateTime
-  location       String?             // Adresse physique ou lien visio
-  meetingUrl     String?             // Google Meet / Zoom / Teams link
-  meetingProvider String?            // google_meet, zoom, teams
-  
+  id          String            @id @default(cuid())
+  title       String
+  description String?
+  type        AppointmentType   @default(IN_PERSON)
+  status      AppointmentStatus @default(SCHEDULED)
+
+  startAt         DateTime
+  endAt           DateTime
+  location        String? // Adresse physique ou lien visio
+  meetingUrl      String? // Google Meet / Zoom / Teams link
+  meetingProvider String? // google_meet, zoom, teams
+
   leadId         String?
   assignedToId   String
   createdById    String?
   organizationId String
-  
+
   // External calendar sync
   googleEventId  String?
   outlookEventId String?
-  
-  reminderAt     DateTime?
-  notes          String?
-  
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+
+  reminderAt DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   assignedTo   User         @relation("AssignedAppointments", fields: [assignedToId], references: [id])
@@ -906,16 +906,36 @@ model Appointment {
 }
 
 enum AppointmentType {
-  IN_PERSON     // En présentiel
-  PHONE         // Par téléphone
-  VIDEO_CALL    // Visioconférence
+  IN_PERSON // En présentiel
+  PHONE // Par téléphone
+  VIDEO_CALL // Visioconférence
 }
 
 enum AppointmentStatus {
-  SCHEDULED     // Planifié
-  CONFIRMED     // Confirmé
-  IN_PROGRESS   // En cours
-  COMPLETED     // Terminé
-  CANCELLED     // Annulé
-  NO_SHOW       // Absent
+  SCHEDULED // Planifié
+  CONFIRMED // Confirmé
+  IN_PROGRESS // En cours
+  COMPLETED // Terminé
+  CANCELLED // Annulé
+  NO_SHOW // Absent
+}
+
+model UserIntegration {
+  id           String    @id @default(cuid())
+  userId       String
+  provider     String // google_calendar
+  accessToken  String
+  refreshToken String?
+  tokenExpiry  DateTime?
+  accountEmail String?
+  calendarId   String?   @default("primary")
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("user_integrations")
 }
