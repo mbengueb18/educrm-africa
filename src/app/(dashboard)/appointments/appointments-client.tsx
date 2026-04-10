@@ -104,6 +104,17 @@ export function AppointmentsClient({ appointments, stats, users, leads, currentU
   var [currentDate, setCurrentDate] = useState(new Date());
   var router = useRouter();
 
+  // Google Calendar success toast
+  useEffect(function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("google") === "success") {
+      setTimeout(function() {
+        toast.success("Google Calendar connecté avec succès ! Vous pouvez maintenant créer un rendez-vous synchronisé.");
+      }, 500);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   // Filter
   var filtered = useMemo(function() {
     return appointments.filter(function(appt) {
@@ -560,6 +571,12 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
       setGoogleConnected(data.connected);
       if (data.connected) setSyncToGoogle(true);
     }).catch(function() {});
+
+    // Show success toast if redirected from Google OAuth
+    if (typeof window !== "undefined" && window.location.search.includes("google=success")) {
+      toast.success("Google Calendar connecté avec succès !");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   // Auto-adjust endAt when startAt changes
@@ -752,7 +769,7 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
           )}
 
           {!googleConnected && (
-            <a href="/api/integrations/google/connect" className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 transition-colors">
+            <a href="/api/integrations/google/connect?returnTo=/appointments" className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 transition-colors">
               <div className="flex items-center gap-2">
                 <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-5 h-5 opacity-50" />
                 <div>

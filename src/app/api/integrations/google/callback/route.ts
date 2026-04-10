@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/settings/integrations?google=error&reason=missing_params", request.url));
   }
 
-  var stateData: { userId: string };
+  var stateData: { userId: string; returnTo?: string };
   try {
     stateData = JSON.parse(Buffer.from(state, "base64").toString());
   } catch {
@@ -82,5 +82,6 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.redirect(new URL("/settings/integrations?google=success", request.url));
+  var returnTo = stateData.returnTo || "/settings/integrations";
+  return NextResponse.redirect(new URL(returnTo + "?google=success", request.url));
 }

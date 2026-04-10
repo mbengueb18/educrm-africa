@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
     "https://www.googleapis.com/auth/userinfo.email",
   ];
 
-  var state = Buffer.from(JSON.stringify({ userId: session.user.id })).toString("base64");
+  var returnTo = request.nextUrl.searchParams.get("returnTo") || "/settings/integrations";
+  var state = Buffer.from(JSON.stringify({ userId: session.user.id, returnTo })).toString("base64");
 
   var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
     client_id: clientId,
