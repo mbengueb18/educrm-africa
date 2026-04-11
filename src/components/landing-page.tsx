@@ -18,6 +18,13 @@ function getTimeLeft() {
 
 export default function LandingPage() {
   var [time, setTime] = useState(getTimeLeft());
+  var [email, setEmail] = useState("");
+  var [submitted, setSubmitted] = useState(false);
+
+  var handleNotify = function() {
+    if (!email.trim() || !email.includes("@")) return;
+    setSubmitted(true);
+  };
 
   useEffect(function() {
     var interval = setInterval(function() { setTime(getTimeLeft()); }, 1000);
@@ -110,27 +117,43 @@ export default function LandingPage() {
       </div>
 
       {/* Email signup */}
-      <div style={{
-        display: "flex", gap: 8, maxWidth: 440, width: "100%",
-        background: "rgba(255,255,255,0.08)", borderRadius: 14, padding: 6,
-        border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(10px)",
-      }}>
-        <input type="email" placeholder="Votre email pour être notifié"
-          style={{
-            flex: 1, padding: "12px 16px", background: "transparent", border: "none",
-            outline: "none", color: "#fff", fontSize: 14,
-          }} />
-        <button style={{
-          padding: "12px 24px", borderRadius: 10, border: "none",
-          background: "#F5A623", color: "#0F1923", fontSize: 14, fontWeight: 700,
-          cursor: "pointer", whiteSpace: "nowrap",
-        }}
-        onMouseEnter={function(e) { e.currentTarget.style.background = "#FFB84D"; }}
-        onMouseLeave={function(e) { e.currentTarget.style.background = "#F5A623"; }}
-        >
-          Me notifier
-        </button>
-      </div>
+      {submitted ? (
+        <div style={{
+          background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)",
+          borderRadius: 14, padding: "16px 32px", textAlign: "center",
+          backdropFilter: "blur(10px)",
+        }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: "#10B981" }}>✓ Merci !</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
+            Vous serez notifié au lancement à <strong style={{ color: "#fff" }}>{email}</strong>
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          display: "flex", gap: 8, maxWidth: 440, width: "100%",
+          background: "rgba(255,255,255,0.08)", borderRadius: 14, padding: 6,
+          border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(10px)",
+        }}>
+          <input type="email" placeholder="Votre email pour être notifié" value={email}
+            onChange={function(e) { setEmail(e.target.value); }}
+            onKeyDown={function(e) { if (e.key === "Enter") handleNotify(); }}
+            style={{
+              flex: 1, padding: "12px 16px", background: "transparent", border: "none",
+              outline: "none", color: "#fff", fontSize: 14,
+            }} />
+          <button onClick={handleNotify} style={{
+            padding: "12px 24px", borderRadius: 10, border: "none",
+            background: "#F5A623", color: "#0F1923", fontSize: 14, fontWeight: 700,
+            cursor: "pointer", whiteSpace: "nowrap",
+            opacity: email.includes("@") ? 1 : 0.5,
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "#FFB84D"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "#F5A623"; }}
+          >
+            Me notifier
+          </button>
+        </div>
+      )}
 
       {/* Features preview */}
       <div style={{
