@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { PermissionProvider } from "@/components/permission-provider";
 
 export default async function DashboardLayout({
   children,
@@ -49,6 +50,7 @@ export default async function DashboardLayout({
   ]);
 
   return (
+    <PermissionProvider role={session.user.role} userId={session.user.id}>
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       <div className="pl-[var(--sidebar-width)] transition-all duration-300">
@@ -62,8 +64,13 @@ export default async function DashboardLayout({
           overdueTasks={overdueTasks}
           dueTodayTasks={dueTodayTasks}
         />
-        <main className="p-6">{children}</main>
+        <PermissionProvider role={session.user.role} userId={session.user.id}>
+          <PermissionProvider role={session.user.role} userId={session.user.id}>
+          <main className="p-6">{children}</main>
+        </PermissionProvider>
+        </PermissionProvider>
       </div>
     </div>
+    </PermissionProvider>
   );
 }
