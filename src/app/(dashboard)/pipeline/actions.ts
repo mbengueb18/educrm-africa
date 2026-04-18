@@ -457,47 +457,4 @@ export async function exportLeadsCSV() {
 
   return csvContent;
 }
-
-// ─── Get lead detail with full history ───
-export async function getLeadDetail(leadId: string) {
-  var session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-
-  var lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: session.user.organizationId },
-    include: {
-      stage: { select: { id: true, name: true, color: true } },
-      assignedTo: { select: { id: true, name: true, avatar: true } },
-      program: { select: { id: true, name: true, code: true } },
-      campus: { select: { id: true, name: true, city: true } },
-      activities: {
-        include: { user: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      },
-      messages: {
-        include: { sender: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      },
-      calls: {
-        include: { calledBy: { select: { name: true } } },
-        orderBy: { calledAt: "desc" },
-        take: 20,
-      },
-      appointments: {
-        include: { assignedTo: { select: { name: true } } },
-        orderBy: { startAt: "desc" },
-        take: 20,
-      },
-      tasks: {
-        include: { assignedTo: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      },
-      _count: { select: { messages: true, activities: true, calls: true, appointments: true, tasks: true } },
-    },
-  });
-
-  return lead;
-}
+//
