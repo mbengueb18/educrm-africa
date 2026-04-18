@@ -1,32 +1,19 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, TrendingDown,
   GraduationCap, Phone, Calendar, ListTodo, AlertTriangle,
-  Activity, Target, BarChart3, ArrowRight, Clock,
+  Activity, Target, BarChart3, Clock, Filter, PhoneMissed,
+  CheckCircle2, XCircle, Timer, CalendarDays, ArrowRight,
 } from "lucide-react";
-
-interface AnalyticsClientProps {
-  data: {
-    kpis: {
-      totalLeads: number; leadsThisMonth: number; leadsPrevMonth: number; leadsGrowth: number;
-      convertedThisMonth: number; convertedPrevMonth: number; conversionRate: number; conversionGrowth: number;
-      totalStudents: number; activeStudents: number;
-      totalTasks: number; overdueTasks: number;
-      callsThisWeek: number; callReachRate: number;
-      appointmentsThisWeek: number;
-    };
-    leadsTimeline: { date: string; count: number }[];
-    conversionsTimeline: { date: string; count: number }[];
-    leadsBySource: { source: string; count: number }[];
-    leadsByStage: { name: string; count: number; color: string }[];
-    leadsByProgram: { name: string; count: number }[];
-    commercialPerf: { name: string; assigned: number; converted: number; calls: number; tasks: number }[];
-    recentActivities: any[];
-  };
-  userName: string;
-}
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend,
+} from "recharts";
+import { getDashboardData } from "./actions";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -42,6 +29,8 @@ var SOURCE_COLORS: Record<string, string> = {
   PARTNER: "#06b6d4", IMPORT: "#6b7280", OTHER: "#9ca3af",
 };
 
+var PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#6b7280"];
+
 function getGreeting(): string {
   var h = new Date().getHours();
   if (h < 12) return "Bonjour";
@@ -49,157 +38,274 @@ function getGreeting(): string {
   return "Bonsoir";
 }
 
-export function AnalyticsClient({ data, userName }: AnalyticsClientProps) {
+function formatDurationShort(seconds: number): string {
+  if (seconds < 60) return seconds + "s";
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function formatDateShort(dateStr: string): string {
+  var d = new Date(dateStr);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+}
+
+interface AnalyticsClientProps {
+  data: any;
+  userName: string;
+  currentUserId: string;
+}
+
+export function AnalyticsClient({ data: initialData, userName, currentUserId }: AnalyticsClientProps) {
+  var [data, setData] = useState(initialData);
+  var [period, setPeriod] = useState(data.period || "30d");
+  var [filterUser, setFilterUser] = useState("");
+  var [filterCampus, setFilterCampus] = useState("");
+  var [showFilters, setShowFilters] = useState(false);
+  var [isPending, startTransition] = useTransition();
+  var router = useRouter();
+
   var { kpis } = data;
 
-  var maxLeadsDay = Math.max(...data.leadsTimeline.map(function(d) { return d.count; }), 1);
-  var totalSourceLeads = data.leadsBySource.reduce(function(sum, s) { return sum + s.count; }, 0);
+  var handleFilterChange = function(newPeriod?: string, newUser?: string, newCampus?: string) {
+    var p = newPeriod !== undefined ? newPeriod : period;
+    var u = newUser !== undefined ? newUser : filterUser;
+    var c = newCampus !== undefined ? newCampus : filterCampus;
+    if (newPeriod !== undefined) setPeriod(p);
+    if (newUser !== undefined) setFilterUser(u);
+    if (newCampus !== undefined) setFilterCampus(c);
+
+    startTransition(async function() {
+      var result = await getDashboardData({
+        period: p,
+        userId: u || undefined,
+        campusId: c || undefined,
+      });
+      setData(result);
+    });
+  };
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-          {getGreeting()}, {userName.split(" ")[0]} 👋
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">Voici un aperçu de votre activité</p>
+      {/* Header + Filters */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            {getGreeting()}, {userName.split(" ")[0]} 👋
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">Voici un aperçu de votre activité</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Period selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {[
+              { key: "7d", label: "7j" },
+              { key: "30d", label: "30j" },
+              { key: "90d", label: "90j" },
+              { key: "12m", label: "12m" },
+            ].map(function(p) {
+              return (
+                <button key={p.key} onClick={function() { handleFilterChange(p.key); }}
+                  className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                    period === p.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  )}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button onClick={function() { setShowFilters(!showFilters); }}
+            className={cn("btn-secondary py-2 text-xs", (filterUser || filterCampus) && "border-brand-300 text-brand-700")}>
+            <Filter size={14} /> Filtres
+            {(filterUser || filterCampus) && <span className="w-4 h-4 rounded-full bg-brand-600 text-white text-[10px] flex items-center justify-center">!</span>}
+          </button>
+
+          {isPending && <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />}
+        </div>
       </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 animate-scale-in">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
+            <button onClick={function() { handleFilterChange(undefined, "", ""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
+              <select value={filterUser} onChange={function(e) { handleFilterChange(undefined, e.target.value); }} className="input text-sm py-1.5">
+                <option value="">Tous</option>
+                <option value={currentUserId}>Mes données</option>
+                {data.filterOptions.users.map(function(u: any) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
+              <select value={filterCampus} onChange={function(e) { handleFilterChange(undefined, undefined, e.target.value); }} className="input text-sm py-1.5">
+                <option value="">Tous</option>
+                {data.filterOptions.campuses.map(function(c: any) { return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; })}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KpiCard
-          label="Leads actifs"
-          value={kpis.totalLeads}
-          change={kpis.leadsGrowth}
-          changeLabel="vs mois dernier"
-          icon={Users}
-          iconColor="text-brand-600"
-          iconBg="bg-brand-50"
-        />
-        <KpiCard
-          label="Nouveaux ce mois"
-          value={kpis.leadsThisMonth}
-          change={kpis.leadsGrowth}
-          changeLabel="vs mois dernier"
-          icon={UserPlus}
-          iconColor="text-emerald-600"
-          iconBg="bg-emerald-50"
-        />
-        <KpiCard
-          label="Convertis ce mois"
-          value={kpis.convertedThisMonth}
-          change={kpis.conversionGrowth}
-          changeLabel="vs mois dernier"
-          icon={UserCheck}
-          iconColor="text-purple-600"
-          iconBg="bg-purple-50"
-        />
-        <KpiCard
-          label="Taux de conversion"
-          value={kpis.conversionRate + "%"}
-          change={kpis.conversionGrowth}
-          changeLabel="vs mois dernier"
-          icon={Target}
-          iconColor="text-amber-600"
-          iconBg="bg-amber-50"
-        />
+        <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={kpis.leadsGrowth} prev={kpis.leadsPreviousPeriod} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
+        <KpiCard label="Convertis" value={kpis.convertedCurrentPeriod} change={kpis.conversionGrowth} prev={kpis.convertedPreviousPeriod} icon={UserCheck} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+        <KpiCard label="Taux de conversion" value={kpis.conversionRate + "%"} change={kpis.conversionGrowth} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
+        <KpiCard label="Étudiants actifs" value={kpis.activeStudents} icon={GraduationCap} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel={"Total : " + kpis.totalStudents} />
       </div>
 
-      {/* Secondary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        <MiniKpi icon={GraduationCap} label="Étudiants actifs" value={String(kpis.activeStudents)} color="text-emerald-600" />
-        <MiniKpi icon={ListTodo} label="Tâches en cours" value={String(kpis.totalTasks)} color="text-blue-600" subValue={kpis.overdueTasks > 0 ? kpis.overdueTasks + " en retard" : undefined} subColor="text-red-500" />
-        <MiniKpi icon={Phone} label="Appels (7j)" value={String(kpis.callsThisWeek)} color="text-indigo-600" subValue={"Joignabilité " + kpis.callReachRate + "%"} />
-        <MiniKpi icon={Calendar} label="RDV cette semaine" value={String(kpis.appointmentsThisWeek)} color="text-teal-600" />
-        <MiniKpi icon={GraduationCap} label="Total étudiants" value={String(kpis.totalStudents)} color="text-purple-600" />
+      {/* Activity KPIs (calls + appointments + tasks) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+        <MiniKpi icon={Phone} label="Appels" value={String(kpis.callsTotal)} color="text-blue-600" />
+        <MiniKpi icon={CheckCircle2} label="Joignabilité" value={kpis.callReachRate + "%"} color="text-emerald-600" />
+        <MiniKpi icon={Timer} label="Durée moy." value={formatDurationShort(kpis.avgDuration)} color="text-purple-600" />
+        <MiniKpi icon={CalendarDays} label="RDV" value={String(kpis.apptsTotal)} color="text-teal-600" />
+        <MiniKpi icon={CheckCircle2} label="Présence" value={kpis.apptPresenceRate + "%"} color="text-emerald-600" />
+        <MiniKpi icon={XCircle} label="Absents" value={String(kpis.apptsNoShow)} color="text-red-500" />
+        <MiniKpi icon={ListTodo} label="Tâches" value={String(kpis.tasksOpen)} color="text-indigo-600" />
+        <MiniKpi icon={AlertTriangle} label="En retard" value={String(kpis.tasksOverdue)} color="text-red-600" highlight={kpis.tasksOverdue > 0} />
       </div>
 
-      {/* Charts row */}
+      {/* Charts row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Leads timeline */}
+        {/* Leads + Conversions curve */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Leads — 30 derniers jours</h3>
-          <div className="flex items-end gap-[3px] h-[140px]">
-            {data.leadsTimeline.map(function(day) {
-              var height = maxLeadsDay > 0 ? Math.max((day.count / maxLeadsDay) * 100, 2) : 2;
-              var isToday = day.date === new Date().toISOString().split("T")[0];
-              return (
-                <div key={day.date} className="flex-1 flex flex-col items-center justify-end group relative">
-                  <div className="absolute -top-6 bg-gray-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                    {new Date(day.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} : {day.count}
-                  </div>
-                  <div
-                    className={cn("w-full rounded-t transition-colors", isToday ? "bg-brand-500" : "bg-brand-200 group-hover:bg-brand-400")}
-                    style={{ height: height + "%" }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-between mt-2 text-[9px] text-gray-400">
-            <span>{new Date(data.leadsTimeline[0]?.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</span>
-            <span>Aujourd'hui</span>
-          </div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Leads & Conversions</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={data.leadsTimeline}>
+              <defs>
+                <linearGradient id="gradLeads" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradConv" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="date" tickFormatter={formatDateShort} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                labelFormatter={function(label) { return formatDateShort(label); }}
+              />
+              <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#gradLeads)" name="Leads" />
+              <Area type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={2} fill="url(#gradConv)" name="Conversions" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* Sources breakdown */}
+        {/* Sources pie chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Sources d'acquisition</h3>
+          {data.leadsBySource.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie
+                    data={data.leadsBySource.slice(0, 6)}
+                    cx="50%" cy="50%"
+                    innerRadius={40} outerRadius={70}
+                    dataKey="count" nameKey="source"
+                    strokeWidth={2} stroke="#fff"
+                  >
+                    {data.leadsBySource.slice(0, 6).map(function(entry: any, index: number) {
+                      return <Cell key={entry.source} fill={SOURCE_COLORS[entry.source] || PIE_COLORS[index % PIE_COLORS.length]} />;
+                    })}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                    formatter={function(value: any, name: any) { return [value + " leads", SOURCE_LABELS[name] || name]; }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 mt-2">
+                {data.leadsBySource.slice(0, 5).map(function(s: any, i: number) {
+                  return (
+                    <div key={s.source} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: SOURCE_COLORS[s.source] || PIE_COLORS[i] }} />
+                        <span className="text-gray-600">{SOURCE_LABELS[s.source] || s.source}</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">{s.count} <span className="text-gray-400 font-normal">({s.pct}%)</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-12">Pas de données</p>
+          )}
+        </div>
+      </div>
+
+      {/* Charts row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Pipeline funnel with conversion rates */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Pipeline & Taux de conversion</h3>
           <div className="space-y-2.5">
-            {data.leadsBySource.slice(0, 7).map(function(s) {
-              var pct = totalSourceLeads > 0 ? Math.round((s.count / totalSourceLeads) * 100) : 0;
-              var color = SOURCE_COLORS[s.source] || "#9ca3af";
+            {data.pipelineFunnel.map(function(stage: any, idx: number) {
+              var maxCount = data.pipelineFunnel[0]?.count || 1;
+              var width = Math.max((stage.count / maxCount) * 100, 8);
               return (
-                <div key={s.source}>
+                <div key={stage.name}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-600">{SOURCE_LABELS[s.source] || s.source}</span>
-                    <span className="text-xs font-semibold text-gray-700">{s.count} <span className="text-gray-400 font-normal">({pct}%)</span></span>
+                    <span className="text-xs text-gray-600">{stage.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-700">{stage.count}</span>
+                      {idx > 0 && stage.conversionRate > 0 && (
+                        <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium">{stage.conversionRate}%</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: pct + "%", backgroundColor: color }} />
+                  <div className="h-6 bg-gray-50 rounded-lg overflow-hidden">
+                    <div className="h-full rounded-lg transition-all" style={{ width: width + "%", backgroundColor: stage.color, opacity: 0.7 }} />
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
 
-      {/* Second row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Pipeline funnel */}
+        {/* Calls chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Pipeline</h3>
-          <div className="space-y-2">
-            {data.leadsByStage.map(function(stage) {
-              var maxStage = Math.max(...data.leadsByStage.map(function(s) { return s.count; }), 1);
-              var width = Math.max((stage.count / maxStage) * 100, 8);
-              return (
-                <div key={stage.name} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-600 w-24 shrink-0 truncate">{stage.name}</span>
-                  <div className="flex-1 h-7 bg-gray-50 rounded-lg overflow-hidden relative">
-                    <div className="h-full rounded-lg flex items-center px-2 transition-all" style={{ width: width + "%", backgroundColor: stage.color + "20" }}>
-                      <div className="h-full rounded-lg" style={{ width: "100%", backgroundColor: stage.color, opacity: 0.7 }} />
-                    </div>
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-700">{stage.count}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Appels quotidiens</h3>
+          {data.callsByDay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.callsByDay}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" tickFormatter={formatDateShort} tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                  labelFormatter={function(label) { return formatDateShort(label); }}
+                />
+                <Bar dataKey="total" fill="#93c5fd" radius={[4, 4, 0, 0]} name="Total" />
+                <Bar dataKey="answered" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Décroché" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-12">Pas de données</p>
+          )}
         </div>
 
         {/* Top programs */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Top filières</h3>
-          {data.leadsByProgram.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8">Pas encore de données</p>
-          ) : (
+          {data.leadsByProgram.length > 0 ? (
             <div className="space-y-3">
-              {data.leadsByProgram.map(function(prog, i) {
+              {data.leadsByProgram.map(function(prog: any, i: number) {
                 var maxProg = data.leadsByProgram[0]?.count || 1;
                 var pct = Math.round((prog.count / maxProg) * 100);
-                var colors = ["bg-brand-500", "bg-emerald-500", "bg-purple-500", "bg-amber-500", "bg-indigo-500"];
+                var colors = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#06b6d4", "#ec4899"];
                 return (
                   <div key={prog.name}>
                     <div className="flex items-center justify-between mb-1">
@@ -207,89 +313,108 @@ export function AnalyticsClient({ data, userName }: AnalyticsClientProps) {
                       <span className="text-xs font-bold text-gray-700">{prog.count}</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={cn("h-full rounded-full", colors[i % colors.length])} style={{ width: pct + "%" }} />
+                      <div className="h-full rounded-full" style={{ width: pct + "%", backgroundColor: colors[i % colors.length] }} />
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
-
-        {/* Commercial performance */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Performance commerciale</h3>
-          {data.commercialPerf.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8">Aucun commercial</p>
           ) : (
-            <div className="space-y-3">
-              {data.commercialPerf.map(function(user) {
-                return (
-                  <div key={user.name} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50">
-                    <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
-                      {getInitials(user.name)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[10px] text-gray-500">{user.assigned} leads</span>
-                        <span className="text-[10px] text-emerald-600 font-medium">{user.converted} convertis</span>
-                        <span className="text-[10px] text-blue-500">{user.calls} appels</span>
-                      </div>
-                    </div>
-                    {user.tasks > 0 && (
-                      <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full font-medium">{user.tasks} tâches</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-xs text-gray-400 text-center py-12">Pas de données</p>
           )}
         </div>
       </div>
 
-      {/* Recent activity */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Activité récente</h3>
-        {data.recentActivities.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-8">Aucune activité</p>
-        ) : (
-          <div className="space-y-3">
-            {data.recentActivities.slice(0, 10).map(function(a: any) {
-              var person = a.lead ? a.lead.firstName + " " + a.lead.lastName :
-                           a.student ? a.student.firstName + " " + a.student.lastName : "";
-              return (
-                <div key={a.id} className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <Activity size={13} className="text-gray-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700">{a.description}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {a.user && <span className="text-xs text-gray-500">{a.user.name}</span>}
-                      {person && <span className="text-xs text-brand-600">— {person}</span>}
-                      <span className="text-xs text-gray-400">{formatRelative(a.createdAt)}</span>
+      {/* Row 3: Commercial performance + Recent activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        {/* Commercial performance */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Performance commerciale</h3>
+          {data.commercialPerf.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-2 text-gray-500 font-medium">Commercial</th>
+                    <th className="text-center py-2 text-gray-500 font-medium">Leads</th>
+                    <th className="text-center py-2 text-gray-500 font-medium">Convertis</th>
+                    <th className="text-center py-2 text-gray-500 font-medium">Taux</th>
+                    <th className="text-center py-2 text-gray-500 font-medium">Appels</th>
+                    <th className="text-center py-2 text-gray-500 font-medium">RDV</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.commercialPerf.map(function(user: any) {
+                    return (
+                      <tr key={user.id} className="hover:bg-gray-50/50">
+                        <td className="py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center">{getInitials(user.name)}</div>
+                            <span className="font-medium text-gray-900">{user.name}</span>
+                          </div>
+                        </td>
+                        <td className="text-center py-2.5 text-gray-700">{user.assigned}</td>
+                        <td className="text-center py-2.5">
+                          <span className="font-bold text-emerald-600">{user.converted}</span>
+                        </td>
+                        <td className="text-center py-2.5">
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                            user.convRate >= 20 ? "bg-emerald-50 text-emerald-600" :
+                            user.convRate >= 10 ? "bg-amber-50 text-amber-600" :
+                            "bg-gray-100 text-gray-500"
+                          )}>{user.convRate}%</span>
+                        </td>
+                        <td className="text-center py-2.5 text-gray-700">{user.calls}</td>
+                        <td className="text-center py-2.5 text-gray-700">{user.appointments}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-8">Aucun commercial</p>
+          )}
+        </div>
+
+        {/* Recent activity */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Activité récente</h3>
+          {data.recentActivities.length > 0 ? (
+            <div className="space-y-3">
+              {data.recentActivities.map(function(a: any) {
+                var person = a.lead ? a.lead.firstName + " " + a.lead.lastName :
+                             a.student ? a.student.firstName + " " + a.student.lastName : "";
+                return (
+                  <div key={a.id} className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Activity size={12} className="text-gray-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700 leading-relaxed">{a.description}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {a.user && <span className="text-[10px] text-gray-500">{a.user.name}</span>}
+                        {person && <span className="text-[10px] text-brand-600">— {person}</span>}
+                        <span className="text-[10px] text-gray-400">{formatRelative(a.createdAt)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-8">Aucune activité</p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── KPI Card ───
-function KpiCard({ label, value, change, changeLabel, icon: Icon, iconColor, iconBg }: {
-  label: string;
-  value: number | string;
-  change?: number;
-  changeLabel?: string;
-  icon: typeof Users;
-  iconColor: string;
-  iconBg: string;
+function KpiCard({ label, value, change, prev, icon: Icon, iconColor, iconBg, subLabel }: {
+  label: string; value: number | string; change?: number; prev?: number;
+  icon: typeof Users; iconColor: string; iconBg: string; subLabel?: string;
 }) {
   var isPositive = (change || 0) >= 0;
   return (
@@ -309,28 +434,23 @@ function KpiCard({ label, value, change, changeLabel, icon: Icon, iconColor, ico
       </div>
       <div className="text-2xl font-bold text-gray-900">{value}</div>
       <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-      {changeLabel && <p className="text-[10px] text-gray-400 mt-0.5">{changeLabel}</p>}
+      {prev !== undefined && (
+        <p className="text-[10px] text-gray-400 mt-0.5">vs {prev} période précédente</p>
+      )}
+      {subLabel && <p className="text-[10px] text-gray-400 mt-0.5">{subLabel}</p>}
     </div>
   );
 }
 
 // ─── Mini KPI ───
-function MiniKpi({ icon: Icon, label, value, color, subValue, subColor }: {
-  icon: typeof Users;
-  label: string;
-  value: string;
-  color: string;
-  subValue?: string;
-  subColor?: string;
+function MiniKpi({ icon: Icon, label, value, color, highlight }: {
+  icon: typeof Users; label: string; value: string; color: string; highlight?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon size={14} className={color} />
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{label}</span>
-      </div>
+    <div className={cn("bg-white rounded-xl border border-gray-200 px-3 py-3 text-center", highlight && "border-red-200 bg-red-50/30")}>
+      <Icon size={14} className={cn("mx-auto mb-1", color)} />
       <div className={cn("text-lg font-bold", color)}>{value}</div>
-      {subValue && <p className={cn("text-[10px] mt-0.5", subColor || "text-gray-400")}>{subValue}</p>}
+      <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{label}</div>
     </div>
   );
 }

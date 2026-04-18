@@ -3,99 +3,138 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function getDashboardData() {
+export async function getDashboardData(filters?: {
+  period?: string; // "7d" | "30d" | "90d" | "12m"
+  userId?: string;
+  campusId?: string;
+}) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
   var orgId = session.user.organizationId;
   var now = new Date();
-  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  var thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-  var sixtyDaysAgo = new Date(now.getTime() - 60 * 86_400_000);
-  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  var prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  var prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  var period = filters?.period || "30d";
 
-  // ─── KPIs ───
+  // Calculate date ranges
+  var daysBack = period === "7d" ? 7 : period === "90d" ? 90 : period === "12m" ? 365 : 30;
+  var currentStart = new Date(now.getTime() - daysBack * 86_400_000);
+  var previousStart = new Date(currentStart.getTime() - daysBack * 86_400_000);
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var todayEnd = new Date(todayStart.getTime() + 86_400_000);
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var weekStart = new Date(now.getTime() - 7 * 86_400_000);
+
+  // Base filter for scoped queries
+  var baseWhere: any = { organizationId: orgId };
+  if (filters?.userId) baseWhere.assignedToId = filters.userId;
+  if (filters?.campusId) baseWhere.campusId = filters.campusId;
+
+  // ─── MAIN KPIs (current vs previous period) ───
   var [
-    totalLeads, leadsThisMonth, leadsPrevMonth,
-    convertedThisMonth, convertedPrevMonth,
-    totalStudents, activeStudents,
-    totalTasks, overdueTasks,
-    callsThisWeek, callsAnswered,
-    appointmentsThisWeek,
+    leadsCurrentPeriod, leadsPreviousPeriod,
+    convertedCurrentPeriod, convertedPreviousPeriod,
+    totalLeads, totalStudents, activeStudents,
   ] = await Promise.all([
+    prisma.lead.count({ where: { ...baseWhere, createdAt: { gte: currentStart } } }),
+    prisma.lead.count({ where: { ...baseWhere, createdAt: { gte: previousStart, lt: currentStart } } }),
+    prisma.lead.count({ where: { ...baseWhere, isConverted: true, convertedAt: { gte: currentStart } } }),
+    prisma.lead.count({ where: { ...baseWhere, isConverted: true, convertedAt: { gte: previousStart, lt: currentStart } } }),
     prisma.lead.count({ where: { organizationId: orgId } }),
-    prisma.lead.count({ where: { organizationId: orgId, createdAt: { gte: monthStart } } }),
-    prisma.lead.count({ where: { organizationId: orgId, createdAt: { gte: prevMonthStart, lt: monthStart } } }),
-    prisma.lead.count({ where: { organizationId: orgId, isConverted: true, convertedAt: { gte: monthStart } } }),
-    prisma.lead.count({ where: { organizationId: orgId, isConverted: true, convertedAt: { gte: prevMonthStart, lt: monthStart } } }),
     prisma.student.count({ where: { organizationId: orgId } }),
     prisma.student.count({ where: { organizationId: orgId, status: "ACTIVE" } }),
-    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] } } }),
-    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] }, dueDate: { lt: now } } }),
-    prisma.call.count({ where: { organizationId: orgId, calledAt: { gte: sevenDaysAgo } } }),
-    prisma.call.count({ where: { organizationId: orgId, calledAt: { gte: sevenDaysAgo }, outcome: "ANSWERED" } }),
-    prisma.appointment.count({ where: { organizationId: orgId, startAt: { gte: todayStart, lt: new Date(todayStart.getTime() + 7 * 86_400_000) } } }),
   ]);
 
-  var conversionRate = totalLeads > 0 ? Math.round((convertedThisMonth / (leadsThisMonth || 1)) * 100) : 0;
-  var leadsGrowth = leadsPrevMonth > 0 ? Math.round(((leadsThisMonth - leadsPrevMonth) / leadsPrevMonth) * 100) : 0;
-  var conversionGrowth = convertedPrevMonth > 0 ? Math.round(((convertedThisMonth - convertedPrevMonth) / convertedPrevMonth) * 100) : 0;
-  var callReachRate = callsThisWeek > 0 ? Math.round((callsAnswered / callsThisWeek) * 100) : 0;
+  var leadsGrowth = leadsPreviousPeriod > 0 ? Math.round(((leadsCurrentPeriod - leadsPreviousPeriod) / leadsPreviousPeriod) * 100) : 0;
+  var conversionRate = leadsCurrentPeriod > 0 ? Math.round((convertedCurrentPeriod / leadsCurrentPeriod) * 100) : 0;
+  var conversionGrowth = convertedPreviousPeriod > 0 ? Math.round(((convertedCurrentPeriod - convertedPreviousPeriod) / convertedPreviousPeriod) * 100) : 0;
 
-  // ─── Leads par jour (30 derniers jours) ───
+  // ─── CALLS & APPOINTMENTS KPIs ───
+  var callBaseWhere: any = { organizationId: orgId };
+  if (filters?.userId) callBaseWhere.calledById = filters.userId;
+
+  var apptBaseWhere: any = { organizationId: orgId };
+  if (filters?.userId) apptBaseWhere.assignedToId = filters.userId;
+
+  var [
+    callsTotal, callsToday, callsThisWeek, callsAnswered, callsAvgDuration,
+    apptsTotal, apptsToday, apptsThisWeek, apptsCompleted, apptsNoShow,
+    tasksOpen, tasksOverdue,
+  ] = await Promise.all([
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart } } }),
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: todayStart, lt: todayEnd } } }),
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: weekStart } } }),
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, outcome: "ANSWERED" } }),
+    prisma.call.aggregate({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, duration: { not: null } }, _avg: { duration: true } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart } } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: todayStart, lt: todayEnd } } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: weekStart } } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "COMPLETED" } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "NO_SHOW" } }),
+    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] } } }),
+    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] }, dueDate: { lt: now } } }),
+  ]);
+
+  var callReachRate = callsTotal > 0 ? Math.round((callsAnswered / callsTotal) * 100) : 0;
+  var avgDuration = Math.round(callsAvgDuration._avg.duration || 0);
+  var apptPresenceRate = (apptsCompleted + apptsNoShow) > 0 ? Math.round((apptsCompleted / (apptsCompleted + apptsNoShow)) * 100) : 0;
+
+  // ─── LEADS TIMELINE (daily) ───
   var leadsRaw = await prisma.lead.findMany({
-    where: { organizationId: orgId, createdAt: { gte: thirtyDaysAgo } },
-    select: { createdAt: true },
+    where: { ...baseWhere, createdAt: { gte: currentStart } },
+    select: { createdAt: true, isConverted: true, convertedAt: true },
   });
 
-  var leadsByDay: Record<string, number> = {};
-  for (var i = 0; i < 30; i++) {
-    var d = new Date(now.getTime() - (29 - i) * 86_400_000);
+  var leadsTimeline: { date: string; leads: number; conversions: number }[] = [];
+  for (var i = 0; i < daysBack; i++) {
+    var d = new Date(now.getTime() - (daysBack - 1 - i) * 86_400_000);
     var key = d.toISOString().split("T")[0];
-    leadsByDay[key] = 0;
+    var dayLeads = leadsRaw.filter(function(l) { return new Date(l.createdAt).toISOString().split("T")[0] === key; }).length;
+    var dayConversions = leadsRaw.filter(function(l) { return l.isConverted && l.convertedAt && new Date(l.convertedAt).toISOString().split("T")[0] === key; }).length;
+    leadsTimeline.push({ date: key, leads: dayLeads, conversions: dayConversions });
   }
-  leadsRaw.forEach(function(l) {
-    var k = new Date(l.createdAt).toISOString().split("T")[0];
-    if (leadsByDay[k] !== undefined) leadsByDay[k]++;
-  });
 
-  var leadsTimeline = Object.entries(leadsByDay).map(function(entry) {
-    return { date: entry[0], count: entry[1] };
-  });
-
-  // ─── Leads par source ───
-  var leadsBySourceRaw = await prisma.lead.groupBy({
-    by: ["source"],
-    where: { organizationId: orgId },
-    _count: { id: true },
-    orderBy: { _count: { id: "desc" } },
-  });
-
-  var leadsBySource = leadsBySourceRaw.map(function(s) {
-    return { source: s.source, count: s._count.id };
-  });
-
-  // ─── Leads par étape (pipeline) ───
+  // ─── PIPELINE CONVERSION FUNNEL ───
   var stages = await prisma.pipelineStage.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, isLost: false },
     include: { _count: { select: { leads: true } } },
     orderBy: { order: "asc" },
   });
 
-  var leadsByStage = stages.map(function(s) {
-    return { name: s.name, count: s._count.leads, color: s.color };
+  var lostStage = await prisma.pipelineStage.findFirst({
+    where: { organizationId: orgId, isLost: true },
+    include: { _count: { select: { leads: true } } },
   });
 
-  // ─── Leads par filière (top 5) ───
-  var leadsByProgramRaw = await prisma.lead.groupBy({
-    by: ["programId"],
-    where: { organizationId: orgId, programId: { not: null } },
+  var totalInPipeline = stages.reduce(function(sum, s) { return sum + s._count.leads; }, 0);
+  var pipelineFunnel = stages.map(function(s, idx) {
+    var convRate = idx === 0 ? 100 : (totalInPipeline > 0 ? Math.round((s._count.leads / stages[0]._count.leads) * 100) : 0);
+    return { name: s.name, count: s._count.leads, color: s.color, conversionRate: convRate };
+  });
+
+  if (lostStage) {
+    pipelineFunnel.push({ name: lostStage.name, count: lostStage._count.leads, color: lostStage.color, conversionRate: 0 });
+  }
+
+  // ─── SOURCES BREAKDOWN ───
+  var leadsBySourceRaw = await prisma.lead.groupBy({
+    by: ["source"],
+    where: { ...baseWhere, createdAt: { gte: currentStart } },
     _count: { id: true },
     orderBy: { _count: { id: "desc" } },
-    take: 5,
+  });
+
+  var totalSourceLeads = leadsBySourceRaw.reduce(function(sum, s) { return sum + s._count.id; }, 0);
+  var leadsBySource = leadsBySourceRaw.map(function(s) {
+    return { source: s.source, count: s._count.id, pct: totalSourceLeads > 0 ? Math.round((s._count.id / totalSourceLeads) * 100) : 0 };
+  });
+
+  // ─── TOP PROGRAMS ───
+  var leadsByProgramRaw = await prisma.lead.groupBy({
+    by: ["programId"],
+    where: { ...baseWhere, programId: { not: null }, createdAt: { gte: currentStart } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 6,
   });
 
   var programIds = leadsByProgramRaw.map(function(p) { return p.programId!; });
@@ -109,7 +148,7 @@ export async function getDashboardData() {
     return { name: prog?.code || prog?.name || "Inconnu", count: p._count.id };
   });
 
-  // ─── Performance par commercial ───
+  // ─── COMMERCIAL PERFORMANCE ───
   var commercials = await prisma.user.findMany({
     where: { organizationId: orgId, role: { in: ["ADMIN", "COMMERCIAL"] }, isActive: true },
     select: { id: true, name: true },
@@ -117,40 +156,39 @@ export async function getDashboardData() {
 
   var commercialPerf = await Promise.all(
     commercials.map(async function(user) {
-      var [assigned, converted, calls, tasks] = await Promise.all([
+      var [assigned, converted, calls, appointments, tasks] = await Promise.all([
         prisma.lead.count({ where: { organizationId: orgId, assignedToId: user.id, isConverted: false } }),
-        prisma.lead.count({ where: { organizationId: orgId, assignedToId: user.id, isConverted: true, convertedAt: { gte: monthStart } } }),
-        prisma.call.count({ where: { organizationId: orgId, calledById: user.id, calledAt: { gte: sevenDaysAgo } } }),
+        prisma.lead.count({ where: { organizationId: orgId, assignedToId: user.id, isConverted: true, convertedAt: { gte: currentStart } } }),
+        prisma.call.count({ where: { organizationId: orgId, calledById: user.id, calledAt: { gte: currentStart } } }),
+        prisma.appointment.count({ where: { organizationId: orgId, assignedToId: user.id, startAt: { gte: currentStart } } }),
         prisma.task.count({ where: { organizationId: orgId, assignedToId: user.id, status: { in: ["TODO", "IN_PROGRESS"] } } }),
       ]);
-      return { name: user.name, assigned, converted, calls, tasks };
+      var convRate = (assigned + converted) > 0 ? Math.round((converted / (assigned + converted)) * 100) : 0;
+      return { id: user.id, name: user.name, assigned, converted, calls, appointments, tasks, convRate };
     })
   );
 
-  // ─── Conversions par jour (30 derniers jours) ───
-  var conversionsRaw = await prisma.lead.findMany({
-    where: { organizationId: orgId, isConverted: true, convertedAt: { gte: thirtyDaysAgo } },
-    select: { convertedAt: true },
+  commercialPerf.sort(function(a, b) { return b.converted - a.converted; });
+
+  // ─── CALLS BY DAY (for chart) ───
+  var callsRaw = await prisma.call.findMany({
+    where: { ...callBaseWhere, calledAt: { gte: currentStart } },
+    select: { calledAt: true, outcome: true },
   });
 
-  var conversionsByDay: Record<string, number> = {};
-  for (var j = 0; j < 30; j++) {
-    var d2 = new Date(now.getTime() - (29 - j) * 86_400_000);
+  var callsByDay: { date: string; total: number; answered: number }[] = [];
+  for (var j = 0; j < Math.min(daysBack, 30); j++) {
+    var d2 = new Date(now.getTime() - (Math.min(daysBack, 30) - 1 - j) * 86_400_000);
     var key2 = d2.toISOString().split("T")[0];
-    conversionsByDay[key2] = 0;
+    var dayCalls = callsRaw.filter(function(c) { return new Date(c.calledAt).toISOString().split("T")[0] === key2; });
+    callsByDay.push({
+      date: key2,
+      total: dayCalls.length,
+      answered: dayCalls.filter(function(c) { return c.outcome === "ANSWERED"; }).length,
+    });
   }
-  conversionsRaw.forEach(function(l) {
-    if (l.convertedAt) {
-      var k = new Date(l.convertedAt).toISOString().split("T")[0];
-      if (conversionsByDay[k] !== undefined) conversionsByDay[k]++;
-    }
-  });
 
-  var conversionsTimeline = Object.entries(conversionsByDay).map(function(entry) {
-    return { date: entry[0], count: entry[1] };
-  });
-
-  // ─── Activité récente ───
+  // ─── RECENT ACTIVITY ───
   var recentActivities = await prisma.activity.findMany({
     where: { organizationId: orgId },
     include: {
@@ -159,24 +197,39 @@ export async function getDashboardData() {
       student: { select: { firstName: true, lastName: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 15,
+    take: 10,
+  });
+
+  // ─── FILTER OPTIONS ───
+  var users = await prisma.user.findMany({
+    where: { organizationId: orgId, isActive: true, role: { in: ["ADMIN", "COMMERCIAL"] } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  var campuses = await prisma.campus.findMany({
+    where: { organizationId: orgId },
+    select: { id: true, name: true, city: true },
+    orderBy: { name: "asc" },
   });
 
   return {
+    period,
     kpis: {
-      totalLeads, leadsThisMonth, leadsPrevMonth, leadsGrowth,
-      convertedThisMonth, convertedPrevMonth, conversionRate, conversionGrowth,
+      totalLeads, leadsCurrentPeriod, leadsPreviousPeriod, leadsGrowth,
+      convertedCurrentPeriod, convertedPreviousPeriod, conversionRate, conversionGrowth,
       totalStudents, activeStudents,
-      totalTasks, overdueTasks,
-      callsThisWeek, callReachRate,
-      appointmentsThisWeek,
+      callsTotal, callsToday, callsThisWeek, callReachRate, avgDuration,
+      apptsTotal, apptsToday, apptsThisWeek, apptsCompleted, apptsNoShow, apptPresenceRate,
+      tasksOpen, tasksOverdue,
     },
     leadsTimeline,
-    conversionsTimeline,
+    callsByDay,
+    pipelineFunnel,
     leadsBySource,
-    leadsByStage,
     leadsByProgram,
     commercialPerf,
     recentActivities,
+    filterOptions: { users, campuses },
   };
 }

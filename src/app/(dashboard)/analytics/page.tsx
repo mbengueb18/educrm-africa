@@ -17,6 +17,7 @@ export default async function AnalyticsPage() {
     <AnalyticsClient
       data={data}
       userName={session.user.name}
+      currentUserId={session.user.id}
     />
   );
 }
