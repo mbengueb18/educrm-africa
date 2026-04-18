@@ -75,3 +75,32 @@ export async function getLeadDetail(leadId: string) {
 
   return lead;
 }
+
+// ─── Log WhatsApp message ───
+export async function logWhatsAppMessage(leadId: string, content: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  await prisma.message.create({
+    data: {
+      channel: "WHATSAPP",
+      direction: "OUTBOUND",
+      content,
+      status: "SENT",
+      sentAt: new Date(),
+      leadId,
+     // sender: { connect: { id: session.user.id } },
+      organizationId: session.user.organizationId,
+    },
+  });
+
+  await prisma.activity.create({
+    data: {
+      type: "MESSAGE_SENT",
+      description: "Message WhatsApp envoyé",
+      userId: session.user.id,
+      leadId,
+      organizationId: session.user.organizationId,
+    },
+  });
+}
