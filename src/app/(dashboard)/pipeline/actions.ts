@@ -33,6 +33,9 @@ export async function getPipelineData() {
     }),
   ]);
 
+  // Auto-calculate lead scores
+  await calculateLeadScores(organizationId);
+
   // Calculate last contact date for each lead
   var leadIds = leads.map(function(l) { return l.id; });
 
@@ -494,4 +497,89 @@ export async function exportLeadsCSV() {
 
   return csvContent;
 }
-//
+
+// ─── Calculate lead score ───
+export async function calculateLeadScores(orgId: string) {
+  var leads = await prisma.lead.findMany({
+    where: { organizationId: orgId, isConverted: false },
+    select: {
+      id: true, source: true, email: true, whatsapp: true,
+      programId: true, campusId: true, score: true, createdAt: true,
+      _count: { select: { calls: true, messages: true, appointments: true } },
+    },
+  });
+
+  var now = new Date();
+
+  // Get last contact dates
+  var leadIds = leads.map(function(l) { return l.id; });
+  var [lastCalls, lastMessages] = await Promise.all([
+    prisma.call.groupBy({
+      by: ["leadId"],
+      where: { leadId: { in: leadIds } },
+      _max: { calledAt: true },
+    }),
+    prisma.message.groupBy({
+      by: ["leadId"],
+      where: { leadId: { in: leadIds }, direction: "OUTBOUND" },
+      _max: { sentAt: true },
+    }),
+  ]);
+
+  var sourceScores: Record<string, number> = {
+    REFERRAL: 20, WALK_IN: 20, WEBSITE: 15, PHONE_CALL: 15,
+    FACEBOOK: 10, INSTAGRAM: 10, WHATSAPP: 10,
+    SALON: 10, PARTNER: 10, RADIO: 5, TV: 5, IMPORT: 5, OTHER: 5,
+  };
+
+  var updates: { id: string; score: number }[] = [];
+
+  for (var lead of leads) {
+    var score = 0;
+
+    // Source score (max 20)
+    score += sourceScores[lead.source] || 5;
+
+    // Profile completeness (max 25)
+    if (lead.email) score += 5;
+    if (lead.whatsapp) score += 5;
+    if (lead.programId) score += 10;
+    if (lead.campusId) score += 5;
+
+    // Interactions (max 55)
+    score += Math.min(lead._count.calls * 5, 20);
+    score += Math.min(lead._count.messages * 3, 15);
+    score += Math.min(lead._count.appointments * 10, 20);
+
+    // Recency bonus (max 15)
+    var callDate = lastCalls.find(function(c) { return c.leadId === lead.id; })?._max?.calledAt;
+    var msgDate = lastMessages.find(function(m) { return m.leadId === lead.id; })?._max?.sentAt;
+    var dates = [callDate, msgDate].filter(Boolean) as Date[];
+    var lastContact = dates.length > 0 ? new Date(Math.max(...dates.map(function(d) { return d.getTime(); }))) : null;
+
+    if (lastContact) {
+      var daysSince = Math.floor((now.getTime() - lastContact.getTime()) / 86_400_000);
+      if (daysSince <= 3) score += 15;
+      else if (daysSince <= 7) score += 10;
+      else if (daysSince <= 14) score += 5;
+    }
+
+    // Cap at 100
+    score = Math.min(score, 100);
+
+    if (score !== lead.score) {
+      updates.push({ id: lead.id, score });
+    }
+  }
+
+  // Batch update scores
+  if (updates.length > 0) {
+    await Promise.all(
+      updates.map(function(u) {
+        return prisma.lead.update({ where: { id: u.id }, data: { score: u.score } });
+      })
+    );
+  }
+
+  return { updated: updates.length };
+}
