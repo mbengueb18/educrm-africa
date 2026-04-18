@@ -17,14 +17,14 @@ export async function getLeadDetail(leadId: string) {
       stage: { select: { id: true, name: true, color: true } },
       activities: {
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
         include: {
           user: { select: { id: true, name: true } },
         },
       },
       messages: {
         orderBy: { sentAt: "desc" },
-        take: 10,
+        take: 20,
         select: {
           id: true,
           channel: true,
@@ -32,6 +32,27 @@ export async function getLeadDetail(leadId: string) {
           content: true,
           status: true,
           sentAt: true,
+        },
+      },
+      calls: {
+        orderBy: { calledAt: "desc" },
+        take: 20,
+        include: {
+          calledBy: { select: { name: true } },
+        },
+      },
+      appointments: {
+        orderBy: { startAt: "desc" },
+        take: 20,
+        include: {
+          assignedTo: { select: { name: true } },
+        },
+      },
+      tasks: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+          assignedTo: { select: { name: true } },
         },
       },
       documents: {
@@ -45,7 +66,7 @@ export async function getLeadDetail(leadId: string) {
         },
       },
       _count: {
-        select: { messages: true, activities: true, documents: true },
+        select: { messages: true, activities: true, documents: true, calls: true, appointments: true, tasks: true },
       },
     },
   });

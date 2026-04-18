@@ -31,8 +31,14 @@ import {
   Trash2,
   Check,
   XCircle,
-  ListTodo, 
+ ListTodo, 
   Plus,
+  CalendarDays,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Video,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
@@ -77,7 +83,7 @@ var activityIcons: Record<string, typeof Activity> = {
 export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverProps) {
   var [lead, setLead] = useState<LeadDetail | null>(null);
   var [loading, setLoading] = useState(false);
-  var [activeTab, setActiveTab] = useState<"info" | "activity" | "messages">("info");
+  var [activeTab, setActiveTab] = useState<"info" | "history" | "messages">("info");
   var [isPending, startTransition] = useTransition();
   var [deleting, setDeleting] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -287,8 +293,8 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
             {/* Tabs */}
             <div className="flex border-b border-gray-100">
               {[
-                { key: "info" as const, label: "Informations" },
-                { key: "activity" as const, label: "Activite (" + lead._count.activities + ")" },
+                { key: "info" as const, label: "Infos" },
+                { key: "history" as const, label: "Historique (" + ((lead._count.activities || 0) + (lead._count.calls || 0) + (lead._count.appointments || 0) + (lead._count.tasks || 0)) + ")" },
                 { key: "messages" as const, label: "Messages (" + lead._count.messages + ")" },
               ].map(function(tab) {
                 return (
@@ -306,7 +312,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto">
               {activeTab === "info" && <InfoTab lead={lead} customFieldsConfig={customFieldsConfig} stages={stages} users={users} onLeadUpdate={function(updated) { setLead(updated); }} />}
-              {activeTab === "activity" && <ActivityTab activities={lead.activities} />}
+              {activeTab === "history" && <HistoryTab lead={lead} />}
               {activeTab === "messages" && <MessagesTab messages={lead.messages} count={lead._count.messages} lead={lead} />}
             </div>
           </>
@@ -554,26 +560,224 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
   );
 }
 
-// ─── Activity Tab ───
-function ActivityTab({ activities }: { activities: LeadDetail["activities"] }) {
-  if (activities.length === 0) {
+// ─── History Tab (unified timeline) ───
+function HistoryTab({ lead }: { lead: LeadDetail }) {
+  var callOutcomeLabels: Record<string, string> = {
+    ANSWERED: "Décroché", NO_ANSWER: "Pas de réponse", BUSY: "Occupé",
+    VOICEMAIL: "Messagerie", WRONG_NUMBER: "Faux numéro", CALLBACK_REQUESTED: "Rappel demandé",
+    NOT_INTERESTED: "Pas intéressé",
+  };
+
+  var apptStatusLabels: Record<string, string> = {
+    SCHEDULED: "Planifié", CONFIRMED: "Confirmé", COMPLETED: "Effectué",
+    CANCELLED: "Annulé", NO_SHOW: "Absent", RESCHEDULED: "Reporté",
+  };
+
+  var taskStatusLabels: Record<string, string> = {
+    TODO: "À faire", IN_PROGRESS: "En cours", DONE: "Terminée", CANCELLED: "Annulée",
+  };
+
+  var priorityLabels: Record<string, string> = {
+    LOW: "Basse", MEDIUM: "Moyenne", HIGH: "Haute", URGENT: "Urgente",
+  };
+
+  // Build unified timeline
+  var timeline: {
+    id: string;
+    type: "activity" | "call" | "appointment" | "task";
+    date: Date;
+    data: any;
+  }[] = [];
+
+  if (lead.activities) {
+    lead.activities.forEach(function(a) {
+      timeline.push({ id: "a-" + a.id, type: "activity", date: new Date(a.createdAt), data: a });
+    });
+  }
+  if (lead.calls) {
+    lead.calls.forEach(function(c) {
+      timeline.push({ id: "c-" + c.id, type: "call", date: new Date(c.calledAt), data: c });
+    });
+  }
+  if (lead.appointments) {
+    lead.appointments.forEach(function(ap) {
+      timeline.push({ id: "ap-" + ap.id, type: "appointment", date: new Date(ap.startAt), data: ap });
+    });
+  }
+  if (lead.tasks) {
+    lead.tasks.forEach(function(t) {
+      timeline.push({ id: "t-" + t.id, type: "task", date: new Date(t.createdAt), data: t });
+    });
+  }
+
+  timeline.sort(function(a, b) { return b.date.getTime() - a.date.getTime(); });
+
+  if (timeline.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center px-6">
         <Activity size={32} className="text-gray-300 mb-3" />
-        <p className="text-sm text-gray-400">Aucune activité enregistrée</p>
+        <p className="text-sm text-gray-400">Aucune interaction enregistrée</p>
+        <p className="text-xs text-gray-400 mt-1">Les appels, rendez-vous, tâches et emails apparaîtront ici</p>
       </div>
     );
   }
 
+  // Filter
+  var [filter, setFilter] = useState<"all" | "call" | "appointment" | "task" | "activity">("all");
+
+  var filtered = filter === "all" ? timeline : timeline.filter(function(t) { return t.type === filter; });
+
   return (
-    <div className="p-5">
+    <div className="p-4">
+      {/* Filters */}
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {[
+          { key: "all" as const, label: "Tout", count: timeline.length },
+          { key: "call" as const, label: "Appels", count: lead.calls?.length || 0 },
+          { key: "appointment" as const, label: "RDV", count: lead.appointments?.length || 0 },
+          { key: "task" as const, label: "Tâches", count: lead.tasks?.length || 0 },
+          { key: "activity" as const, label: "Activité", count: lead.activities?.length || 0 },
+        ].map(function(f) {
+          if (f.count === 0 && f.key !== "all") return null;
+          return (
+            <button key={f.key} onClick={function() { setFilter(f.key); }}
+              className={cn("text-[10px] px-2.5 py-1 rounded-full border transition-colors font-medium",
+                filter === f.key ? "bg-brand-100 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+              )}>
+              {f.label} ({f.count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Timeline */}
       <div className="relative">
         <div className="absolute left-4 top-2 bottom-2 w-px bg-gray-200" />
-        <div className="space-y-4">
-          {activities.map(function(activity) {
+        <div className="space-y-3">
+          {filtered.map(function(item) {
+            if (item.type === "call") {
+              var call = item.data;
+              var isAnswered = call.outcome === "ANSWERED";
+              var CallIcon = call.direction === "OUTBOUND" ? PhoneOutgoing : PhoneIncoming;
+              return (
+                <div key={item.id} className="flex gap-3 relative">
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 border-2",
+                    isAnswered ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"
+                  )}>
+                    <CallIcon size={14} className={isAnswered ? "text-emerald-600" : "text-red-500"} />
+                  </div>
+                  <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-700">
+                        {call.direction === "OUTBOUND" ? "Appel sortant" : "Appel entrant"}
+                      </p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                        isAnswered ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
+                      )}>
+                        {callOutcomeLabels[call.outcome] || call.outcome}
+                      </span>
+                    </div>
+                    {call.duration && call.duration > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">Durée : {Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, "0")}</p>
+                    )}
+                    {call.notes && <p className="text-xs text-gray-500 mt-1 italic">"{call.notes}"</p>}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {call.calledBy && <span className="text-[10px] text-gray-500">{call.calledBy.name}</span>}
+                      <span className="text-[10px] text-gray-400">{formatRelative(call.calledAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (item.type === "appointment") {
+              var appt = item.data;
+              var apptColors: Record<string, string> = {
+                SCHEDULED: "bg-blue-50 border-blue-200", CONFIRMED: "bg-blue-50 border-blue-200",
+                COMPLETED: "bg-emerald-50 border-emerald-200", CANCELLED: "bg-gray-50 border-gray-200",
+                NO_SHOW: "bg-red-50 border-red-200", RESCHEDULED: "bg-amber-50 border-amber-200",
+              };
+              var ApptIcon = appt.type === "VIDEO_CALL" ? Video : appt.type === "PHONE" ? Phone : CalendarDays;
+              return (
+                <div key={item.id} className="flex gap-3 relative">
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 border-2",
+                    apptColors[appt.status] || "bg-blue-50 border-blue-200"
+                  )}>
+                    <ApptIcon size={14} className="text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-700">{appt.title}</p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                        appt.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
+                        appt.status === "NO_SHOW" ? "bg-red-100 text-red-600" :
+                        appt.status === "CANCELLED" ? "bg-gray-100 text-gray-500" :
+                        "bg-blue-100 text-blue-700"
+                      )}>
+                        {apptStatusLabels[appt.status] || appt.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatDateTime(appt.startAt)} — {new Date(appt.endAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    {appt.location && <p className="text-xs text-gray-500 mt-0.5"><MapPin size={10} className="inline mr-1" />{appt.location}</p>}
+                    {appt.meetingUrl && <a href={appt.meetingUrl} target="_blank" className="text-xs text-blue-600 hover:underline mt-0.5 inline-block">Lien visio</a>}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {appt.assignedTo && <span className="text-[10px] text-gray-500">{appt.assignedTo.name}</span>}
+                      <span className="text-[10px] text-gray-400">{formatRelative(appt.startAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (item.type === "task") {
+              var task = item.data;
+              var isDone = task.status === "DONE";
+              var isOverdue = !isDone && task.dueDate && new Date(task.dueDate) < new Date();
+              var TaskIcon = isDone ? CheckCircle2 : isOverdue ? AlertTriangle : ListTodo;
+              return (
+                <div key={item.id} className="flex gap-3 relative">
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 border-2",
+                    isDone ? "bg-emerald-50 border-emerald-200" :
+                    isOverdue ? "bg-red-50 border-red-200" :
+                    "bg-amber-50 border-amber-200"
+                  )}>
+                    <TaskIcon size={14} className={isDone ? "text-emerald-600" : isOverdue ? "text-red-500" : "text-amber-600"} />
+                  </div>
+                  <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className={cn("text-sm font-medium", isDone ? "text-gray-400 line-through" : "text-gray-700")}>{task.title}</p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                        isDone ? "bg-emerald-100 text-emerald-700" :
+                        isOverdue ? "bg-red-100 text-red-600" :
+                        "bg-amber-100 text-amber-700"
+                      )}>
+                        {taskStatusLabels[task.status] || task.status}
+                      </span>
+                    </div>
+                    {task.dueDate && (
+                      <p className={cn("text-xs mt-1", isOverdue ? "text-red-500 font-medium" : "text-gray-500")}>
+                        <Clock size={10} className="inline mr-1" />
+                        Échéance : {formatDateTime(task.dueDate)}
+                        {isOverdue && " — En retard !"}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[10px] text-gray-500">{priorityLabels[task.priority] || task.priority}</span>
+                      {task.assignedTo && <span className="text-[10px] text-gray-500">• {task.assignedTo.name}</span>}
+                      <span className="text-[10px] text-gray-400">{formatRelative(task.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Default: activity
+            var activity = item.data;
             var Icon = activityIcons[activity.type] || Activity;
             return (
-              <div key={activity.id} className="flex gap-3 relative">
+              <div key={item.id} className="flex gap-3 relative">
                 <div className="w-8 h-8 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center shrink-0 z-10">
                   <Icon size={14} className="text-gray-500" />
                 </div>
