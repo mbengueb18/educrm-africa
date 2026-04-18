@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
-  Upload, Download,
+  Upload, Download, AlertTriangle, Bell, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
@@ -43,6 +43,19 @@ export function PipelineClient({
   var [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   var [importOpen, setImportOpen] = useState(false);
   var [exportOpen, setExportOpen] = useState(false);
+  var [filterRelance, setFilterRelance] = useState<"all" | "urgent" | "warning" | "mine">("all");
+
+  // Count leads needing follow-up
+  var urgentCount = leads.filter(function(l: any) { return l.daysSinceContact >= 7; }).length;
+  var warningCount = leads.filter(function(l: any) { return l.daysSinceContact >= 3 && l.daysSinceContact < 7; }).length;
+
+  // Filter leads
+  var filteredLeads = leads.filter(function(l: any) {
+    if (filterRelance === "urgent") return l.daysSinceContact >= 7;
+    if (filterRelance === "warning") return l.daysSinceContact >= 3;
+    if (filterRelance === "mine") return l.assignedToId !== null;
+    return true;
+  });
 
   var router = useRouter();
 
@@ -89,6 +102,33 @@ export function PipelineClient({
         </div>
 
         <div className="flex items-center gap-2">
+
+          {/* Follow-up filters */}
+          {urgentCount > 0 && (
+            <button onClick={function() { setFilterRelance(filterRelance === "urgent" ? "all" : "urgent"); }}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                filterRelance === "urgent" ? "bg-red-100 text-red-700 border border-red-200" : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100"
+              )}>
+              <AlertTriangle size={13} />
+              {urgentCount} urgent{urgentCount > 1 ? "s" : ""}
+            </button>
+          )}
+          {warningCount > 0 && (
+            <button onClick={function() { setFilterRelance(filterRelance === "warning" ? "all" : "warning"); }}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                filterRelance === "warning" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100"
+              )}>
+              <Bell size={13} />
+              {warningCount} à relancer
+            </button>
+          )}
+          {filterRelance !== "all" && (
+            <button onClick={function() { setFilterRelance("all"); }}
+              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
+              ✕ Effacer
+            </button>
+          )}
+
           {/* Import / Export */}
           <button
             onClick={function() { setImportOpen(true); }}
@@ -172,13 +212,13 @@ export function PipelineClient({
       {viewMode === "kanban" ? (
         <KanbanBoard
           stages={stages}
-          leads={leads}
+          leads={filteredLeads}
           onAddLead={function() { setModalOpen(true); }}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
         />
       ) : (
         <LeadListView
-          leads={leads}
+          leads={filteredLeads}
           stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
           users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
           onOpenLead={function(id) { setSelectedLeadId(id); }}

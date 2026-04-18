@@ -33,7 +33,44 @@ export async function getPipelineData() {
     }),
   ]);
 
-  return { stages, leads, users };
+  // Calculate last contact date for each lead
+  var leadIds = leads.map(function(l) { return l.id; });
+
+  var [lastCalls, lastMessages, lastAppointments] = await Promise.all([
+    prisma.call.groupBy({
+      by: ["leadId"],
+      where: { leadId: { in: leadIds } },
+      _max: { calledAt: true },
+    }),
+    prisma.message.groupBy({
+      by: ["leadId"],
+      where: { leadId: { in: leadIds }, direction: "OUTBOUND" },
+      _max: { sentAt: true },
+    }),
+    prisma.appointment.groupBy({
+      by: ["leadId"],
+      where: { leadId: { in: leadIds }, status: { in: ["COMPLETED", "CONFIRMED", "SCHEDULED"] } },
+      _max: { startAt: true },
+    }),
+  ]);
+
+  var enrichedLeads = leads.map(function(lead) {
+    var callDate = lastCalls.find(function(c) { return c.leadId === lead.id; })?._max?.calledAt;
+    var msgDate = lastMessages.find(function(m) { return m.leadId === lead.id; })?._max?.sentAt;
+    var apptDate = lastAppointments.find(function(a) { return a.leadId === lead.id; })?._max?.startAt;
+
+    var dates = [callDate, msgDate, apptDate].filter(Boolean) as Date[];
+    var lastContactAt = dates.length > 0 ? new Date(Math.max(...dates.map(function(d) { return d.getTime(); }))) : null;
+
+    var now = new Date();
+    var daysSinceContact = lastContactAt
+      ? Math.floor((now.getTime() - lastContactAt.getTime()) / 86_400_000)
+      : Math.floor((now.getTime() - lead.createdAt.getTime()) / 86_400_000);
+
+    return { ...lead, lastContactAt, daysSinceContact };
+  });
+
+  return { stages, leads: enrichedLeads, users };
 }
 
 // ─── Move lead to stage ───

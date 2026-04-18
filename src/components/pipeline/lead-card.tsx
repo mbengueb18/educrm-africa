@@ -9,6 +9,8 @@ import {
   User as UserIcon,
   GraduationCap,
   Activity,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import type { LeadSource } from "@prisma/client";
 
@@ -29,6 +31,8 @@ interface LeadCardProps {
     assignedTo: { id: string; name: string; avatar: string | null } | null;
     program: { id: string; name: string; code: string | null } | null;
     _count: { messages: number; activities: number };
+    daysSinceContact?: number;
+    lastContactAt?: Date | null;
   };
   customFieldsConfig?: { key: string; label: string; showInCard: boolean }[];
   onOpen?: (leadId: string) => void;
@@ -100,8 +104,8 @@ export function LeadCard({ lead, customFieldsConfig = [], onOpen }: LeadCardProp
         </div>
       )}
 
-      {/* Source badge */}
-      <div className="flex items-center gap-2 mb-3">
+      {/* Source badge + Follow-up alert */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span
           className={cn(
             "badge text-[11px]",
@@ -110,6 +114,18 @@ export function LeadCard({ lead, customFieldsConfig = [], onOpen }: LeadCardProp
         >
           {sourceLabels[lead.source]}
         </span>
+        {lead.daysSinceContact !== undefined && lead.daysSinceContact >= 7 && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold animate-pulse">
+            <AlertTriangle size={10} />
+            {lead.daysSinceContact}j sans contact
+          </span>
+        )}
+        {lead.daysSinceContact !== undefined && lead.daysSinceContact >= 3 && lead.daysSinceContact < 7 && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
+            <Clock size={10} />
+            {lead.daysSinceContact}j
+          </span>
+        )}
         <span className="text-[11px] text-gray-400">
           {formatRelative(lead.createdAt)}
         </span>
