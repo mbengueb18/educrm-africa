@@ -221,6 +221,43 @@ export function PipelineClient({
         </div>
       </div>
 
+      {/* Personal stats */}
+      {filterRelance === "mine" && (
+        <div className="bg-gradient-to-r from-brand-50 to-emerald-50 rounded-xl border border-brand-200 p-4 mb-4 animate-scale-in">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-800">📊 Mes performances</h3>
+            <span className="text-[10px] text-gray-400">Période en cours</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {(function() {
+              var myLeads = leads.filter(function(l: any) { return l.assignedToId === currentUserId; });
+              var totalMine = myLeads.length;
+              var urgentMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 7; }).length;
+              var warningMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 3 && l.daysSinceContact < 7; }).length;
+              var recentMine = myLeads.filter(function(l: any) { return l.daysSinceContact < 3; }).length;
+              var avgScore = totalMine > 0 ? Math.round(myLeads.reduce(function(sum: number, l: any) { return sum + l.score; }, 0) / totalMine) : 0;
+              var highScoreMine = myLeads.filter(function(l: any) { return l.score >= 60; }).length;
+
+              return [
+                { label: "Mes leads", value: String(totalMine), color: "text-brand-700" },
+                { label: "À jour (< 3j)", value: String(recentMine), color: "text-emerald-600" },
+                { label: "À relancer (3-7j)", value: String(warningMine), color: "text-amber-600" },
+                { label: "Urgents (> 7j)", value: String(urgentMine), color: "text-red-600" },
+                { label: "Score moyen", value: String(avgScore), color: "text-purple-600" },
+                { label: "Score élevé (60+)", value: String(highScoreMine), color: "text-blue-600" },
+              ].map(function(stat) {
+                return (
+                  <div key={stat.label} className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
+                    <div className={cn("text-lg font-bold", stat.color)}>{stat.value}</div>
+                    <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{stat.label}</div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard

@@ -629,7 +629,7 @@ export async function detectDuplicates() {
 
       // Same email
       if (!reason && leads[i].email && leads[j].email) {
-        if (leads[i].email.toLowerCase() === leads[j].email.toLowerCase()) {
+        if (leads[i].email!.toLowerCase() === leads[j].email!.toLowerCase()) {
           reason = "Même email";
         }
       }
@@ -662,7 +662,7 @@ function getGroupReason(lead: any, others: any[]): string {
     var p1 = lead.phone?.replace(/\D/g, "") || "";
     var p2 = other.phone?.replace(/\D/g, "") || "";
     if (p1.length >= 8 && p1 === p2 && !reasons.includes("Même téléphone")) reasons.push("Même téléphone");
-    if (lead.email && other.email && lead.email.toLowerCase() === other.email.toLowerCase() && !reasons.includes("Même email")) reasons.push("Même email");
+    if (lead.email && other.email && lead.email!.toLowerCase() === other.email!.toLowerCase() && !reasons.includes("Même email")) reasons.push("Même email");
   }
   return reasons.join(" + ");
 }
