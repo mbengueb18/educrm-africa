@@ -114,16 +114,14 @@ export function LeadCard({ lead, customFieldsConfig = [], onOpen }: LeadCardProp
         >
           {sourceLabels[lead.source]}
         </span>
-        {lead.daysSinceContact !== undefined && lead.daysSinceContact >= 7 && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold animate-pulse">
-            <AlertTriangle size={10} />
-            {lead.daysSinceContact}j sans contact
-          </span>
-        )}
-        {lead.daysSinceContact !== undefined && lead.daysSinceContact >= 3 && lead.daysSinceContact < 7 && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
+        {lead.daysSinceContact !== undefined && (
+          <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold",
+            lead.daysSinceContact >= 7 ? "bg-red-100 text-red-700" :
+            lead.daysSinceContact >= 3 ? "bg-amber-100 text-amber-700" :
+            "bg-emerald-100 text-emerald-700"
+          )}>
             <Clock size={10} />
-            {lead.daysSinceContact}j
+            {lead.daysSinceContact === 0 ? "Aujourd'hui" : lead.daysSinceContact + "j"}
           </span>
         )}
         <span className="text-[11px] text-gray-400">

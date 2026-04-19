@@ -16,6 +16,8 @@ import { useRouter } from "next/navigation";
 
 interface Lead {
   id: string;
+  lastContactAt?: Date | null;
+  daysSinceContact?: number;
   firstName: string;
   lastName: string;
   phone: string;
@@ -43,6 +45,8 @@ interface LeadListViewProps {
   leads: Lead[];
   stages: Stage[];
   users: { id: string; name: string }[];
+  programs?: { id: string; name: string }[];
+  campuses?: { id: string; name: string; city: string }[];
   onOpenLead?: (leadId: string) => void;
 }
 
@@ -61,7 +65,7 @@ const SOURCE_COLORS: Record<string, string> = {
 };
 
 // Default visible columns
-const DEFAULT_COLUMNS = ["name", "phone", "email", "stage", "source", "program", "score", "assignedTo", "city", "createdAt"];
+const DEFAULT_COLUMNS = ["name", "phone", "email", "stage", "source", "program", "score", "assignedTo", "lastContact", "createdAt"];
 
 // All available system columns
 const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
@@ -77,15 +81,18 @@ const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "program", label: "Filière", group: "Formation" },
   { key: "createdAt", label: "Date création", group: "Dates" },
   { key: "updatedAt", label: "Dernière maj", group: "Dates" },
+  { key: "lastContact", label: "Dernier contact", group: "Dates" },
 ];
 
-export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewProps) {
+export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead }: LeadListViewProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filterStage, setFilterStage] = useState<string>("");
   const [filterSource, setFilterSource] = useState<string>("");
   const [filterAssigned, setFilterAssigned] = useState<string>("");
+  const [filterProgram, setFilterProgram] = useState<string>("");
+  const [filterCampus, setFilterCampus] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
@@ -145,9 +152,11 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
         if (filterAssigned === "unassigned" && lead.assignedTo) return false;
         if (filterAssigned !== "unassigned" && lead.assignedTo?.id !== filterAssigned) return false;
       }
+      if (filterProgram && lead.program?.id !== filterProgram) return false;
+      if (filterCampus && (lead as any).campusId !== filterCampus) return false;
       return true;
     });
-  }, [leads, search, filterStage, filterSource, filterAssigned]);
+  }, [leads, search, filterStage, filterSource, filterAssigned, filterProgram, filterCampus]);
 
   // Sort leads
   const sorted = useMemo(() => {
@@ -158,6 +167,10 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
         case "score": valA = a.score; valB = b.score; break;
         case "createdAt": valA = new Date(a.createdAt).getTime(); valB = new Date(b.createdAt).getTime(); break;
         case "updatedAt": valA = new Date(a.updatedAt).getTime(); valB = new Date(b.updatedAt).getTime(); break;
+        case "lastContact":
+          valA = (a as any).daysSinceContact ?? 9999;
+          valB = (b as any).daysSinceContact ?? 9999;
+          break;
         case "city": valA = a.city || ""; valB = b.city || ""; break;
         case "source": valA = a.source; valB = b.source; break;
         default: valA = ""; valB = "";
@@ -223,7 +236,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
     setAssigning(false);
   };
 
-  const activeFiltersCount = [filterStage, filterSource, filterAssigned].filter(Boolean).length;
+  const activeFiltersCount = [filterStage, filterSource, filterAssigned, filterProgram, filterCampus].filter(Boolean).length;
 
   const getCustomFieldValue = (lead: Lead, cfKey: string): string => {
     var custom = (lead.customFields as Record<string, any>) || {};
@@ -299,6 +312,17 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
         return <span className="text-xs text-gray-500">{formatRelative(lead.createdAt)}</span>;
       case "updatedAt":
         return <span className="text-xs text-gray-500">{formatRelative(lead.updatedAt)}</span>;
+        case "lastContact":
+        if (lead.daysSinceContact === undefined || lead.daysSinceContact === null) return <span className="text-gray-400">—</span>;
+        return (
+          <span className={cn("text-xs font-medium",
+            lead.daysSinceContact >= 7 ? "text-red-600" :
+            lead.daysSinceContact >= 3 ? "text-amber-600" :
+            "text-emerald-600"
+          )}>
+            {lead.lastContactAt ? formatRelative(lead.lastContactAt) : "Jamais"}
+          </span>
+        );
       default:
         return <span className="text-gray-400">—</span>;
     }
@@ -423,14 +447,14 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
             <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
             {activeFiltersCount > 0 && (
               <button
-                onClick={() => { setFilterStage(""); setFilterSource(""); setFilterAssigned(""); }}
+                onClick={() => { setFilterStage(""); setFilterSource(""); setFilterAssigned(""); setFilterProgram(""); setFilterCampus(""); }}
                 className="text-xs text-brand-600 hover:text-brand-700 font-medium"
               >
                 Effacer tout
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Étape</label>
               <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="input text-sm py-1.5">
@@ -451,6 +475,22 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
                 <option value="">Tous</option>
                 <option value="unassigned">Non assigne</option>
                 {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Filière</label>
+              <select value={filterProgram} onChange={(e) => setFilterProgram(e.target.value)} className="input text-sm py-1.5">
+                <option value="">Toutes</option>
+                {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
+              <select value={filterCampus} onChange={(e) => setFilterCampus(e.target.value)} className="input text-sm py-1.5">
+                <option value="">Tous</option>
+                {campuses.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.city}</option>)}
               </select>
             </div>
           </div>
@@ -506,7 +546,7 @@ export function LeadListView({ leads, stages, users, onOpenLead }: LeadListViewP
                 {visibleColumns.map((colKey) => {
                   var col = allAvailableColumns.find((c) => c.key === colKey);
                   if (!col) return null;
-                  var isSortable = ["name", "score", "createdAt", "updatedAt", "city", "source"].includes(colKey);
+                  var isSortable = ["name", "score", "createdAt", "updatedAt", "city", "source", "lastContact"].includes(colKey);
                   return (
                     <th
                       key={colKey}

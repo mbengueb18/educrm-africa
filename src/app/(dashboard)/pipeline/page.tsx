@@ -13,12 +13,17 @@ export default async function PipelinePage() {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [pipelineData, stats, programs, fieldProps] = await Promise.all([
+  const [pipelineData, stats, programs, campuses, fieldProps] = await Promise.all([
     getPipelineData(),
     getPipelineStats(),
     prisma.program.findMany({
       where: { organizationId: session.user.organizationId, isActive: true },
       select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.campus.findMany({
+      where: { organizationId: session.user.organizationId },
+      select: { id: true, name: true, city: true },
       orderBy: { name: "asc" },
     }),
     getAllFieldProperties(),
@@ -31,6 +36,7 @@ export default async function PipelinePage() {
       users={pipelineData.users}
       stats={stats}
       programs={programs}
+      campuses={campuses}
       crmFields={fieldProps.fields}
       currentUserId={session.user.id}
     />

@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
-  Upload, Download, AlertTriangle, Bell, Filter, Copy, Check, Loader2, X,
+  Upload, Download, Copy, Check, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
@@ -29,6 +29,7 @@ interface PipelineClientProps {
     stageBreakdown: { name: string; count: number; color: string }[];
   };
   programs: { id: string; name: string }[];
+  campuses: { id: string; name: string; city: string }[];
   crmFields?: any[];
 }
 
@@ -39,6 +40,7 @@ export function PipelineClient({
   currentUserId,
   stats,
   programs,
+  campuses,
   crmFields,
 }: PipelineClientProps) {
   var [modalOpen, setModalOpen] = useState(false);
@@ -46,7 +48,8 @@ export function PipelineClient({
   var [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   var [importOpen, setImportOpen] = useState(false);
   var [exportOpen, setExportOpen] = useState(false);
-  var [filterRelance, setFilterRelance] = useState<"all" | "urgent" | "warning" | "mine">("all");
+  var [filterMine, setFilterMine] = useState(false);
+  var [showFilters, setShowFilters] = useState(false);
   var [duplicatesOpen, setDuplicatesOpen] = useState(false);
   var [duplicates, setDuplicates] = useState<any[]>([]);
   var [loadingDuplicates, setLoadingDuplicates] = useState(false);
@@ -80,15 +83,9 @@ export function PipelineClient({
     setMerging(false);
   };
 
-  // Count leads needing follow-up
-  var urgentCount = leads.filter(function(l: any) { return l.daysSinceContact >= 7; }).length;
-  var warningCount = leads.filter(function(l: any) { return l.daysSinceContact >= 3 && l.daysSinceContact < 7; }).length;
-
-  // Filter leads
+   // Filter leads
   var filteredLeads = leads.filter(function(l: any) {
-    if (filterRelance === "urgent") return l.daysSinceContact >= 7;
-    if (filterRelance === "warning") return l.daysSinceContact >= 3;
-    if (filterRelance === "mine") return l.assignedToId === currentUserId;
+    if (filterMine) return l.assignedToId === currentUserId;
     return true;
   });
 
@@ -138,36 +135,10 @@ export function PipelineClient({
 
         <div className="flex items-center gap-2">
 
-          {/* Follow-up filters */}
-          {urgentCount > 0 && (
-            <button onClick={function() { setFilterRelance(filterRelance === "urgent" ? "all" : "urgent"); }}
-              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                filterRelance === "urgent" ? "bg-red-100 text-red-700 border border-red-200" : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100"
-              )}>
-              <AlertTriangle size={13} />
-              {urgentCount} urgent{urgentCount > 1 ? "s" : ""}
-            </button>
-          )}
-          {warningCount > 0 && (
-            <button onClick={function() { setFilterRelance(filterRelance === "warning" ? "all" : "warning"); }}
-              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                filterRelance === "warning" ? "bg-amber-100 text-amber-700 border border-amber-200" : "bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100"
-              )}>
-              <Bell size={13} />
-              {warningCount} à relancer
-            </button>
-          )}
-          {filterRelance !== "all" && (
-            <button onClick={function() { setFilterRelance("all"); }}
-              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
-              ✕ Effacer
-            </button>
-          )}
-
           {/* Mes leads */}
-          <button onClick={function() { setFilterRelance(filterRelance === "mine" ? "all" : "mine"); }}
+          <button onClick={function() { setFilterMine(!filterMine); }}
             className={cn("btn-secondary py-1.5 text-xs",
-              filterRelance === "mine" && "bg-brand-100 text-brand-700 border-brand-200"
+              filterMine && "bg-brand-100 text-brand-700 border-brand-200"
             )}>
             <UserPlus size={13} />
             Mes leads
@@ -222,7 +193,7 @@ export function PipelineClient({
       </div>
 
       {/* Personal stats */}
-      {filterRelance === "mine" && (
+      {filterMine && (
         <div className="bg-gradient-to-r from-brand-50 to-emerald-50 rounded-xl border border-brand-200 p-4 mb-4 animate-scale-in">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-gray-800">📊 Mes performances</h3>
@@ -258,49 +229,14 @@ export function PipelineClient({
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="Leads actifs"
-          value={stats.totalLeads}
-          icon={Users}
-          iconColor="text-brand-600"
-          iconBg="bg-brand-50"
-        />
-        <StatCard
-          label="Nouveaux (7j)"
-          value={stats.newLeadsWeek}
-          change={12}
-          changeLabel="vs semaine dern."
-          icon={UserPlus}
-          iconColor="text-emerald-600"
-          iconBg="bg-emerald-50"
-        />
-        <StatCard
-          label="Convertis (30j)"
-          value={stats.convertedMonth}
-          change={8}
-          changeLabel="vs mois dern."
-          icon={UserCheck}
-          iconColor="text-accent-600"
-          iconBg="bg-accent-50"
-        />
-        <StatCard
-          label="Taux de conversion"
-          value={conversionRate + "%"}
-          change={conversionRate > 15 ? 5 : -2}
-          changeLabel="vs mois dern."
-          icon={TrendingUp}
-          iconColor="text-purple-600"
-          iconBg="bg-purple-50"
-        />
-      </div>
-
       {/* Pipeline view */}
       {viewMode === "kanban" ? (
         <KanbanBoard
           stages={stages}
           leads={filteredLeads}
+          users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+          programs={programs}
+          campuses={campuses}
           onAddLead={function() { setModalOpen(true); }}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
         />
@@ -309,6 +245,8 @@ export function PipelineClient({
           leads={filteredLeads}
           stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
           users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+          programs={programs}
+          campuses={campuses}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
         />
       )}
