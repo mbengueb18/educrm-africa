@@ -32,6 +32,7 @@ export default async function PipelinePage() {
       stats={stats}
       programs={programs}
       crmFields={fieldProps.fields}
+      currentUserId={session.user.id}
     />
   );
 }

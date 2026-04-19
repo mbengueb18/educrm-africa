@@ -583,3 +583,148 @@ export async function calculateLeadScores(orgId: string) {
 
   return { updated: updates.length };
 }
+
+// ─── Detect duplicate leads ───
+export async function detectDuplicates() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var orgId = session.user.organizationId;
+
+  var leads = await prisma.lead.findMany({
+    where: { organizationId: orgId, isConverted: false },
+    select: {
+      id: true, firstName: true, lastName: true,
+      phone: true, email: true, whatsapp: true,
+      score: true, source: true, createdAt: true,
+      stageId: true,
+      assignedTo: { select: { name: true } },
+      program: { select: { name: true } },
+      _count: { select: { calls: true, messages: true, appointments: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  var duplicateGroups: { key: string; reason: string; leads: typeof leads }[] = [];
+  var processed = new Set<string>();
+
+  for (var i = 0; i < leads.length; i++) {
+    if (processed.has(leads[i].id)) continue;
+
+    var group: typeof leads = [leads[i]];
+
+    for (var j = i + 1; j < leads.length; j++) {
+      if (processed.has(leads[j].id)) continue;
+
+      var reason = "";
+
+      // Same phone
+      if (leads[i].phone && leads[j].phone) {
+        var p1 = leads[i].phone.replace(/\D/g, "");
+        var p2 = leads[j].phone.replace(/\D/g, "");
+        if (p1.length >= 8 && p1 === p2) {
+          reason = "Même téléphone";
+        }
+      }
+
+      // Same email
+      if (!reason && leads[i].email && leads[j].email) {
+        if (leads[i].email.toLowerCase() === leads[j].email.toLowerCase()) {
+          reason = "Même email";
+        }
+      }
+
+      if (reason) {
+        group.push(leads[j]);
+        processed.add(leads[j].id);
+        if (!duplicateGroups.find(function(g) { return g.key === leads[i].id; })) {
+          // Set reason for first match
+        }
+      }
+    }
+
+    if (group.length > 1) {
+      processed.add(leads[i].id);
+      duplicateGroups.push({
+        key: leads[i].id,
+        reason: getGroupReason(leads[i], group.slice(1)),
+        leads: group,
+      });
+    }
+  }
+
+  return duplicateGroups;
+}
+
+function getGroupReason(lead: any, others: any[]): string {
+  var reasons: string[] = [];
+  for (var other of others) {
+    var p1 = lead.phone?.replace(/\D/g, "") || "";
+    var p2 = other.phone?.replace(/\D/g, "") || "";
+    if (p1.length >= 8 && p1 === p2 && !reasons.includes("Même téléphone")) reasons.push("Même téléphone");
+    if (lead.email && other.email && lead.email.toLowerCase() === other.email.toLowerCase() && !reasons.includes("Même email")) reasons.push("Même email");
+  }
+  return reasons.join(" + ");
+}
+
+// ─── Merge duplicate leads ───
+export async function mergeDuplicateLeads(keepId: string, removeIds: string[]) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var orgId = session.user.organizationId;
+
+  // Verify all leads belong to org
+  var leads = await prisma.lead.findMany({
+    where: { id: { in: [keepId, ...removeIds] }, organizationId: orgId },
+  });
+
+  if (leads.length !== 1 + removeIds.length) throw new Error("Leads introuvables");
+
+  var keepLead = leads.find(function(l) { return l.id === keepId; });
+  if (!keepLead) throw new Error("Lead principal introuvable");
+
+  // Transfer all related data to the kept lead
+  for (var removeId of removeIds) {
+    await prisma.activity.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.message.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.call.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.appointment.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.task.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.document.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+    await prisma.emailCampaignRecipient.updateMany({ where: { leadId: removeId }, data: { leadId: keepId } });
+
+    // Merge missing fields
+    var removeLead = leads.find(function(l) { return l.id === removeId; });
+    if (removeLead) {
+      var updates: any = {};
+      if (!keepLead.email && removeLead.email) updates.email = removeLead.email;
+      if (!keepLead.whatsapp && removeLead.whatsapp) updates.whatsapp = removeLead.whatsapp;
+      if (!keepLead.city && removeLead.city) updates.city = removeLead.city;
+      if (!keepLead.programId && removeLead.programId) updates.programId = removeLead.programId;
+      if (!keepLead.campusId && removeLead.campusId) updates.campusId = removeLead.campusId;
+      if (!keepLead.assignedToId && removeLead.assignedToId) updates.assignedToId = removeLead.assignedToId;
+
+      if (Object.keys(updates).length > 0) {
+        await prisma.lead.update({ where: { id: keepId }, data: updates });
+      }
+    }
+
+    // Delete the duplicate
+    await prisma.lead.delete({ where: { id: removeId } });
+  }
+
+  // Log activity
+  await prisma.activity.create({
+    data: {
+      type: "NOTE_ADDED" as any,
+      description: removeIds.length + " doublon(s) fusionné(s)",
+      userId: session.user.id,
+      leadId: keepId,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath("/pipeline");
+  return { success: true };
+}
