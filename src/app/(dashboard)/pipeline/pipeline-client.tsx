@@ -11,7 +11,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
-  Upload, Download, Copy, Check, Loader2, X,
+  Upload, Download, Copy, Check, Loader2, X, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
