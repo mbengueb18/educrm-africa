@@ -104,3 +104,38 @@ export async function logWhatsAppMessage(leadId: string, content: string) {
     },
   });
 }
+
+// ─── Update lead notes ───
+export async function updateLeadNotes(leadId: string, notes: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: { customFields: true },
+  });
+
+  if (!lead) throw new Error("Lead introuvable");
+
+  var customFields = (lead.customFields as Record<string, any>) || {};
+  customFields._notes = notes;
+
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: { customFields },
+  });
+
+  if (notes.trim()) {
+    await prisma.activity.create({
+      data: {
+        type: "NOTE_ADDED",
+        description: "Note ajoutée",
+        userId: session.user.id,
+        leadId,
+        organizationId: session.user.organizationId,
+      },
+    });
+  }
+
+  return { success: true };
+}

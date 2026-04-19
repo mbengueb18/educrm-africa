@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { getLeadDetail, logWhatsAppMessage } from "@/app/(dashboard)/pipeline/lead-actions";
+import { getLeadDetail, logWhatsAppMessage, updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
 import { moveLeadToStage, assignLead, updateLeadScore, updateLead, deleteLead } from "@/app/(dashboard)/pipeline/actions";
 import { createTask } from "@/app/(dashboard)/tasks/actions";
 import { cn, formatCFA, formatDate, formatDateTime, formatRelative, formatPhone, getInitials, getScoreBg } from "@/lib/utils";
@@ -34,6 +34,7 @@ import {
   XCircle,
  ListTodo, 
   Plus,
+  StickyNote,
   CalendarDays,
   PhoneIncoming,
   PhoneOutgoing,
@@ -84,7 +85,7 @@ var activityIcons: Record<string, typeof Activity> = {
 export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverProps) {
   var [lead, setLead] = useState<LeadDetail | null>(null);
   var [loading, setLoading] = useState(false);
-  var [activeTab, setActiveTab] = useState<"info" | "history">("info");
+  var [activeTab, setActiveTab] = useState<"info" | "history" | "notes">("info");
   var [isPending, startTransition] = useTransition();
   var [deleting, setDeleting] = useState(false);
   var [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -308,6 +309,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
               {[
                 { key: "info" as const, label: "Infos" },
                 { key: "history" as const, label: "Historique (" + ((lead._count.activities || 0) + (lead._count.calls || 0) + (lead._count.appointments || 0) + (lead._count.tasks || 0) + (lead._count.messages || 0)) + ")" },
+                { key: "notes" as const, label: "Notes" },
               ].map(function(tab) {
                 return (
                   <button key={tab.key} onClick={function() { setActiveTab(tab.key); }}
@@ -325,6 +327,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
             <div className="flex-1 overflow-y-auto">
               {activeTab === "info" && <InfoTab lead={lead} customFieldsConfig={customFieldsConfig} stages={stages} users={users} onLeadUpdate={function(updated) { setLead(updated); }} />}
               {activeTab === "history" && <HistoryTab lead={lead} />}
+              {activeTab === "notes" && <NotesTab lead={lead} onUpdate={function(updated) { setLead(updated); }} />}
             </div>
           </>
         )}
@@ -1058,6 +1061,77 @@ function WhatsAppButton({ lead }: { lead: LeadDetail }) {
     </div>
   );
 }
+
+// ─── Notes Tab ───
+function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadDetail) => void }) {
+  var currentNotes = ((lead.customFields as any)?._notes as string) || "";
+  var [notes, setNotes] = useState(currentNotes);
+  var [saving, setSaving] = useState(false);
+  var [editing, setEditing] = useState(!currentNotes);
+
+  useEffect(function() {
+    setNotes(((lead.customFields as any)?._notes as string) || "");
+    setEditing(!((lead.customFields as any)?._notes));
+  }, [lead.id]);
+
+  var handleSave = async function() {
+    setSaving(true);
+    try {
+      await updateLeadNotes(lead.id, notes);
+      var updatedCustomFields = { ...((lead.customFields as any) || {}), _notes: notes };
+      onUpdate({ ...lead, customFields: updatedCustomFields } as any);
+      toast.success("Notes enregistrées");
+      setEditing(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <StickyNote size={16} className="text-amber-500" />
+          <h3 className="text-sm font-semibold text-gray-700">Notes internes</h3>
+        </div>
+        {!editing && currentNotes && (
+          <button onClick={function() { setEditing(true); }} className="btn-secondary py-1 px-2.5 text-xs">
+            <Pencil size={12} /> Modifier
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <>
+          <textarea
+            value={notes}
+            onChange={function(e) { setNotes(e.target.value); }}
+            placeholder="Ajoutez des notes internes sur ce lead (visibles uniquement par votre équipe)...&#10;&#10;Exemples :&#10;• Parents divorcés, contact préférentiel : mère&#10;• Intéressé par la filière Marketing, budget limité&#10;• Doit rappeler après les examens du bac"
+            className="input text-sm w-full min-h-[300px] resize-y font-normal"
+            autoFocus
+          />
+          <div className="flex items-center justify-end gap-2 mt-3">
+            {currentNotes && (
+              <button onClick={function() { setNotes(currentNotes); setEditing(false); }} className="btn-secondary py-1.5 px-3 text-xs" disabled={saving}>
+                <XCircle size={13} /> Annuler
+              </button>
+            )}
+            <button onClick={handleSave} disabled={saving} className="btn-primary py-1.5 px-3 text-xs">
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Enregistrer
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-4">
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{currentNotes || "Aucune note"}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
   function QuickTaskForm({ leadId, leadName, users, onClose }: {
   leadId: string;
   leadName: string;
