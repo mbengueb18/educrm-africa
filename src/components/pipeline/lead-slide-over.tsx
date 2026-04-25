@@ -806,7 +806,23 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
               var dirLabel = msg.direction === "OUTBOUND" ? "envoyé" : "reçu";
 
               var parsedContent = { subject: null as string | null, body: msg.content };
-              try { var parsed = JSON.parse(msg.content); parsedContent = { subject: parsed.subject, body: parsed.body }; } catch {}
+              try {
+                var parsed = JSON.parse(msg.content);
+                parsedContent = { subject: parsed.subject || null, body: parsed.body || msg.content };
+              } catch {}
+
+              // Clean inbound replies: remove quoted text and signatures
+              var displayBody = parsedContent.body || "";
+              if (msg.direction === "INBOUND") {
+                // Remove quoted thread (everything from "On ... wrote:" or "Le ... a écrit :")
+                displayBody = displayBody
+                  .replace(/^(>+\s*.*\n?)+/gm, "")
+                  .replace(/On .{1,200} wrote:[\s\S]*$/i, "")
+                  .replace(/Le .{1,200} a [eé]crit\s*:[\s\S]*$/i, "")
+                  .replace(/-{2,}.*Original Message.*-{2,}[\s\S]*$/i, "")
+                  .replace(/_{3,}[\s\S]*$/m, "")
+                  .trim();
+              }
 
               return (
                 <div key={item.id} className="flex gap-3 relative">
@@ -824,9 +840,9 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                         {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Reçu" : msg.status === "SENT" ? "Envoyé" : msg.status === "FAILED" ? "Échoué" : msg.status}
                       </span>
                     </div>
-                    {parsedContent.subject && <p className="text-xs font-semibold text-gray-700 mb-1">{parsedContent.subject}</p>}
-                    <p className="text-xs text-gray-600 whitespace-pre-wrap line-clamp-4">{parsedContent.body}</p>
-                    <span className="text-[10px] text-gray-400 mt-1.5 block">{formatRelative(msg.sentAt)}</span>
+                    {parsedContent.subject && <p className="text-xs font-semibold text-gray-800 mb-1.5">{parsedContent.subject}</p>}
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{displayBody}</p>
+                    <span className="text-[10px] text-gray-400 mt-2 block">{formatRelative(msg.sentAt)}</span>
                   </div>
                 </div>
               );
