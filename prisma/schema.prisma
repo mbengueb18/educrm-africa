@@ -521,6 +521,7 @@ model Message {
   sentBy       User?            @relation("SentMessages", fields: [sentById], references: [id])
   template     MessageTemplate? @relation(fields: [templateId], references: [id])
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events MessageEvent[]
 
   @@index([organizationId])
   @@index([leadId])
@@ -938,4 +939,31 @@ model UserIntegration {
   @@unique([userId, provider])
   @@index([userId])
   @@map("user_integrations")
+}
+
+enum MessageEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  BLOCKED
+  SPAM
+  REPLIED
+  FAILED
+}
+
+model MessageEvent {
+  id        String           @id @default(cuid())
+  messageId String?
+  email     String?
+  event     MessageEventType
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+  @@index([email])
+  @@map("message_events")
 }

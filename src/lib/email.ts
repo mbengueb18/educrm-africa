@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Resend } from "resend";
 
 interface SendEmailParams {
   to: string;
@@ -22,9 +23,10 @@ interface EmailResult {
 export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   const { to, toName, subject, body, leadId, organizationId, sentById, replyTo } = params;
 
-  const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.EMAIL_FROM || "noreply@educrm.africa";
-  const senderName = process.env.EMAIL_FROM_NAME || "EduCRM";
+  const apiKey = process.env.RESEND_API_KEY;
+  const senderEmail = process.env.EMAIL_FROM || "noreply@talibcrm.com";
+  const senderName = process.env.EMAIL_FROM_NAME || "TalibCRM";
+  const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
 
   // Demo mode if no API key
   if (!apiKey) {
@@ -56,32 +58,33 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       success: true,
       dbMessageId: msg.id,
       demoMode: true,
-      error: "Mode demo: BREVO_API_KEY non configuree. Email enregistre mais pas envoye.",
+      error: "Mode demo: RESEND_API_KEY non configuree. Email enregistre mais pas envoye.",
     };
   }
 
+  // Build Reply-To: prefer custom replyTo, otherwise use inbound pattern with leadId
+  let finalReplyTo: string | undefined = replyTo;
+  if (!finalReplyTo && leadId && inboundDomain) {
+    finalReplyTo = "reply+" + leadId + "@" + inboundDomain;
+  }
+
   try {
-    // Brevo Transactional Email API
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": apiKey,
-      },
-      body: JSON.stringify({
-        sender: { name: senderName, email: senderEmail },
-        to: [{ email: to, name: toName || to }],
-        subject,
-        htmlContent: formatEmailHtml(body, subject, senderName),
-        textContent: body,
-        replyTo: replyTo ? { email: replyTo } : undefined,
-        tags: ["educrm", "lead-communication"],
-      }),
+    const resend = new Resend(apiKey);
+
+    const { data, error } = await resend.emails.send({
+      from: senderName + " <" + senderEmail + ">",
+      to: [to],
+      subject,
+      html: formatEmailHtml(body, subject, senderName),
+      text: body,
+      replyTo: finalReplyTo,
+      tags: [
+        { name: "category", value: "lead-communication" },
+        { name: "source", value: "educrm" },
+      ],
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
+    if (error || !data) {
       const msg = await prisma.message.create({
         data: {
           leadId: leadId || null,
@@ -94,7 +97,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         },
       });
 
-      return { success: false, dbMessageId: msg.id, error: result.message || "Erreur Brevo" };
+      return { success: false, dbMessageId: msg.id, error: error?.message || "Erreur Resend" };
     }
 
     const msg = await prisma.message.create({
@@ -104,7 +107,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         direction: "OUTBOUND",
         content: JSON.stringify({ subject, body }),
         status: "SENT",
-        externalId: result.messageId,
+        externalId: data.id,
         sentById: sentById || null,
         organizationId,
         deliveredAt: new Date(),
@@ -123,7 +126,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       });
     }
 
-    return { success: true, messageId: result.messageId, dbMessageId: msg.id };
+    return { success: true, messageId: data.id, dbMessageId: msg.id };
   } catch (error: any) {
     const msg = await prisma.message.create({
       data: {
@@ -155,7 +158,6 @@ export async function sendBulkEmail(params: {
   const errors: string[] = [];
 
   for (const lead of leads) {
-    // Replace variables in subject and body
     const personalizedSubject = replaceVariables(subject, lead);
     const personalizedBody = replaceVariables(body, lead);
 
@@ -176,7 +178,6 @@ export async function sendBulkEmail(params: {
       errors.push(lead.email + ": " + (result.error || "Erreur inconnue"));
     }
 
-    // Rate limit: 10 emails per second for Brevo free plan
     await new Promise((r) => setTimeout(r, 120));
   }
 
@@ -209,6 +210,6 @@ function formatEmailHtml(body: string, subject: string, senderName: string): str
     "</div>" +
     '<div style="padding:32px;">' + paragraphs + "</div>" +
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-    '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via EduCRM Africa</p>" +
+    '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via TalibCRM</p>" +
     "</div></div></body></html>";
 }
