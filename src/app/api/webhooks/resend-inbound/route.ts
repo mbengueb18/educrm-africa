@@ -45,10 +45,37 @@ export async function POST(request: NextRequest) {
       }
 
       var subject = data.subject || "";
-      var textBody = data.text || "";
-      var htmlBody = data.html || "";
+      // Try multiple field names — Resend's payload structure may vary
+      var textBody = data.text || data.text_body || data.textBody || data.bodyText || "";
+      var htmlBody = data.html || data.html_body || data.htmlBody || data.bodyHtml || "";
+      // Strip HTML if no plain text version
+      if (!textBody && htmlBody) {
+        textBody = htmlBody
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+\n/g, "\n")
+          .replace(/\n\s+/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+      }
       var receivedAt = data.created_at ? new Date(data.created_at) : new Date();
       var resendMessageId = data.email_id || data.id || null;
+
+      console.log("[Resend Inbound] Received email", {
+        from: fromEmail,
+        to: toEmails,
+        subject: subject,
+        textBodyLength: textBody.length,
+        htmlBodyLength: htmlBody.length,
+        rawDataKeys: Object.keys(data),
+      });
 
       if (!fromEmail) {
         return NextResponse.json({ ok: true, skipped: "no from email" });

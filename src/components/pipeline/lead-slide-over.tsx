@@ -805,11 +805,13 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
               var channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : msg.channel;
               var dirLabel = msg.direction === "OUTBOUND" ? "envoyé" : "reçu";
 
-              var parsedContent = { subject: null as string | null, body: msg.content };
+              var parsedContent = { subject: null as string | null, body: "" };
               try {
                 var parsed = JSON.parse(msg.content);
-                parsedContent = { subject: parsed.subject || null, body: parsed.body || msg.content };
-              } catch {}
+                parsedContent = { subject: parsed.subject || null, body: parsed.body || "" };
+              } catch {
+                parsedContent = { subject: null, body: msg.content };
+              }
 
               // Clean inbound replies: remove quoted text and signatures
               var displayBody = parsedContent.body || "";
@@ -822,6 +824,9 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                   .replace(/-{2,}.*Original Message.*-{2,}[\s\S]*$/i, "")
                   .replace(/_{3,}[\s\S]*$/m, "")
                   .trim();
+              }
+              if (!displayBody.trim()) {
+                displayBody = "(Message vide)";
               }
 
               return (
