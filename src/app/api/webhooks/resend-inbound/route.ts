@@ -45,10 +45,31 @@ export async function POST(request: NextRequest) {
       }
 
       var subject = data.subject || "";
-      // Try multiple field names — Resend's payload structure may vary
-      var textBody = data.text || data.text_body || data.textBody || data.bodyText || "";
-      var htmlBody = data.html || data.html_body || data.htmlBody || data.bodyHtml || "";
-      // Strip HTML if no plain text version
+      var receivedAt = data.created_at ? new Date(data.created_at) : new Date();
+      var resendMessageId = data.email_id || data.id || null;
+
+      // Webhooks don't include the body — fetch it via Resend Received Emails API
+      var textBody = "";
+      var htmlBody = "";
+
+      if (resendMessageId && process.env.RESEND_API_KEY) {
+        try {
+          var fetchResponse = await fetch("https://api.resend.com/emails/received/" + resendMessageId, {
+            headers: { "Authorization": "Bearer " + process.env.RESEND_API_KEY },
+          });
+          if (fetchResponse.ok) {
+            var emailData = await fetchResponse.json();
+            textBody = emailData.text || emailData.text_body || emailData.textBody || "";
+            htmlBody = emailData.html || emailData.html_body || emailData.htmlBody || "";
+          } else {
+            console.error("[Resend Inbound] Failed to fetch email body", fetchResponse.status, await fetchResponse.text());
+          }
+        } catch (fetchErr) {
+          console.error("[Resend Inbound] Error fetching email body", fetchErr);
+        }
+      }
+
+      // If only HTML, strip tags to get plain text
       if (!textBody && htmlBody) {
         textBody = htmlBody
           .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -65,8 +86,6 @@ export async function POST(request: NextRequest) {
           .replace(/\n{3,}/g, "\n\n")
           .trim();
       }
-      var receivedAt = data.created_at ? new Date(data.created_at) : new Date();
-      var resendMessageId = data.email_id || data.id || null;
 
       console.log("[Resend Inbound] Received email", {
         from: fromEmail,
@@ -74,7 +93,7 @@ export async function POST(request: NextRequest) {
         subject: subject,
         textBodyLength: textBody.length,
         htmlBodyLength: htmlBody.length,
-        rawDataKeys: Object.keys(data),
+        resendMessageId: resendMessageId,
       });
 
       if (!fromEmail) {
