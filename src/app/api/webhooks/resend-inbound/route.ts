@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Resend } from "resend";
 
 // Resend webhook (inbound + tracking)
 // Configure: https://resend.com/webhooks
@@ -48,24 +49,23 @@ export async function POST(request: NextRequest) {
       var receivedAt = data.created_at ? new Date(data.created_at) : new Date();
       var resendMessageId = data.email_id || data.id || null;
 
-      // Webhooks don't include the body — fetch it via Resend Received Emails API
+      // Webhooks don't include the body — fetch it via Resend SDK
       var textBody = "";
       var htmlBody = "";
 
       if (resendMessageId && process.env.RESEND_API_KEY) {
         try {
-          var fetchResponse = await fetch("https://api.resend.com/emails/received/" + resendMessageId, {
-            headers: { "Authorization": "Bearer " + process.env.RESEND_API_KEY },
-          });
-          if (fetchResponse.ok) {
-            var emailData = await fetchResponse.json();
-            textBody = emailData.text || emailData.text_body || emailData.textBody || "";
-            htmlBody = emailData.html || emailData.html_body || emailData.htmlBody || "";
+          var resend = new Resend(process.env.RESEND_API_KEY);
+          var receivingResult = await (resend.emails as any).receiving.get(resendMessageId);
+          var emailData = receivingResult?.data || receivingResult;
+          if (emailData) {
+            textBody = emailData.text || "";
+            htmlBody = emailData.html || "";
           } else {
-            console.error("[Resend Inbound] Failed to fetch email body", fetchResponse.status, await fetchResponse.text());
+            console.error("[Resend Inbound] No data returned from receiving.get", receivingResult);
           }
-        } catch (fetchErr) {
-          console.error("[Resend Inbound] Error fetching email body", fetchErr);
+        } catch (fetchErr: any) {
+          console.error("[Resend Inbound] Error fetching email body", fetchErr?.message || fetchErr);
         }
       }
 
