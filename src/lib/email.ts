@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
+import { getAttachmentBuffer } from "@/lib/supabase-storage";
+
+interface AttachmentInput {
+  path: string;          // Supabase Storage path
+  filename: string;
+  contentType?: string;
+}
 
 interface SendEmailParams {
   to: string;
@@ -10,6 +17,7 @@ interface SendEmailParams {
   organizationId: string;
   sentById?: string;
   replyTo?: string;
+  attachments?: AttachmentInput[];
 }
 
 interface EmailResult {
@@ -90,6 +98,24 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   try {
     const resend = new Resend(apiKey);
 
+    // Build attachments list (download from Supabase + base64 encode)
+    let resendAttachments: { filename: string; content: Buffer; contentType?: string }[] | undefined;
+    if (params.attachments && params.attachments.length > 0) {
+      resendAttachments = [];
+      for (const att of params.attachments) {
+        try {
+          const buffer = await getAttachmentBuffer(att.path);
+          resendAttachments.push({
+            filename: att.filename,
+            content: buffer,
+            contentType: att.contentType,
+          });
+        } catch (attErr: any) {
+          console.error("[Email] Failed to load attachment", att.filename, attErr.message);
+        }
+      }
+    }
+
     const { data, error } = await resend.emails.send({
       from: senderName + " <" + senderEmail + ">",
       to: [to],
@@ -97,6 +123,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       html: formatEmailHtml(body, subject, senderName),
       text: body,
       replyTo: finalReplyTo,
+      attachments: resendAttachments,
       tags: [
         { name: "category", value: "lead-communication" },
         { name: "source", value: "educrm" },

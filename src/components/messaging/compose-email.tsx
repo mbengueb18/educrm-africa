@@ -3,8 +3,15 @@
 import { useState, useTransition } from "react";
 import { sendEmailToLead } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
-import { Send, Loader2, X, ChevronDown, Paperclip } from "lucide-react";
+import { Send, Loader2, X, ChevronDown, Paperclip, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface UploadedAttachment {
+  path: string;
+  filename: string;
+  size: number;
+  contentType?: string;
+}
 
 interface ComposeEmailProps {
   leadId: string;
@@ -44,6 +51,60 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   const [body, setBody] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(file.name + " : trop volumineux (max 25 MB)");
+          continue;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("leadId", leadId);
+
+        const response = await fetch("/api/attachments/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          setAttachments(function(prev) {
+            return prev.concat([{
+              path: data.path,
+              filename: data.filename,
+              size: data.size,
+              contentType: data.contentType,
+            }]);
+          });
+          toast.success(file.name + " ajouté");
+        } else {
+          toast.error(data.error || "Erreur upload " + file.name);
+        }
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Erreur upload");
+    }
+    setUploading(false);
+    event.target.value = ""; // reset input
+  };
+
+  const removeAttachment = (path: string) => {
+    setAttachments(function(prev) { return prev.filter(function(a) { return a.path !== path; }); });
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " o";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " Ko";
+    return (bytes / (1024 * 1024)).toFixed(1) + " Mo";
+  };
 
   if (!leadEmail) {
     return (
@@ -66,7 +127,9 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
 
     startTransition(async () => {
       try {
-        var result = await sendEmailToLead(leadId, subject, body);
+        var result = await sendEmailToLead(leadId, subject, body, attachments.length > 0 ? attachments.map(function(a) {
+          return { path: a.path, filename: a.filename, contentType: a.contentType };
+        }) : undefined);
         if (result.success) {
           toast.success(result.demoMode
             ? "Email enregistre (mode demo — configurez BREVO_API_KEY pour envoyer)"
@@ -74,6 +137,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           );
           setSubject("");
           setBody("");
+          setAttachments([]);
           onSent?.();
         } else {
           toast.error(result.error || "Erreur envoi");
@@ -149,6 +213,27 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
         ))}
       </div>
 
+      {/* Attachments list */}
+      {attachments.length > 0 && (
+        <div className="space-y-1.5">
+          {attachments.map(function(att) {
+            return (
+              <div key={att.path} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
+                <FileText size={14} className="text-gray-400 shrink-0" />
+                <span className="text-xs text-gray-700 truncate flex-1">{att.filename}</span>
+                <span className="text-[10px] text-gray-400">{formatSize(att.size)}</span>
+                <button
+                  onClick={function() { removeAttachment(att.path); }}
+                  className="p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
@@ -157,10 +242,27 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
               Annuler
             </button>
           )}
+          <label className={cn(
+            "btn-secondary py-1.5 text-xs cursor-pointer",
+            (uploading || isPending) && "opacity-50 cursor-not-allowed"
+          )}>
+            {uploading ? (
+              <><Loader2 size={13} className="animate-spin" /> Upload...</>
+            ) : (
+              <><Paperclip size={13} /> Joindre</>
+            )}
+            <input
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              disabled={uploading || isPending}
+              className="hidden"
+            />
+          </label>
         </div>
         <button
           onClick={handleSend}
-          disabled={isPending || !subject.trim() || !body.trim()}
+          disabled={isPending || uploading || !subject.trim() || !body.trim()}
           className="btn-primary py-1.5 text-xs"
         >
           {isPending ? (

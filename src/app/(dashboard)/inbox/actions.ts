@@ -6,7 +6,12 @@ import { sendEmail, sendBulkEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
 
 // ─── Send email to a lead ───
-export async function sendEmailToLead(leadId: string, subject: string, body: string) {
+export async function sendEmailToLead(
+  leadId: string,
+  subject: string,
+  body: string,
+  attachments?: { path: string; filename: string; contentType?: string }[]
+) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
@@ -26,6 +31,7 @@ export async function sendEmailToLead(leadId: string, subject: string, body: str
     leadId,
     organizationId: session.user.organizationId,
     sentById: session.user.id,
+    attachments,
   });
 
   revalidatePath("/pipeline");
