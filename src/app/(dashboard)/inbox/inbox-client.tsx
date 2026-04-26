@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
@@ -49,7 +49,11 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 
 export function InboxClient({ conversations: initialConversations }: InboxClientProps) {
-  const [conversations] = useState(initialConversations);
+  const [conversations, setConversations] = useState(initialConversations);
+
+  useEffect(() => {
+    setConversations(initialConversations);
+  }, [initialConversations]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
