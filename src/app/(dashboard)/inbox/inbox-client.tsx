@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
   Search, Send, Mail, MessageCircle, MessageSquare, Phone,
-  Plus, ChevronRight, Inbox as InboxIcon,
+  Plus, ChevronRight, Inbox as InboxIcon, Reply,
 } from "lucide-react";
 
 interface Conversation {
@@ -58,6 +58,15 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [replySubject, setReplySubject] = useState("");
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll to top when compose form opens
+  useEffect(() => {
+    if (composing && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = 0;
+    }
+  }, [composing]);
 
   const selected = conversations.find((c) => c.lead.id === selectedId);
 
@@ -151,7 +160,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                   return (
                     <button
                       key={conv.lead.id}
-                      onClick={() => { setSelectedId(conv.lead.id); setComposing(false); }}
+                      onClick={() => { setSelectedId(conv.lead.id); setComposing(false); setReplySubject(""); }}
                       className={cn(
                         "w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
                         isSelected && "bg-brand-50/50 border-l-2 border-l-brand-500"
@@ -217,7 +226,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                   </div>
                 </div>
                 <button
-                  onClick={() => setComposing(true)}
+                  onClick={() => { setComposing(true); setReplySubject(""); }}
                   className="btn-primary py-1.5 text-xs"
                 >
                   <Send size={13} /> Envoyer un email
@@ -225,16 +234,17 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
                 {composing && (
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-4 animate-scale-in">
                     <ComposeEmail
                       leadId={selected.lead.id}
                       leadName={selected.lead.firstName + " " + selected.lead.lastName}
                       leadEmail={selected.lead.email}
+                      initialSubject={replySubject}
                       compact
-                      onSent={() => setComposing(false)}
-                      onClose={() => setComposing(false)}
+                      onSent={() => { setComposing(false); setReplySubject(""); }}
+                      onClose={() => { setComposing(false); setReplySubject(""); }}
                     />
                   </div>
                 )}
@@ -259,26 +269,41 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                         )}
                       </div>
                       <div className={cn(
-                        "max-w-[70%] rounded-xl px-4 py-3",
+                        "max-w-[70%] rounded-xl px-4 py-3 group",
                         isOutbound ? "bg-brand-50" : "bg-gray-100"
                       )}>
                         {parsed.subject && (
                           <p className="text-xs font-semibold text-gray-700 mb-1">{parsed.subject}</p>
                         )}
                         <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{parsed.body}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <ChannelIcon size={11} className={CHANNEL_COLORS[msg.channel] || "text-gray-400"} />
-                          <span className="text-[10px] text-gray-400">{formatRelative(msg.sentAt)}</span>
-                          {isOutbound && msg.sentBy && (
-                            <span className="text-[10px] text-gray-400">par {msg.sentBy.name}</span>
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <div className="flex items-center gap-2">
+                            <ChannelIcon size={11} className={CHANNEL_COLORS[msg.channel] || "text-gray-400"} />
+                            <span className="text-[10px] text-gray-400">{formatRelative(msg.sentAt)}</span>
+                            {isOutbound && msg.sentBy && (
+                              <span className="text-[10px] text-gray-400">par {msg.sentBy.name}</span>
+                            )}
+                            <span className={cn("text-[10px] font-medium",
+                              msg.status === "SENT" || msg.status === "DELIVERED" ? "text-emerald-500" :
+                              msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
+                            )}>
+                              {msg.status === "SENT" ? "Envoyé" : msg.status === "DELIVERED" ? "Reçu" :
+                               msg.status === "FAILED" ? "Échoué" : msg.status === "QUEUED" ? "En attente" : msg.status}
+                            </span>
+                          </div>
+                          {!isOutbound && msg.channel === "EMAIL" && (
+                            <button
+                              onClick={() => {
+                                var subj = parsed.subject || "";
+                                if (!subj.toLowerCase().startsWith("re:")) subj = "Re: " + subj;
+                                setReplySubject(subj);
+                                setComposing(true);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium"
+                            >
+                              <Reply size={11} /> Répondre
+                            </button>
                           )}
-                          <span className={cn("text-[10px] font-medium",
-                            msg.status === "SENT" || msg.status === "DELIVERED" ? "text-emerald-500" :
-                            msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
-                          )}>
-                            {msg.status === "SENT" ? "Envoyé" : msg.status === "DELIVERED" ? "Reçu" :
-                             msg.status === "FAILED" ? "Échoué" : msg.status === "QUEUED" ? "En attente" : msg.status}
-                          </span>
                         </div>
                       </div>
                     </div>

@@ -21,7 +21,26 @@ interface EmailResult {
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
-  const { to, toName, subject, body, leadId, organizationId, sentById, replyTo } = params;
+  const { to, toName, subject: rawSubject, body: rawBody, leadId, organizationId, sentById, replyTo } = params;
+
+  // Replace variables ({{prenom}}, {{nom}}, {{email}}) using the lead's data
+  let subject = rawSubject;
+  let body = rawBody;
+  if (leadId) {
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    if (lead) {
+      const leadData = {
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email || to,
+      };
+      subject = replaceVariables(rawSubject, leadData);
+      body = replaceVariables(rawBody, leadData);
+    }
+  }
 
   const apiKey = process.env.RESEND_API_KEY;
   const senderEmail = process.env.EMAIL_FROM || "noreply@talibcrm.com";

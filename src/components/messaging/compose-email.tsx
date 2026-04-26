@@ -10,6 +10,7 @@ interface ComposeEmailProps {
   leadId: string;
   leadName: string;
   leadEmail: string | null;
+  initialSubject?: string;
   onSent?: () => void;
   onClose?: () => void;
   compact?: boolean;
@@ -38,8 +39,8 @@ const QUICK_TEMPLATES = [
   },
 ];
 
-export function ComposeEmail({ leadId, leadName, leadEmail, onSent, onClose, compact = false }: ComposeEmailProps) {
-  const [subject, setSubject] = useState("");
+export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSent, onClose, compact = false }: ComposeEmailProps) {
+  const [subject, setSubject] = useState(initialSubject || "");
   const [body, setBody] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [isPending, startTransition] = useTransition();
