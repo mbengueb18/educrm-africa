@@ -93,20 +93,39 @@ export async function getInboxMessages(params?: {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  var where: any = { organizationId: session.user.organizationId };
-  if (params?.channel) where.channel = params.channel;
-
-  const messages = await prisma.message.findMany({
-    where,
+  // 1. Find the most recent message per lead (only leads with messages)
+  var leadIdsWithMessages = await prisma.message.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      leadId: { not: null },
+      ...(params?.channel ? { channel: params.channel as any } : {}),
+    },
+    select: { leadId: true },
     orderBy: { sentAt: "desc" },
-    take: params?.limit || 50,
+    distinct: ["leadId"],
+    take: params?.limit || 100,
+  });
+
+  var leadIds = leadIdsWithMessages
+    .map(function(m) { return m.leadId; })
+    .filter(function(id): id is string { return !!id; });
+
+  if (leadIds.length === 0) return [];
+
+  // 2. Get ALL messages for those leads (not capped at 50)
+  const messages = await prisma.message.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      leadId: { in: leadIds },
+    },
+    orderBy: { sentAt: "desc" },
     include: {
       lead: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       sentBy: { select: { id: true, name: true } },
     },
   });
 
-  // Group by lead
+  // 3. Group by lead
   var grouped: Record<string, {
     lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string };
     messages: typeof messages;
