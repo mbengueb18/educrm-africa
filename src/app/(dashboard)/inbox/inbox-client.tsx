@@ -103,7 +103,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ height: "calc(100vh - 220px)" }}>
-        <div className="grid grid-cols-[340px_1fr] h-full">
+        <div className="grid grid-cols-[340px_1fr] h-full overflow-hidden">
           {/* Conversation list */}
           <div className="border-r border-gray-200 flex flex-col">
             <div className="p-3 border-b border-gray-100">
@@ -200,9 +200,9 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
 
           {/* Message thread */}
           {selected ? (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full overflow-hidden">
               {/* Thread header */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 text-sm font-bold flex items-center justify-center">
                     {getInitials(selected.lead.firstName + " " + selected.lead.lastName)}
@@ -225,7 +225,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
                 {composing && (
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-4 animate-scale-in">
                     <ComposeEmail
