@@ -5,7 +5,7 @@ import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
   Search, Send, Mail, MessageCircle, MessageSquare, Phone,
-  Plus, ChevronRight, Inbox as InboxIcon, Reply,
+  Plus, ChevronRight, Inbox as InboxIcon, Reply, Paperclip, Download,
 } from "lucide-react";
 
 interface Conversation {
@@ -18,6 +18,7 @@ interface Conversation {
     status: string;
     sentAt: Date;
     sentBy: { id: string; name: string } | null;
+    attachments?: { id: string; filename: string; contentType: string | null; size: number }[];
   }[];
   lastMessage: {
     id: string;
@@ -276,6 +277,30 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                           <p className="text-xs font-semibold text-gray-700 mb-1">{parsed.subject}</p>
                         )}
                         <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{parsed.body}</p>
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {msg.attachments.map(function(att) {
+                              return (
+                                 <a
+                                  key={att.id}
+                                  href={"/api/attachments/" + att.id}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-2 py-1.5 bg-white/60 hover:bg-white border border-gray-200 rounded-lg text-xs text-gray-700 hover:text-brand-600 transition-colors"
+                                >
+                                  <Paperclip size={12} className="text-gray-400 shrink-0" />
+                                  <span className="truncate flex-1">{att.filename}</span>
+                                  {att.size > 0 && (
+                                    <span className="text-[10px] text-gray-400 shrink-0">
+                                      {att.size < 1024 * 1024 ? Math.round(att.size / 1024) + " Ko" : (att.size / (1024 * 1024)).toFixed(1) + " Mo"}
+                                    </span>
+                                  )}
+                                  <Download size={11} className="text-gray-400 shrink-0" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
                         <div className="flex items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-2">
                             <ChannelIcon size={11} className={CHANNEL_COLORS[msg.channel] || "text-gray-400"} />

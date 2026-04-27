@@ -10,7 +10,7 @@ export async function sendEmailToLead(
   leadId: string,
   subject: string,
   body: string,
-  attachments?: { path: string; filename: string; contentType?: string }[]
+  attachments?: { path: string; filename: string; contentType?: string; size?: number }[]
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -128,6 +128,7 @@ export async function getInboxMessages(params?: {
     include: {
       lead: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       sentBy: { select: { id: true, name: true } },
+      attachments: { select: { id: true, filename: true, contentType: true, size: true } },
     },
   });
 

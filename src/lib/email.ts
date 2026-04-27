@@ -6,6 +6,7 @@ interface AttachmentInput {
   path: string;          // Supabase Storage path
   filename: string;
   contentType?: string;
+  size?: number;
 }
 
 interface SendEmailParams {
@@ -159,6 +160,21 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         deliveredAt: new Date(),
       },
     });
+
+    // Save outgoing attachments (link them to the message)
+    if (params.attachments && params.attachments.length > 0) {
+      await prisma.messageAttachment.createMany({
+        data: params.attachments.map(function(att) {
+          return {
+            messageId: msg.id,
+            filename: att.filename,
+            contentType: att.contentType || null,
+            storagePath: att.path,
+            size: att.size || 0,
+          };
+        }),
+      });
+    }
 
     if (leadId) {
       await prisma.activity.create({

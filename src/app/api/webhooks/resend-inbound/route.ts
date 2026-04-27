@@ -147,6 +147,27 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Save inbound attachments (metadata + downloadable later via signed URL)
+      var inboundAttachments = data.attachments || [];
+      if (Array.isArray(inboundAttachments) && inboundAttachments.length > 0) {
+        for (var att of inboundAttachments) {
+          try {
+            await prisma.messageAttachment.create({
+              data: {
+                messageId: newMessage.id,
+                filename: att.filename || "fichier",
+                contentType: att.content_type || att.contentType || null,
+                size: att.size || 0,
+                externalId: att.id || null,
+              },
+            });
+          } catch (attErr: any) {
+            console.error("[Resend Inbound] Failed to save attachment", attErr?.message);
+          }
+        }
+        console.log("[Resend Inbound] Saved " + inboundAttachments.length + " attachment(s)");
+      }
+
       // Log MessageEvent
       await prisma.messageEvent.create({
         data: {

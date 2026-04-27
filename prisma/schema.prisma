@@ -522,6 +522,7 @@ model Message {
   template     MessageTemplate? @relation(fields: [templateId], references: [id])
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events MessageEvent[]
+  attachments MessageAttachment[]
 
   @@index([organizationId])
   @@index([leadId])
@@ -966,4 +967,21 @@ model MessageEvent {
   @@index([messageId])
   @@index([email])
   @@map("message_events")
+}
+
+model MessageAttachment {
+  id           String   @id @default(cuid())
+  messageId    String
+  filename     String
+  contentType  String?
+  size         Int      @default(0)
+  storagePath  String?  // Supabase path (for outbound)
+  externalId   String?  // Resend attachment ID (for inbound)
+  downloadUrl  String?  // Cached signed URL (optional)
+  createdAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
 }

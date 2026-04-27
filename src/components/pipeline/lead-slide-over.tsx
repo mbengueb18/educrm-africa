@@ -35,6 +35,7 @@ import {
  ListTodo, 
   Plus,
   StickyNote,
+  Paperclip,
   CalendarDays,
   PhoneIncoming,
   PhoneOutgoing,
@@ -847,6 +848,29 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     </div>
                     {parsedContent.subject && <p className="text-xs font-semibold text-gray-800 mb-1.5">{parsedContent.subject}</p>}
                     <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{displayBody}</p>
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {msg.attachments.map(function(att: any) {
+                          return (
+                            <a
+                              key={att.id}
+                              href={"/api/attachments/" + att.id}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-2 py-1.5 bg-white hover:bg-brand-50 border border-gray-200 rounded text-xs text-gray-700 hover:text-brand-600 transition-colors"
+                            >
+                              <Paperclip size={11} className="text-gray-400 shrink-0" />
+                              <span className="truncate flex-1">{att.filename}</span>
+                              {att.size > 0 && (
+                                <span className="text-[10px] text-gray-400 shrink-0">
+                                  {att.size < 1024 * 1024 ? Math.round(att.size / 1024) + " Ko" : (att.size / (1024 * 1024)).toFixed(1) + " Mo"}
+                                </span>
+                              )}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
                     <span className="text-[10px] text-gray-400 mt-2 block">{formatRelative(msg.sentAt)}</span>
                   </div>
                 </div>

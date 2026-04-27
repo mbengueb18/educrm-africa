@@ -128,7 +128,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
     startTransition(async () => {
       try {
         var result = await sendEmailToLead(leadId, subject, body, attachments.length > 0 ? attachments.map(function(a) {
-          return { path: a.path, filename: a.filename, contentType: a.contentType };
+          return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
         }) : undefined);
         if (result.success) {
           toast.success(result.demoMode
