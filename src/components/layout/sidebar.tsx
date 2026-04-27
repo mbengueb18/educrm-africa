@@ -55,6 +55,12 @@ const navItems = [
     permission: "appointments:view" as Permission,
   },
   {
+    label: "Calendrier",
+    href: "/calendar",
+    icon: CalendarDays,
+    permission: "appointments:view" as Permission,
+  },
+  {
     label: "Inbox",
     href: "/inbox",
     icon: MessageSquare,
