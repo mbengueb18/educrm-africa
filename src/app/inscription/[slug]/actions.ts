@@ -154,8 +154,8 @@ export async function submitInscription(slug: string, data: InscriptionData) {
           name: doc.filename,
           type: "OTHER" as any,
           url: doc.path,
-          fileSize: doc.size,
-          mimeType: doc.contentType || null,
+          size: doc.size,
+          mimeType: doc.contentType || "application/octet-stream",
           leadId: leadId,
           organizationId: org.id,
         };
