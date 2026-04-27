@@ -539,6 +539,7 @@ enum MessageChannel {
   EMAIL
   PHONE_CALL // Log only
   IN_APP
+  CHATBOT
 }
 
 enum MessageDirection {

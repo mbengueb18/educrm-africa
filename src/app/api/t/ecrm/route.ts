@@ -497,6 +497,7 @@ export async function GET(request: NextRequest) {
             message: collected.message || '',
             programLevel: collected.programLevel || '',
             traffic: traffic,
+            history: history,
           }),
         }).then(function(r) { return r.json(); })
           .then(function(result) { log('info', 'Chatbot lead submitted:', result); })

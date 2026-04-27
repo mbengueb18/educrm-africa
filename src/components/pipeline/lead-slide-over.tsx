@@ -36,6 +36,7 @@ import {
   Plus,
   StickyNote,
   Paperclip,
+  Bot,
   CalendarDays,
   PhoneIncoming,
   PhoneOutgoing,
@@ -800,10 +801,11 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
               var isWhatsApp = msg.channel === "WHATSAPP";
               var isSMS = msg.channel === "SMS";
               var isEmail = msg.channel === "EMAIL";
-              var MsgIcon = isWhatsApp ? MessageCircle : isSMS ? MessageSquare : Mail;
-              var msgColor = isWhatsApp ? "bg-emerald-50 border-emerald-200" : isEmail ? "bg-blue-50 border-blue-200" : "bg-purple-50 border-purple-200";
-              var msgIconColor = isWhatsApp ? "text-emerald-600" : isEmail ? "text-blue-600" : "text-purple-600";
-              var channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : msg.channel;
+              var isChatbot = msg.channel === "CHATBOT";
+              var MsgIcon = isWhatsApp ? MessageCircle : isSMS ? MessageSquare : isChatbot ? Bot : Mail;
+              var msgColor = isWhatsApp ? "bg-emerald-50 border-emerald-200" : isEmail ? "bg-blue-50 border-blue-200" : isChatbot ? "bg-violet-50 border-violet-200" : "bg-purple-50 border-purple-200";
+              var msgIconColor = isWhatsApp ? "text-emerald-600" : isEmail ? "text-blue-600" : isChatbot ? "text-violet-600" : "text-purple-600";
+              var channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : isChatbot ? "Chatbot" : msg.channel;
               var dirLabel = msg.direction === "OUTBOUND" ? "envoyé" : "reçu";
 
               var parsedContent = { subject: null as string | null, body: "" };

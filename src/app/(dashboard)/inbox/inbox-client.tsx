@@ -5,7 +5,7 @@ import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
   Search, Send, Mail, MessageCircle, MessageSquare, Phone,
-  Plus, ChevronRight, Inbox as InboxIcon, Reply, Paperclip, Download,
+  Plus, ChevronRight, Inbox as InboxIcon, Reply, Paperclip, Download, Bot,
 } from "lucide-react";
 
 interface Conversation {
@@ -40,6 +40,7 @@ const CHANNEL_ICONS: Record<string, typeof Mail> = {
   WHATSAPP: MessageCircle,
   SMS: MessageSquare,
   PHONE_CALL: Phone,
+  CHATBOT: Bot,
 };
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -47,6 +48,7 @@ const CHANNEL_COLORS: Record<string, string> = {
   WHATSAPP: "text-emerald-500",
   SMS: "text-blue-500",
   PHONE_CALL: "text-purple-500",
+  CHATBOT: "text-violet-500",
 };
 
 export function InboxClient({ conversations: initialConversations }: InboxClientProps) {
@@ -136,6 +138,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                 { key: "EMAIL", label: "Email" },
                 { key: "WHATSAPP", label: "WhatsApp" },
                 { key: "SMS", label: "SMS" },
+                { key: "CHATBOT", label: "Chatbot" },
               ].map((tab) => (
                 <button
                   key={tab.key || "all"}

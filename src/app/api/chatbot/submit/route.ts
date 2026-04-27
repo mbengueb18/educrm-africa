@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { slug, firstName, lastName, phone, email, message, programLevel, traffic } = body;
+    const { slug, firstName, lastName, phone, email, message, programLevel, traffic, history } = body;
 
     if (!slug) {
       return NextResponse.json({ error: "slug requis" }, { status: 400 });
@@ -84,6 +84,28 @@ export async function POST(request: NextRequest) {
       });
 
       leadId = newLead.id;
+    }
+    // Save conversation as a message in the inbox
+    if (history && Array.isArray(history) && history.length > 0) {
+      var transcript = history.map(function(h: any) {
+        return (h.from === "bot" ? "🤖 Bot: " : "👤 Visiteur: ") + h.text;
+      }).join("\n");
+
+      await prisma.message.create({
+        data: {
+          channel: "CHATBOT" as any,
+          direction: "INBOUND",
+          content: JSON.stringify({
+            subject: "Conversation chatbot",
+            body: transcript,
+          }),
+          status: "DELIVERED",
+          sentAt: new Date(),
+          deliveredAt: new Date(),
+          leadId: leadId,
+          organizationId: org.id,
+        },
+      });
     }
 
     return NextResponse.json({ success: true, leadId }, {
