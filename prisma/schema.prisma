@@ -42,6 +42,7 @@ model Organization {
   tasks            Task[]
   calls            Call[]
   appointments     Appointment[]
+  chatbotConfig ChatbotConfig?
 
   @@map("organizations")
 }
@@ -984,4 +985,21 @@ model MessageAttachment {
 
   @@index([messageId])
   @@map("message_attachments")
+}
+
+model ChatbotConfig {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  enabled         Boolean  @default(false)
+  agentName       String   @default("Aïcha")
+  welcomeMessage  String   @default("Bonjour ! Comment puis-je vous aider ?")
+  primaryColor    String   @default("#1B4F72")
+  position        String   @default("bottom-right") // bottom-right, bottom-left
+  scenario        Json     @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("chatbot_configs")
 }

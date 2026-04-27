@@ -333,11 +333,184 @@ export async function GET(request: NextRequest) {
   ECRM.identify = function(data) { sendLead(data); };
   ECRM.getTrafficSource = function() { return trafficData; };
 
+
+
+  // ─── Chatbot Module ───
+  function initChatbot() {
+    fetch('${baseUrl}/api/chatbot/config?id=' + ECRM.orgSlug)
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { enabled: false }; })
+      .then(function(config) {
+        if (!config.enabled) return;
+        renderChatbot(config);
+      });
+  }
+
+  function renderChatbot(config) {
+    var scenario = config.scenario;
+    var currentStepId = scenario[0].id;
+    var collected = {};
+    var history = [];
+    var open = false;
+
+    var primary = config.primaryColor || '#1B4F72';
+    var position = config.position === 'bottom-left' ? 'left:24px;' : 'right:24px;';
+
+    // Bubble button
+    var bubble = document.createElement('div');
+    bubble.id = '_ecrm_chat_bubble';
+    bubble.style.cssText = 'position:fixed;bottom:24px;' + position + 'z-index:999998;width:60px;height:60px;border-radius:50%;background:' + primary + ';box-shadow:0 4px 16px rgba(0,0,0,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s;';
+    bubble.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+    bubble.onmouseover = function() { bubble.style.transform = 'scale(1.1)'; };
+    bubble.onmouseout = function() { bubble.style.transform = 'scale(1)'; };
+    bubble.onclick = toggleChat;
+    document.body.appendChild(bubble);
+
+    // Chat window
+    var chat = document.createElement('div');
+    chat.id = '_ecrm_chat';
+    chat.style.cssText = 'position:fixed;bottom:96px;' + position + 'z-index:999999;width:360px;max-width:calc(100vw - 48px);height:520px;max-height:calc(100vh - 120px);background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.16);display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
+    chat.innerHTML =
+      '<div style="background:' + primary + ';padding:16px;color:white;display:flex;align-items:center;gap:10px;">' +
+        '<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;">' + (config.agentName || 'A')[0].toUpperCase() + '</div>' +
+        '<div style="flex:1;"><div style="font-weight:600;font-size:14px;">' + (config.agentName || 'Conseiller') + '</div>' +
+        '<div style="font-size:11px;opacity:0.8;display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;"></span>En ligne</div></div>' +
+        '<button id="_ecrm_close" style="background:none;border:none;color:white;cursor:pointer;font-size:20px;line-height:1;padding:4px;">×</button>' +
+      '</div>' +
+      '<div id="_ecrm_messages" style="flex:1;overflow-y:auto;padding:16px;background:#f9fafb;"></div>' +
+      '<div id="_ecrm_input_zone" style="border-top:1px solid #e5e7eb;padding:12px;background:white;"></div>';
+    document.body.appendChild(chat);
+
+    document.getElementById('_ecrm_close').onclick = toggleChat;
+
+    function toggleChat() {
+      open = !open;
+      chat.style.display = open ? 'flex' : 'none';
+      if (open && history.length === 0) {
+        addBotMessage(config.welcomeMessage || 'Bonjour !');
+        setTimeout(function() { goToStep(currentStepId); }, 600);
+      }
+    }
+
+    function addBotMessage(text) {
+      var div = document.createElement('div');
+      div.style.cssText = 'margin-bottom:12px;display:flex;gap:8px;';
+      div.innerHTML =
+        '<div style="width:28px;height:28px;border-radius:50%;background:' + primary + ';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;flex-shrink:0;">' + (config.agentName || 'A')[0].toUpperCase() + '</div>' +
+        '<div style="background:white;padding:10px 14px;border-radius:12px;border-top-left-radius:4px;max-width:240px;font-size:13px;color:#1f2937;line-height:1.5;border:1px solid #e5e7eb;">' + escapeHtml(text) + '</div>';
+      document.getElementById('_ecrm_messages').appendChild(div);
+      scrollToBottom();
+      history.push({ from: 'bot', text: text });
+    }
+
+    function addUserMessage(text) {
+      var div = document.createElement('div');
+      div.style.cssText = 'margin-bottom:12px;display:flex;gap:8px;justify-content:flex-end;';
+      div.innerHTML =
+        '<div style="background:' + primary + ';color:white;padding:10px 14px;border-radius:12px;border-top-right-radius:4px;max-width:240px;font-size:13px;line-height:1.5;">' + escapeHtml(text) + '</div>';
+      document.getElementById('_ecrm_messages').appendChild(div);
+      scrollToBottom();
+      history.push({ from: 'user', text: text });
+    }
+
+    function scrollToBottom() {
+      var msgs = document.getElementById('_ecrm_messages');
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function goToStep(stepId) {
+      var step = scenario.find(function(s) { return s.id === stepId; });
+      if (!step) return;
+      currentStepId = stepId;
+
+      addBotMessage(step.message);
+
+      var inputZone = document.getElementById('_ecrm_input_zone');
+      inputZone.innerHTML = '';
+
+      if (step.type === 'bot' && step.options) {
+        // Render option buttons
+        step.options.forEach(function(opt) {
+          var btn = document.createElement('button');
+          btn.style.cssText = 'display:block;width:100%;margin:0 0 6px 0;padding:10px;background:white;border:1px solid ' + primary + ';color:' + primary + ';border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;text-align:left;transition:background 0.15s;';
+          btn.textContent = opt.label;
+          btn.onmouseover = function() { btn.style.background = primary + '15'; };
+          btn.onmouseout = function() { btn.style.background = 'white'; };
+          btn.onclick = function() {
+            addUserMessage(opt.label);
+            if (opt.context) collected.programLevel = opt.context;
+            inputZone.innerHTML = '';
+            setTimeout(function() { goToStep(opt.next); }, 400);
+          };
+          inputZone.appendChild(btn);
+        });
+      } else if (step.type === 'input') {
+        var input = document.createElement('input');
+        input.type = step.field === 'email' ? 'email' : (step.field === 'phone' ? 'tel' : 'text');
+        input.placeholder = 'Votre réponse...';
+        input.style.cssText = 'flex:1;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;';
+        var sendBtn = document.createElement('button');
+        sendBtn.style.cssText = 'padding:10px 14px;background:' + primary + ';color:white;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;';
+        sendBtn.textContent = '→';
+
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;gap:6px;';
+        wrap.appendChild(input);
+        wrap.appendChild(sendBtn);
+        inputZone.appendChild(wrap);
+
+        var handleSend = function() {
+          var val = input.value.trim();
+          if (!val) return;
+          addUserMessage(val);
+          collected[step.field] = val;
+          inputZone.innerHTML = '';
+          setTimeout(function() { goToStep(step.next); }, 400);
+        };
+        sendBtn.onclick = handleSend;
+        input.addEventListener('keypress', function(e) { if (e.key === 'Enter') handleSend(); });
+        setTimeout(function() { input.focus(); }, 100);
+      } else if (step.type === 'submit') {
+        // Send the lead
+        var traffic = trafficData || {};
+        try {
+          var stored = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
+          var k = Object.keys(stored);
+          for (var i = 0; i < k.length; i++) { if (!traffic[k[i]]) traffic[k[i]] = stored[k[i]]; }
+        } catch(e) {}
+
+        fetch('${baseUrl}/api/chatbot/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: ECRM.orgSlug,
+            firstName: collected.firstName || '',
+            lastName: collected.lastName || '',
+            phone: collected.phone || '',
+            email: collected.email || '',
+            message: collected.message || '',
+            programLevel: collected.programLevel || '',
+            traffic: traffic,
+          }),
+        }).then(function(r) { return r.json(); })
+          .then(function(result) { log('info', 'Chatbot lead submitted:', result); })
+          .catch(function(e) { log('warn', 'Chatbot submit error:', e); });
+      }
+    }
+  }
+
   // ─── Init ───
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() { init(); initChatbot(); });
   } else {
     init();
+    initChatbot();
   }
 })();
 `;
