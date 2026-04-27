@@ -157,7 +157,6 @@ export async function submitInscription(slug: string, data: InscriptionData) {
           size: doc.size,
           mimeType: doc.contentType || "application/octet-stream",
           leadId: leadId,
-          organizationId: org.id,
         };
       }),
     });
