@@ -32,6 +32,7 @@ export async function getLeadDetail(leadId: string) {
           content: true,
           status: true,
           sentAt: true,
+          attachments: { select: { id: true, filename: true, contentType: true, size: true } },
         },
       },
       calls: {
