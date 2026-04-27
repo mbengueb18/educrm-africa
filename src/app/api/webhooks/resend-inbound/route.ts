@@ -147,25 +147,55 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Save inbound attachments (metadata + downloadable later via signed URL)
+      // Fetch and store inbound attachments to Supabase
       var inboundAttachments = data.attachments || [];
-      if (Array.isArray(inboundAttachments) && inboundAttachments.length > 0) {
-        for (var att of inboundAttachments) {
-          try {
-            await prisma.messageAttachment.create({
-              data: {
-                messageId: newMessage.id,
-                filename: att.filename || "fichier",
-                contentType: att.content_type || att.contentType || null,
-                size: att.size || 0,
-                externalId: att.id || null,
-              },
-            });
-          } catch (attErr: any) {
-            console.error("[Resend Inbound] Failed to save attachment", attErr?.message);
+      if (Array.isArray(inboundAttachments) && inboundAttachments.length > 0 && resendMessageId && process.env.RESEND_API_KEY) {
+        try {
+          var resendForAttach = new Resend(process.env.RESEND_API_KEY);
+          var attachmentsResult = await (resendForAttach.emails as any).receiving.attachments.list({
+            emailId: resendMessageId,
+          });
+          var fullAttachments = attachmentsResult?.data || attachmentsResult || [];
+
+          for (var att of fullAttachments) {
+            try {
+              // Download the attachment from Resend
+              var downloadResponse = await fetch(att.download_url);
+              if (!downloadResponse.ok) {
+                console.error("[Resend Inbound] Failed to download", att.filename);
+                continue;
+              }
+              var arrayBuffer = await downloadResponse.arrayBuffer();
+              var buffer = Buffer.from(arrayBuffer);
+
+              // Upload to Supabase
+              var { uploadAttachment } = await import("@/lib/supabase-storage");
+              var blob = new Blob([buffer], { type: att.content_type || "application/octet-stream" });
+              var { path } = await uploadAttachment(
+                blob,
+                att.filename || "fichier",
+                lead.organizationId,
+                lead.id
+              );
+
+              await prisma.messageAttachment.create({
+                data: {
+                  messageId: newMessage.id,
+                  filename: att.filename || "fichier",
+                  contentType: att.content_type || null,
+                  size: buffer.length,
+                  storagePath: path,
+                  externalId: att.id || null,
+                },
+              });
+              console.log("[Resend Inbound] Saved attachment to Supabase:", att.filename);
+            } catch (attErr: any) {
+              console.error("[Resend Inbound] Failed to process attachment", attErr?.message);
+            }
           }
+        } catch (listErr: any) {
+          console.error("[Resend Inbound] Failed to list attachments", listErr?.message);
         }
-        console.log("[Resend Inbound] Saved " + inboundAttachments.length + " attachment(s)");
       }
 
       // Log MessageEvent
