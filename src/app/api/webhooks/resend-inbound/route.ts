@@ -148,14 +148,24 @@ export async function POST(request: NextRequest) {
       });
 
       // Fetch and store inbound attachments to Supabase
-      var inboundAttachments = data.attachments || [];
-      if (Array.isArray(inboundAttachments) && inboundAttachments.length > 0 && resendMessageId && process.env.RESEND_API_KEY) {
+      if (resendMessageId && process.env.RESEND_API_KEY) {
         try {
           var resendForAttach = new Resend(process.env.RESEND_API_KEY);
           var attachmentsResult = await (resendForAttach.emails as any).receiving.attachments.list({
             emailId: resendMessageId,
           });
-          var fullAttachments = attachmentsResult?.data || attachmentsResult || [];
+
+          // Extract array from various possible response shapes
+          var fullAttachments: any[] = [];
+          if (Array.isArray(attachmentsResult)) {
+            fullAttachments = attachmentsResult;
+          } else if (Array.isArray(attachmentsResult?.data)) {
+            fullAttachments = attachmentsResult.data;
+          } else if (Array.isArray(attachmentsResult?.data?.data)) {
+            fullAttachments = attachmentsResult.data.data;
+          }
+
+          console.log("[Resend Inbound] Found " + fullAttachments.length + " attachment(s) for email " + resendMessageId);
 
           for (var att of fullAttachments) {
             try {
