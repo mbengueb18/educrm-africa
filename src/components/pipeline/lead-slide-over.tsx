@@ -209,26 +209,37 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-3">
-                  <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs">
-                    <Phone size={13} /> Appeler
-                  </a>
-                  {lead.whatsapp && (
-                    <WhatsAppButton lead={lead} />
-                  )}
-                  {lead.email && (
-                    <button onClick={function() { setShowCompose(true); }} className="btn-secondary py-1.5 px-3 text-xs">
-                      <Mail size={13} /> Email
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  {/* Communication group */}
+                  <div className="flex items-center gap-1.5">
+                    <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs" title="Appeler">
+                      <Phone size={13} /> Appeler
+                    </a>
+                    {lead.whatsapp && <WhatsAppButton lead={lead} />}
+                    {lead.email && (
+                      <button onClick={function() { setShowCompose(true); }} className="btn-secondary py-1.5 px-3 text-xs" title="Envoyer un email">
+                        <Mail size={13} /> Email
+                      </button>
+                    )}
+                    <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50" title="Créer une tâche">
+                      <ListTodo size={13} /> Tâche
                     </button>
-                  )}
-                  <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50">
-                    <ListTodo size={13} /> Tâche
-                  </button>
+                  </div>
+
+                  {/* Vertical divider */}
+                  <div className="w-px h-5 bg-gray-200" />
+
+                  {/* Portal */}
                   <PortalButton lead={lead} />
+
+                  {/* Conversion (only if not converted) */}
                   {!lead.isConverted && (
-                    <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50">
-                      <GraduationCap size={13} /> Convertir
-                    </button>
+                    <>
+                      <div className="w-px h-5 bg-gray-200" />
+                      <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50" title="Convertir en étudiant">
+                        <GraduationCap size={13} /> Convertir
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
