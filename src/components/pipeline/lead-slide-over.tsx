@@ -1299,6 +1299,8 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
   var [open, setOpen] = useState(false);
   var [loading, setLoading] = useState(false);
   var [generated, setGenerated] = useState<{ url: string; fullUrl: string } | null>(null);
+  var stageName = (lead.stage?.name || "").toLowerCase();
+  var isPortalAvailable = stageName.includes("dossier") || stageName.includes("reçu") || stageName.includes("recu");
 
   var handleGenerate = async function() {
     setLoading(true);
@@ -1340,8 +1342,23 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
 
   return (
     <div className="relative">
-      <button onClick={function() { setOpen(!open); if (!generated) handleGenerate(); }}
-        className="btn-secondary py-1.5 px-3 text-xs text-violet-600 border-violet-200 hover:bg-violet-50">
+      <button
+        onClick={function() {
+          if (!isPortalAvailable) {
+            toast.error("Le portail candidat sera disponible une fois l'étape \"Dossier reçu\" atteinte");
+            return;
+          }
+          setOpen(!open);
+          if (!generated) handleGenerate();
+        }}
+        className={cn(
+          "btn-secondary py-1.5 px-3 text-xs",
+          isPortalAvailable
+            ? "text-violet-600 border-violet-200 hover:bg-violet-50"
+            : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+        )}
+        title={isPortalAvailable ? "Générer le lien du portail candidat" : "Disponible à partir de l'étape \"Dossier reçu\""}
+      >
         <Link2 size={13} /> Portail
       </button>
 

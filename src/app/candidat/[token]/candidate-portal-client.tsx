@@ -166,9 +166,6 @@ export function CandidatePortalClient({ token, data }: { token: string; data: Po
           </div>
 
           <div className="bg-brand-50 border border-brand-100 rounded-xl p-4">
-            <p className="text-sm font-semibold text-brand-900 mb-1">
-              ✅ Statut actuel : {lead.stage.name}
-            </p>
             <p className="text-xs text-brand-700">
               {lead.assignedTo
                 ? "Votre conseiller " + lead.assignedTo.name + " suit votre candidature."

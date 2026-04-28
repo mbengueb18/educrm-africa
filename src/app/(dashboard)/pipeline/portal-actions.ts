@@ -24,10 +24,17 @@ export async function generatePortalLink(leadId: string, expirationDays: number 
       phone: true,
       organizationId: true,
       organization: { select: { name: true } },
+      stage: { select: { name: true } },
     },
   });
 
   if (!lead) throw new Error("Lead introuvable");
+
+  // Le portail n'est disponible qu'à partir de l'étape "Dossier reçu"
+  const stageName = (lead.stage?.name || "").toLowerCase();
+  if (!stageName.includes("dossier") && !stageName.includes("reçu") && !stageName.includes("recu")) {
+    throw new Error("Le portail candidat n'est disponible qu'à partir de l'étape \"Dossier reçu\"");
+  }
 
   // Reuse existing valid token if present
   const existing = await prisma.leadPortalToken.findFirst({
