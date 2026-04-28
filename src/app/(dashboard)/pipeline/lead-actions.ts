@@ -14,7 +14,7 @@ export async function getLeadDetail(leadId: string) {
       program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true } },
       campus: { select: { id: true, name: true, city: true } },
       campaign: { select: { id: true, name: true, type: true } },
-      stage: { select: { id: true, name: true, color: true } },
+      stage: { select: { id: true, name: true, color: true, order: true } },
       activities: {
         orderBy: { createdAt: "desc" },
         take: 50,

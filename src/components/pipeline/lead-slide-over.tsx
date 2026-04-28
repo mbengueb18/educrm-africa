@@ -1311,7 +1311,9 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
   var [loading, setLoading] = useState(false);
   var [generated, setGenerated] = useState<{ url: string; fullUrl: string } | null>(null);
   var stageName = (lead.stage?.name || "").toLowerCase();
-  var isPortalAvailable = stageName.includes("dossier") || stageName.includes("reçu") || stageName.includes("recu");
+  var stageOrder = (lead.stage as any)?.order ?? 0;
+  var isNegativeStage = stageName.includes("perdu") || stageName.includes("annulé") || stageName.includes("annule") || stageName.includes("rejeté") || stageName.includes("rejete");
+  var isPortalAvailable = stageOrder >= 3 && !isNegativeStage;
 
   var handleGenerate = async function() {
     setLoading(true);

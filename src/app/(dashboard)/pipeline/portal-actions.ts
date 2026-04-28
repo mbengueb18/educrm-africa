@@ -24,15 +24,19 @@ export async function generatePortalLink(leadId: string, expirationDays: number 
       phone: true,
       organizationId: true,
       organization: { select: { name: true } },
-      stage: { select: { name: true } },
+      stage: { select: { name: true, order: true } },
     },
   });
 
   if (!lead) throw new Error("Lead introuvable");
 
-  // Le portail n'est disponible qu'à partir de l'étape "Dossier reçu"
+  // Le portail est disponible à partir de l'étape "Dossier reçu" (order >= 3)
+  // mais pas pour les étapes négatives (Perdu, Annulé, Rejeté)
   const stageName = (lead.stage?.name || "").toLowerCase();
-  if (!stageName.includes("dossier") && !stageName.includes("reçu") && !stageName.includes("recu")) {
+  const stageOrder = lead.stage?.order ?? 0;
+  const isNegativeStage = stageName.includes("perdu") || stageName.includes("annulé") || stageName.includes("annule") || stageName.includes("rejeté") || stageName.includes("rejete");
+
+  if (stageOrder < 3 || isNegativeStage) {
     throw new Error("Le portail candidat n'est disponible qu'à partir de l'étape \"Dossier reçu\"");
   }
 
