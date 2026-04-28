@@ -13,6 +13,7 @@ import Link from "next/link";
 
 export default function IntegrationsPage() {
   const [keys, setKeys] = useState<any[]>([]);
+  const [chatbotEnabled, setChatbotEnabled] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -21,6 +22,10 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     listApiKeys().then(setKeys).catch(() => {});
+    fetch("/api/settings/chatbot-status")
+      .then(function(r) { return r.json(); })
+      .then(function(data) { setChatbotEnabled(!!data.enabled); })
+      .catch(function() {});
   }, []);
 
   const handleGenerate = () => {
@@ -168,9 +173,9 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
                 iconBg="bg-violet-50"
                 title="Chatbot site web"
                 description="Bulle de chat intégrée au tracking"
-                status="active"
-                statusLabel="Configuré"
-                action={{ label: "Configurer", href: "/settings/chatbot" }}
+                status={chatbotEnabled ? "active" : "inactive"}
+                statusLabel={chatbotEnabled ? "Activé" : "Désactivé"}
+                action={{ label: chatbotEnabled ? "Configurer" : "Activer", href: "/settings/chatbot" }}
               />
               <IntegrationCard
                 icon={CalendarDays}
