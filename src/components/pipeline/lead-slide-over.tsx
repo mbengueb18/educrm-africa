@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { getLeadDetail, logWhatsAppMessage, updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
+import { generatePortalLink, sendPortalLinkByEmail } from "@/app/(dashboard)/pipeline/portal-actions";
 import { moveLeadToStage, assignLead, updateLeadScore, updateLead, deleteLead } from "@/app/(dashboard)/pipeline/actions";
 import { createTask } from "@/app/(dashboard)/tasks/actions";
 import { cn, formatCFA, formatDate, formatDateTime, formatRelative, formatPhone, getInitials, getScoreBg } from "@/lib/utils";
@@ -37,6 +38,8 @@ import {
   StickyNote,
   Paperclip,
   Bot,
+  Link2,
+  ExternalLink,
   CalendarDays,
   PhoneIncoming,
   PhoneOutgoing,
@@ -221,6 +224,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                   <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50">
                     <ListTodo size={13} /> Tâche
                   </button>
+                  <PortalButton lead={lead} />
                   {!lead.isConverted && (
                     <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50">
                       <GraduationCap size={13} /> Convertir
@@ -269,6 +273,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                 }}
               />
             )}
+
 
             {/* Delete confirmation */}
             {showDeleteConfirm && (
@@ -1285,6 +1290,114 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
           Créer
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Portal Link Button ───
+function PortalButton({ lead }: { lead: LeadDetail }) {
+  var [open, setOpen] = useState(false);
+  var [loading, setLoading] = useState(false);
+  var [generated, setGenerated] = useState<{ url: string; fullUrl: string } | null>(null);
+
+  var handleGenerate = async function() {
+    setLoading(true);
+    try {
+      var result = await generatePortalLink(lead.id);
+      var fullUrl = window.location.origin + result.url;
+      setGenerated({ url: result.url, fullUrl: fullUrl });
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    }
+    setLoading(false);
+  };
+
+  var handleSendEmail = async function() {
+    if (!lead.email) { toast.error("Aucune adresse email pour ce lead"); return; }
+    setLoading(true);
+    try {
+      var result = await sendPortalLinkByEmail(lead.id);
+      toast.success("Lien envoyé par email !");
+      setGenerated({ url: "", fullUrl: result.url });
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    }
+    setLoading(false);
+  };
+
+  var handleCopy = function() {
+    if (!generated) return;
+    navigator.clipboard.writeText(generated.fullUrl);
+    toast.success("Lien copié");
+  };
+
+  var handleSendWhatsApp = function() {
+    if (!generated || !lead.whatsapp) { toast.error("Aucun WhatsApp pour ce lead"); return; }
+    var text = "Bonjour " + lead.firstName + ",\n\nVoici votre espace candidat personnel :\n" + generated.fullUrl + "\n\nVous pouvez y suivre votre candidature, déposer vos documents et échanger avec votre conseiller.";
+    var phone = lead.whatsapp.replace(/\D/g, "");
+    window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(text), "_blank");
+  };
+
+  return (
+    <div className="relative">
+      <button onClick={function() { setOpen(!open); if (!generated) handleGenerate(); }}
+        className="btn-secondary py-1.5 px-3 text-xs text-violet-600 border-violet-200 hover:bg-violet-50">
+        <Link2 size={13} /> Portail
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={function() { setOpen(false); }} />
+          <div className="absolute top-full right-0 mt-1 w-80 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
+            <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
+              <p className="text-xs font-semibold text-violet-700">Espace candidat</p>
+              <p className="text-[10px] text-violet-600">Lien personnel sécurisé pour le candidat</p>
+            </div>
+            <div className="p-4 space-y-3">
+              {loading && !generated && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 size={18} className="animate-spin text-violet-500" />
+                </div>
+              )}
+
+              {generated && generated.url && (
+                <>
+                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Lien d'accès</p>
+                    <p className="text-xs text-gray-700 font-mono break-all">{generated.fullUrl}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={handleCopy} className="btn-secondary py-2 text-xs">
+                      <Link2 size={12} /> Copier
+                    </button>
+                    <a href={generated.fullUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary py-2 text-xs justify-center">
+                      <ExternalLink size={12} /> Ouvrir
+                    </a>
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-3 space-y-2">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Envoyer au candidat</p>
+                    {lead.email && (
+                      <button onClick={handleSendEmail} disabled={loading} className="w-full btn-primary py-2 text-xs justify-center">
+                        {loading ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+                        Envoyer par email
+                      </button>
+                    )}
+                    {lead.whatsapp && (
+                      <button onClick={handleSendWhatsApp} className="w-full btn-secondary py-2 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 justify-center">
+                        <MessageCircle size={12} /> Envoyer par WhatsApp
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <p className="text-[10px] text-gray-400 text-center pt-1">Le lien expire dans 90 jours</p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
