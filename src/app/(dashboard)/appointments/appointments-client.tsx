@@ -769,15 +769,15 @@ function AppointmentFormModal({ mode, appointment, onClose, users, leads, curren
           )}
 
           {!googleConnected && (
-            <a href="/api/integrations/google/connect?returnTo=/appointments" className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 transition-colors">
+            <a href="/settings/google-calendar" className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors">
               <div className="flex items-center gap-2">
-                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-5 h-5 opacity-50" />
+                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-5 h-5 opacity-60" />
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Connecter Google Calendar</p>
-                  <p className="text-[10px] text-gray-400">Synchronisez vos rendez-vous et générez des liens Meet</p>
+                  <p className="text-sm font-medium text-amber-900">Google Calendar non connecté</p>
+                  <p className="text-[10px] text-amber-700">Configurez la connexion dans les paramètres pour synchroniser vos RDV</p>
                 </div>
               </div>
-              <ChevronRight size={14} className="text-gray-400" />
+              <ChevronRight size={14} className="text-amber-600" />
             </a>
           )}
 

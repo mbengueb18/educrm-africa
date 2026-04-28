@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import {
   Key, Copy, Trash2, Plus, Code, Globe, FileText,
   CheckCircle, Loader2, ArrowLeft, Eye, EyeOff,
+  LayoutDashboard, Mail, Bot, CalendarDays, MessageCircle,
+  Facebook, Instagram, Music2, CreditCard, Sparkles, Zap,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -14,8 +16,8 @@ export default function IntegrationsPage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<"tracking" | "api" | "widget" | "docs">("tracking");
-  const [orgSlug, setOrgSlug] = useState("ism-dakar");
+  const [activeTab, setActiveTab] = useState<"overview" | "tracking" | "api" | "widget" | "docs">("overview");
+  const [orgSlug, setOrgSlug] = useState("ism-dakar");  
 
   useEffect(() => {
     listApiKeys().then(setKeys).catch(() => {});
@@ -111,6 +113,7 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
         {[
+          { key: "overview" as const, label: "Vue d'ensemble", icon: LayoutDashboard },
           { key: "tracking" as const, label: "Code de suivi", icon: Code },
           { key: "widget" as const, label: "Formulaire embarquable", icon: Globe },
           { key: "api" as const, label: "API & Clés", icon: Key },
@@ -128,6 +131,133 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
           </button>
         ))}
       </div>
+
+      {/* Overview tab */}
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          {/* Active integrations */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <CheckCircle size={14} className="text-emerald-500" />
+              Incluses dans votre plan
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <IntegrationCard
+                icon={Mail}
+                iconColor="text-blue-600"
+                iconBg="bg-blue-50"
+                title="Email"
+                description="Envoi et réception d'emails individuels"
+                status="active"
+                statusLabel="Actif"
+                action={{ label: "Statistiques", href: "/analytics" }}
+              />
+              <IntegrationCard
+                icon={Code}
+                iconColor="text-emerald-600"
+                iconBg="bg-emerald-50"
+                title="Tracking site web"
+                description="Capture automatique des leads"
+                status="active"
+                statusLabel="Actif"
+                action={{ label: "Voir le code", onClick: () => setActiveTab("tracking") }}
+              />
+              <IntegrationCard
+                icon={Bot}
+                iconColor="text-violet-600"
+                iconBg="bg-violet-50"
+                title="Chatbot site web"
+                description="Bulle de chat intégrée au tracking"
+                status="active"
+                statusLabel="Configuré"
+                action={{ label: "Configurer", href: "/settings/chatbot" }}
+              />
+              <IntegrationCard
+                icon={CalendarDays}
+                iconColor="text-amber-600"
+                iconBg="bg-amber-50"
+                title="Google Calendar"
+                description="Synchronisation des rendez-vous"
+                status="active"
+                statusLabel="Connecté"
+                action={{ label: "Configurer", href: "/settings/google-calendar" }}
+              />
+            </div>
+          </div>
+
+          {/* Available integrations */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Sparkles size={14} className="text-brand-500" />
+              Bientôt disponibles
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <IntegrationCard
+                icon={MessageCircle}
+                iconColor="text-emerald-600"
+                iconBg="bg-emerald-50"
+                title="WhatsApp Business API"
+                description="Envoyer/recevoir WhatsApp dans le CRM"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+              <IntegrationCard
+                icon={Facebook}
+                iconColor="text-blue-600"
+                iconBg="bg-blue-50"
+                title="Facebook Lead Ads"
+                description="Sync auto des leads Facebook"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+              <IntegrationCard
+                icon={Instagram}
+                iconColor="text-pink-600"
+                iconBg="bg-pink-50"
+                title="Instagram Lead Ads"
+                description="Sync auto des leads Instagram"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+              <IntegrationCard
+                icon={Music2}
+                iconColor="text-gray-700"
+                iconBg="bg-gray-100"
+                title="TikTok Lead Ads"
+                description="Sync auto des Lead Ads TikTok"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+              <IntegrationCard
+                icon={CreditCard}
+                iconColor="text-indigo-600"
+                iconBg="bg-indigo-50"
+                title="Wave / Orange Money"
+                description="Encaisser les frais d'inscription"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+              <IntegrationCard
+                icon={Zap}
+                iconColor="text-yellow-600"
+                iconBg="bg-yellow-50"
+                title="Zapier"
+                description="Connecter à 5000+ applications"
+                status="coming"
+                statusLabel="Bientôt"
+              />
+            </div>
+          </div>
+
+          {/* Help box */}
+          <div className="bg-brand-50 border border-brand-100 rounded-xl p-4">
+            <p className="text-sm text-brand-800">
+              <strong>💡 Une intégration vous manque ?</strong> Contactez-nous pour suggérer
+              une nouvelle intégration ou en obtenir une sur-mesure.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tracking tab */}
       {activeTab === "tracking" && (
@@ -532,4 +662,54 @@ function FieldRow({ field, names }: { field: string; names: string }) {
       <td className="px-3 py-2 text-gray-500"><code className="text-xs bg-gray-50 px-1.5 py-0.5 rounded">{names}</code></td>
     </tr>
   );
+}
+
+function IntegrationCard({
+  icon: Icon,
+  iconColor,
+  iconBg,
+  title,
+  description,
+  status,
+  statusLabel,
+  action,
+}: {
+  icon: any;
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  description: string;
+  status: "active" | "coming" | "inactive";
+  statusLabel: string;
+  action?: { label: string; href?: string; onClick?: () => void };
+}) {
+  var statusBg = status === "active" ? "bg-emerald-100 text-emerald-700" : status === "coming" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600";
+
+  var content = (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-card-hover hover:border-brand-200 transition-all duration-200 h-full flex flex-col">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <Icon size={20} className={iconColor} />
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusBg}`}>
+          {statusLabel}
+        </span>
+      </div>
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">{title}</h3>
+      <p className="text-xs text-gray-500 flex-1">{description}</p>
+      {action && status !== "coming" && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <span className="text-xs font-medium text-brand-600 hover:text-brand-700">{action.label} →</span>
+        </div>
+      )}
+    </div>
+  );
+
+  if (action?.href) {
+    return <Link href={action.href}>{content}</Link>;
+  }
+  if (action?.onClick) {
+    return <button onClick={action.onClick} className="text-left w-full">{content}</button>;
+  }
+  return content;
 }
