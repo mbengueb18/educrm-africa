@@ -25,7 +25,7 @@ import type { Permission } from "@/lib/permissions";
 const navItems = [
   {
     label: "Dashboard",
-    href: "/analytics",
+    href: "/dashboard",
     icon: LayoutDashboard,
     permission: "analytics:view" as Permission,
   },
