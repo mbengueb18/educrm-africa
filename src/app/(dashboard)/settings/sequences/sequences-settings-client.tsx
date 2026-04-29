@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { updateSequenceConfig, resetToDefaults } from "./actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Power, Mail, MessageCircle, Phone, AlertTriangle,
   XCircle, Check, Loader2, Pause, Calendar, Reply, RotateCcw,
-  ChevronDown, ChevronUp, Edit3, Plus, Trash2,
+  ChevronDown, ChevronUp, Edit3, Plus, Trash2, GripVertical,
 } from "lucide-react";
 import type { SequenceStep } from "@/lib/sequence-defaults";
 
@@ -108,6 +109,27 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
     setSteps((prev) => prev.filter((s) => s.id !== id));
   };
 
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    if (result.destination.index === result.source.index) return;
+
+    const reordered = Array.from(steps);
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+
+    // Recalculate daysAfter to keep them increasing
+    const recalculated = reordered.map((step, i) => {
+      if (i === 0) return step;
+      const prev = reordered[i - 1];
+      if (step.daysAfter <= prev.daysAfter) {
+        return { ...step, daysAfter: prev.daysAfter + 1 };
+      }
+      return step;
+    });
+
+    setSteps(recalculated);
+  };
+
   return (
     <div>
       {/* Header */}
@@ -161,143 +183,169 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
             <h3 className="text-sm font-semibold text-gray-900">Séquence de relance personnalisée</h3>
             <span className="text-[10px] text-gray-400">Variables : {"{prenom}"} {"{nom}"} {"{email}"} {"{ecole}"}</span>
           </div>
-          <div className="space-y-3">
-            {steps.map((step, i) => {
-              const Icon = CHANNEL_ICONS[step.channel] || Mail;
-              const colorClass = CHANNEL_COLORS[step.channel] || "bg-gray-50 text-gray-600";
-              const isExpanded = expandedStep === step.id;
-              const isEditable = step.channel === "EMAIL" || step.channel === "WHATSAPP_TASK" || step.channel === "CALL_TASK";
 
-              return (
-                <div key={step.id} className={cn("border rounded-xl transition-colors", step.enabled ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50")}>
-                  <div className="flex items-center gap-3 p-3">
-                    {/* Toggle enabled */}
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input type="checkbox" checked={step.enabled} onChange={(e) => updateStep(step.id, { enabled: e.target.checked })} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
-                    </label>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="sequence-steps">
+              {(provided) => (
+                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3">
+                  {steps.map((step, i) => {
+                    const Icon = CHANNEL_ICONS[step.channel] || Mail;
+                    const colorClass = CHANNEL_COLORS[step.channel] || "bg-gray-50 text-gray-600";
+                    const isExpanded = expandedStep === step.id;
+                    const isEditable = step.channel === "EMAIL" || step.channel === "WHATSAPP_TASK" || step.channel === "CALL_TASK";
 
-                    {/* Day input */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-xs text-gray-500">J+</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={365}
-                        value={step.daysAfter}
-                        onChange={(e) => updateStep(step.id, { daysAfter: parseInt(e.target.value) || 0 })}
-                        className="w-12 px-2 py-1 text-xs border border-gray-200 rounded text-center"
-                        disabled={!step.enabled}
-                      />
-                    </div>
+                    return (
+                      <Draggable key={step.id} draggableId={step.id} index={i}>
+                        {(dragProvided, dragSnapshot) => (
+                          <div
+                            ref={dragProvided.innerRef}
+                            {...dragProvided.draggableProps}
+                            className={cn(
+                              "border rounded-xl transition-all",
+                              step.enabled ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50",
+                              dragSnapshot.isDragging && "shadow-xl ring-2 ring-brand-300 rotate-1 z-10"
+                            )}
+                          >
+                            <div className="flex items-center gap-3 p-3">
+                              {/* Drag handle */}
+                              <div {...dragProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 shrink-0" title="Glisser pour réorganiser">
+                                <GripVertical size={16} />
+                              </div>
 
-                    {/* Channel icon + label */}
-                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", colorClass)}>
-                      <Icon size={14} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{step.label}</p>
-                      <p className="text-[10px] text-gray-500">{CHANNEL_LABELS[step.channel]}</p>
-                    </div>
+                              {/* Toggle enabled */}
+                              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" checked={step.enabled} onChange={(e) => updateStep(step.id, { enabled: e.target.checked })} className="sr-only peer" />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                              </label>
 
-                    {/* Expand button */}
-                    {isEditable && (
-                      <button
-                        onClick={() => setExpandedStep(isExpanded ? null : step.id)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
-                        title="Modifier"
-                      >
-                        {isExpanded ? <ChevronUp size={14} /> : <Edit3 size={14} />}
-                      </button>
-                    )}
-                    {/* Delete button (only for custom steps) */}
-                    {step.id.startsWith("custom_") && (
-                      <button
-                        onClick={() => removeStep(step.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
+                              {/* Day input */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-xs text-gray-500">J+</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={365}
+                                  value={step.daysAfter}
+                                  onChange={(e) => updateStep(step.id, { daysAfter: parseInt(e.target.value) || 0 })}
+                                  className="w-12 px-2 py-1 text-xs border border-gray-200 rounded text-center"
+                                  disabled={!step.enabled}
+                                />
+                              </div>
 
-                  {/* Expanded edit zone */}
-                  {isExpanded && isEditable && (
-                    <div className="border-t border-gray-100 p-3 bg-gray-50/50 space-y-3">
-                      <div>
-                        <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Nom de l'étape</label>
-                        <input
-                          value={step.label}
-                          onChange={(e) => updateStep(step.id, { label: e.target.value })}
-                          className="input text-xs py-1.5 w-full"
-                        />
-                      </div>
+                              {/* Channel icon + label */}
+                              <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", colorClass)}>
+                                <Icon size={14} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{step.label}</p>
+                                <p className="text-[10px] text-gray-500">{CHANNEL_LABELS[step.channel]}</p>
+                              </div>
 
-                      {step.channel === "EMAIL" && (
-                        <>
-                          <div>
-                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Objet de l'email</label>
-                            <input
-                              value={step.emailSubject || ""}
-                              onChange={(e) => updateStep(step.id, { emailSubject: e.target.value })}
-                              className="input text-xs py-1.5 w-full"
-                              placeholder="Ex : {prenom}, votre projet de formation"
-                            />
+                              {/* Expand button */}
+                              {isEditable && (
+                                <button
+                                  onClick={() => setExpandedStep(isExpanded ? null : step.id)}
+                                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+                                  title="Modifier"
+                                >
+                                  {isExpanded ? <ChevronUp size={14} /> : <Edit3 size={14} />}
+                                </button>
+                              )}
+
+                              {/* Delete button (only for custom steps) */}
+                              {step.id.startsWith("custom_") && (
+                                <button
+                                  onClick={() => removeStep(step.id)}
+                                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Expanded edit zone */}
+                            {isExpanded && isEditable && (
+                              <div className="border-t border-gray-100 p-3 bg-gray-50/50 space-y-3">
+                                <div>
+                                  <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Nom de l'étape</label>
+                                  <input
+                                    value={step.label}
+                                    onChange={(e) => updateStep(step.id, { label: e.target.value })}
+                                    className="input text-xs py-1.5 w-full"
+                                  />
+                                </div>
+
+                                {step.channel === "EMAIL" && (
+                                  <>
+                                    <div>
+                                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Objet de l'email</label>
+                                      <input
+                                        value={step.emailSubject || ""}
+                                        onChange={(e) => updateStep(step.id, { emailSubject: e.target.value })}
+                                        className="input text-xs py-1.5 w-full"
+                                        placeholder="Ex : {prenom}, votre projet de formation"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Corps du message</label>
+                                      <textarea
+                                        value={step.emailBody || ""}
+                                        onChange={(e) => updateStep(step.id, { emailBody: e.target.value })}
+                                        className="input text-xs py-1.5 w-full font-mono"
+                                        rows={8}
+                                        placeholder="Bonjour {prenom}, ..."
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {(step.channel === "WHATSAPP_TASK" || step.channel === "CALL_TASK") && (
+                                  <>
+                                    <div>
+                                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Titre de la tâche créée</label>
+                                      <input
+                                        value={step.taskTitle || ""}
+                                        onChange={(e) => updateStep(step.id, { taskTitle: e.target.value })}
+                                        className="input text-xs py-1.5 w-full"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Description</label>
+                                      <textarea
+                                        value={step.taskDescription || ""}
+                                        onChange={(e) => updateStep(step.id, { taskDescription: e.target.value })}
+                                        className="input text-xs py-1.5 w-full"
+                                        rows={2}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Priorité</label>
+                                      <select
+                                        value={step.taskPriority || "HIGH"}
+                                        onChange={(e) => updateStep(step.id, { taskPriority: e.target.value as any })}
+                                        className="input text-xs py-1.5"
+                                      >
+                                        <option value="LOW">Basse</option>
+                                        <option value="MEDIUM">Moyenne</option>
+                                        <option value="HIGH">Haute</option>
+                                        <option value="URGENT">Urgente</option>
+                                      </select>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Corps du message</label>
-                            <textarea
-                              value={step.emailBody || ""}
-                              onChange={(e) => updateStep(step.id, { emailBody: e.target.value })}
-                              className="input text-xs py-1.5 w-full font-mono"
-                              rows={8}
-                              placeholder="Bonjour {prenom}, ..."
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {(step.channel === "WHATSAPP_TASK" || step.channel === "CALL_TASK") && (
-                        <>
-                          <div>
-                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Titre de la tâche créée</label>
-                            <input
-                              value={step.taskTitle || ""}
-                              onChange={(e) => updateStep(step.id, { taskTitle: e.target.value })}
-                              className="input text-xs py-1.5 w-full"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Description</label>
-                            <textarea
-                              value={step.taskDescription || ""}
-                              onChange={(e) => updateStep(step.id, { taskDescription: e.target.value })}
-                              className="input text-xs py-1.5 w-full"
-                              rows={2}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1 block">Priorité</label>
-                            <select
-                              value={step.taskPriority || "HIGH"}
-                              onChange={(e) => updateStep(step.id, { taskPriority: e.target.value as any })}
-                              className="input text-xs py-1.5"
-                            >
-                              <option value="LOW">Basse</option>
-                              <option value="MEDIUM">Moyenne</option>
-                              <option value="HIGH">Haute</option>
-                              <option value="URGENT">Urgente</option>
-                            </select>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </Droppable>
+          </DragDropContext>
 
           {/* Add step buttons */}
           <div className="mt-4 pt-4 border-t border-gray-100">
