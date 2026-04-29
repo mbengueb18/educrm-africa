@@ -8,7 +8,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Power, Mail, MessageCircle, Phone, AlertTriangle,
   XCircle, Check, Loader2, Pause, Calendar, Reply, RotateCcw,
-  ChevronDown, ChevronUp, Edit3,
+  ChevronDown, ChevronUp, Edit3, Plus, Trash2,
 } from "lucide-react";
 import type { SequenceStep } from "@/lib/sequence-defaults";
 
@@ -74,6 +74,38 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
 
   const updateStep = (id: string, patch: Partial<SequenceStep>) => {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  };
+
+  const addStep = (channel: SequenceStep["channel"]) => {
+    const newId = "custom_" + Date.now();
+    const lastDay = steps.length > 0 ? Math.max(...steps.map((s) => s.daysAfter)) : 0;
+    const newStep: SequenceStep = {
+      id: newId,
+      enabled: true,
+      daysAfter: lastDay + 3,
+      channel: channel,
+      label:
+        channel === "EMAIL" ? "Nouvel email" :
+        channel === "WHATSAPP_TASK" ? "Nouvelle tâche WhatsApp" :
+        channel === "CALL_TASK" ? "Nouvelle tâche d'appel" :
+        "Marquage automatique",
+      ...(channel === "EMAIL" ? {
+        emailSubject: "Bonjour {prenom}",
+        emailBody: "Bonjour {prenom},\n\n[Votre message ici]\n\nCordialement,\nL'équipe {ecole}",
+      } : {}),
+      ...(channel === "WHATSAPP_TASK" || channel === "CALL_TASK" ? {
+        taskTitle: channel === "CALL_TASK" ? "Appeler {prenom} {nom}" : "WhatsApp à {prenom} {nom}",
+        taskDescription: "Tâche de relance personnalisée",
+        taskPriority: "HIGH",
+      } : {}),
+    };
+    setSteps((prev) => [...prev, newStep].sort((a, b) => a.daysAfter - b.daysAfter));
+    setExpandedStep(newId);
+  };
+
+  const removeStep = (id: string) => {
+    if (!confirm("Supprimer cette étape ? Les exécutions passées resteront en historique.")) return;
+    setSteps((prev) => prev.filter((s) => s.id !== id));
   };
 
   return (
@@ -173,8 +205,19 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                       <button
                         onClick={() => setExpandedStep(isExpanded ? null : step.id)}
                         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+                        title="Modifier"
                       >
                         {isExpanded ? <ChevronUp size={14} /> : <Edit3 size={14} />}
+                      </button>
+                    )}
+                    {/* Delete button (only for custom steps) */}
+                    {step.id.startsWith("custom_") && (
+                      <button
+                        onClick={() => removeStep(step.id)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>
@@ -254,6 +297,22 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                 </div>
               );
             })}
+          </div>
+
+          {/* Add step buttons */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-500 mb-2">+ Ajouter une étape :</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => addStep("EMAIL")} className="btn-secondary py-1.5 px-3 text-xs">
+                <Mail size={12} className="text-blue-500" /> Email
+              </button>
+              <button onClick={() => addStep("WHATSAPP_TASK")} className="btn-secondary py-1.5 px-3 text-xs">
+                <MessageCircle size={12} className="text-emerald-500" /> Tâche WhatsApp
+              </button>
+              <button onClick={() => addStep("CALL_TASK")} className="btn-secondary py-1.5 px-3 text-xs">
+                <Phone size={12} className="text-purple-500" /> Tâche d'appel
+              </button>
+            </div>
           </div>
 
           <p className="text-[10px] text-gray-400 mt-3">
