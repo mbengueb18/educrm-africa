@@ -98,35 +98,47 @@ export async function getSequenceAnalytics(periodDays: number = 30) {
     emailStats.bounced = bounced;
   } catch {}
 
-  // Average time to first reply
-  let totalReplyDays = 0;
+  // Average time to first reply (from last relance sent → first inbound after that)
+  let totalReplyMs = 0;
   let replyCount = 0;
   if (repliedLeadIds.size > 0) {
     const repliedLeads = await prisma.lead.findMany({
       where: { id: { in: Array.from(repliedLeadIds) } },
       select: {
         id: true,
-        createdAt: true,
+        sequenceExecutions: {
+          where: { status: "DONE" },
+          orderBy: { executedAt: "desc" },
+          select: { executedAt: true },
+        },
         messages: {
           where: { direction: "INBOUND" },
           orderBy: { sentAt: "asc" },
-          take: 1,
           select: { sentAt: true },
         },
       },
     });
+
     repliedLeads.forEach((l) => {
-      if (l.messages[0]) {
-        const days = (new Date(l.messages[0].sentAt).getTime() - new Date(l.createdAt).getTime()) / 86400000;
-        if (days >= 0) {
-          totalReplyDays += days;
-          replyCount++;
+      // Find the first inbound that arrived AFTER any sequence execution
+      for (const exec of l.sequenceExecutions.reverse()) {
+        const reply = l.messages.find((m) => new Date(m.sentAt) >= new Date(exec.executedAt));
+        if (reply) {
+          const ms = new Date(reply.sentAt).getTime() - new Date(exec.executedAt).getTime();
+          if (ms >= 0) {
+            totalReplyMs += ms;
+            replyCount++;
+          }
+          return;
         }
       }
     });
   }
 
-  const avgReplyDays = replyCount > 0 ? totalReplyDays / replyCount : 0;
+  // Display in hours if average < 1 day, otherwise in days
+  const avgReplyMs = replyCount > 0 ? totalReplyMs / replyCount : 0;
+  const avgReplyDays = avgReplyMs / 86400000;
+  const avgReplyHours = avgReplyMs / 3600000;
 
   // Auto-lost
   const autoLost = stepStats["J21_auto_lost"].done;
@@ -146,6 +158,10 @@ export async function getSequenceAnalytics(periodDays: number = 30) {
       repliedCount: repliedLeadIds.size,
       replyRate: totalLeadsRelance > 0 ? Math.round((repliedLeadIds.size / totalLeadsRelance) * 100) : 0,
       avgReplyDays: Math.round(avgReplyDays * 10) / 10,
+      avgReplyHours: Math.round(avgReplyHours * 10) / 10,
+      avgReplyDisplay: avgReplyDays >= 1
+        ? Math.round(avgReplyDays * 10) / 10 + " j"
+        : Math.round(avgReplyHours * 10) / 10 + " h",
       autoLost,
       converted: convertedFromSequence,
       conversionRate: totalLeadsRelance > 0 ? Math.round((convertedFromSequence / totalLeadsRelance) * 100) : 0,

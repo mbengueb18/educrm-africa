@@ -17,6 +17,8 @@ interface Analytics {
     repliedCount: number;
     replyRate: number;
     avgReplyDays: number;
+    avgReplyHours: number;
+    avgReplyDisplay: string;
     autoLost: number;
     converted: number;
     conversionRate: number;
@@ -133,8 +135,7 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads }: {
           icon={Clock}
           color="text-blue-600"
           bg="bg-blue-50"
-          value={analytics.overview.avgReplyDays}
-          unit=" j"
+          value={analytics.overview.avgReplyDisplay as any}
           label="Délai moyen de réponse"
         />
         <KpiCard
@@ -276,7 +277,7 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads }: {
 }
 
 function KpiCard({ icon: Icon, color, bg, value, subValue, label, unit }: {
-  icon: any; color: string; bg: string; value: number; subValue?: string; label: string; unit?: string;
+  icon: any; color: string; bg: string; value: number | string; subValue?: string; label: string; unit?: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
