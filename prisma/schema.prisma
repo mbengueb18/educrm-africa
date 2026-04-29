@@ -1058,6 +1058,7 @@ model OrganizationSequenceConfig {
   pauseOnReply             Boolean  @default(true)
   pauseOnAppointment       Boolean  @default(true)
   autoMarkLostAfterDays    Int      @default(21)
+  steps                    Json     @default("[]")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
