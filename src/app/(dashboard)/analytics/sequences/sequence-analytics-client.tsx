@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getSequenceAnalytics } from "./actions";
+import { getSequenceAnalytics, exportLeadsInSequenceCSV } from "./actions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   TrendingUp, Users, Reply, Clock, XCircle, CheckCircle2,
   Mail, MessageCircle, Phone, AlertTriangle, ChevronRight,
-  Repeat, Loader2,
+  Repeat, Loader2, Download, ArrowUpRight, ArrowDownRight,
+  Calendar, Sparkles,
 } from "lucide-react";
 
 interface Analytics {
@@ -58,12 +59,51 @@ const STEP_COLORS: Record<string, string> = {
   J21_auto_lost: "bg-red-50 text-red-600",
 };
 
-export function SequenceAnalyticsClient({ initialAnalytics, initialLeads }: {
+interface Cohort {
+  month: string;
+  monthLabel: string;
+  total: number;
+  d0: number;
+  d1: number;
+  d3: number;
+  d7: number;
+  d14: number;
+  d21: number;
+}
+
+interface Impact {
+  withSequence: { total: number; converted: number; conversionRate: number; replied: number; replyRate: number; lost: number; lostRate: number };
+  withoutSequence: { total: number; converted: number; conversionRate: number; replied: number; replyRate: number; lost: number; lostRate: number };
+  uplift: { conversion: number; reply: number };
+  periodDays: number;
+}
+
+export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initialCohorts, initialImpact }: {
   initialAnalytics: Analytics;
   initialLeads: LeadInSequence[];
+  initialCohorts: Cohort[];
+  initialImpact: Impact;
 }) {
   const [analytics, setAnalytics] = useState(initialAnalytics);
   const [leads] = useState(initialLeads);
+  const [cohorts] = useState(initialCohorts);
+  const [impact] = useState(initialImpact);
+
+  const handleExport = async () => {
+    try {
+      const csv = await exportLeadsInSequenceCSV();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "leads-en-sequence-" + new Date().toISOString().split("T")[0] + ".csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e: any) {
+      alert("Erreur : " + (e.message || "Export échoué"));
+    }
+  };
   const [period, setPeriod] = useState(30);
   const [, startTransition] = useTransition();
   const [stepFilter, setStepFilter] = useState<string>("all");
@@ -183,6 +223,91 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads }: {
         </div>
       </div>
 
+      {/* Impact comparison */}
+      {(impact.withSequence.total > 0 || impact.withoutSequence.total > 0) && (
+        <div className="bg-gradient-to-br from-brand-50 to-violet-50 rounded-xl border border-brand-100 p-5 mb-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <Sparkles size={16} className="text-brand-500" /> Impact des relances automatiques
+          </h3>
+          <p className="text-xs text-gray-600 mb-4">
+            Comparaison des leads avec vs sans relance sur les {impact.periodDays} derniers jours
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ImpactStat
+              label="Taux de réponse"
+              withSeq={impact.withSequence.replyRate}
+              withoutSeq={impact.withoutSequence.replyRate}
+              uplift={impact.uplift.reply}
+              suffix="%"
+            />
+            <ImpactStat
+              label="Taux de conversion"
+              withSeq={impact.withSequence.conversionRate}
+              withoutSeq={impact.withoutSequence.conversionRate}
+              uplift={impact.uplift.conversion}
+              suffix="%"
+            />
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">Volume</p>
+              <p className="text-sm font-bold text-gray-900">
+                {impact.withSequence.total} <span className="text-gray-500 font-normal">avec relance</span>
+              </p>
+              <p className="text-sm text-gray-500">
+                vs {impact.withoutSequence.total} sans relance
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cohort analysis */}
+      {cohorts.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <Calendar size={16} className="text-blue-500" /> Cohortes : à quel moment les leads répondent
+          </h3>
+          <p className="text-xs text-gray-500 mb-4">
+            % cumulé de leads ayant répondu après leur création (par mois)
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-2 font-medium text-gray-500">Cohorte</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">Total</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+0</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+1</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+3</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+7</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+14</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+21</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cohorts.map((c) => (
+                  <tr key={c.month} className="border-b border-gray-50 last:border-0">
+                    <td className="py-2 px-2 font-medium text-gray-700 capitalize">{c.monthLabel}</td>
+                    <td className="text-center py-2 px-2 text-gray-500">{c.total}</td>
+                    <CohortCell value={c.d0} />
+                    <CohortCell value={c.d1} />
+                    <CohortCell value={c.d3} />
+                    <CohortCell value={c.d7} />
+                    <CohortCell value={c.d14} />
+                    <CohortCell value={c.d21} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-[10px] text-gray-400 mt-3">
+            💡 Plus la couleur est foncée, plus le pourcentage de réponses est élevé. Cela vous aide à identifier les meilleures fenêtres de relance.
+          </p>
+        </div>
+      )}
+
       {/* Email + Tasks performance */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -215,6 +340,9 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads }: {
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <Users size={16} className="text-brand-500" /> Leads en séquence active ({filteredLeads.length})
           </h3>
+          <button onClick={handleExport} className="btn-secondary py-1.5 px-3 text-xs">
+            <Download size={12} /> Exporter CSV
+          </button>
         </div>
 
         {/* Filters */}
@@ -304,5 +432,46 @@ function StatRow({ label, value, percentage, negative }: { label: string; value:
         )}
       </div>
     </div>
+  );
+}
+
+function ImpactStat({ label, withSeq, withoutSeq, uplift, suffix }: {
+  label: string; withSeq: number; withoutSeq: number; uplift: number; suffix: string;
+}) {
+  const isPositive = uplift > 0;
+  return (
+    <div className="bg-white rounded-lg p-3">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <div className="flex items-baseline gap-2 mb-1">
+        <p className="text-lg font-bold text-brand-600">{withSeq}{suffix}</p>
+        <span className="text-xs text-gray-400">avec relance</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-gray-500">vs {withoutSeq}{suffix} sans</span>
+        {uplift !== 0 && (
+          <span className={cn(
+            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5",
+            isPositive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
+          )}>
+            {isPositive ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+            {Math.abs(uplift)}{suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CohortCell({ value }: { value: number }) {
+  let bg = "bg-gray-50";
+  let text = "text-gray-400";
+  if (value > 0 && value <= 20) { bg = "bg-blue-50"; text = "text-blue-700"; }
+  else if (value > 20 && value <= 40) { bg = "bg-blue-100"; text = "text-blue-800"; }
+  else if (value > 40 && value <= 60) { bg = "bg-blue-200"; text = "text-blue-900"; }
+  else if (value > 60) { bg = "bg-blue-300"; text = "text-blue-900"; }
+  return (
+    <td className={cn("text-center py-2 px-2 font-medium", bg, text)}>
+      {value > 0 ? value + "%" : "—"}
+    </td>
   );
 }

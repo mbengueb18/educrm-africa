@@ -243,3 +243,206 @@ export async function getLeadsInSequence() {
     };
   });
 }
+
+// ─── Cohorte temporelle : à quel moment les leads répondent ───
+export async function getCohortAnalysis(months: number = 3) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+  const since = new Date();
+  since.setMonth(since.getMonth() - months);
+
+  // Get leads created in period that have at least one sequence execution
+  const leads = await prisma.lead.findMany({
+    where: {
+      organizationId: orgId,
+      createdAt: { gte: since },
+      sequenceExecutions: { some: {} },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      messages: {
+        where: { direction: "INBOUND" },
+        orderBy: { sentAt: "asc" },
+        take: 1,
+        select: { sentAt: true },
+      },
+    },
+  });
+
+  // Group by month cohort
+  const cohorts: Record<string, { total: number; reply_d0: number; reply_d1: number; reply_d3: number; reply_d7: number; reply_d14: number; reply_d21: number }> = {};
+
+  leads.forEach((l) => {
+    const month = new Date(l.createdAt).toISOString().substring(0, 7); // "2026-04"
+    if (!cohorts[month]) {
+      cohorts[month] = { total: 0, reply_d0: 0, reply_d1: 0, reply_d3: 0, reply_d7: 0, reply_d14: 0, reply_d21: 0 };
+    }
+    cohorts[month].total++;
+
+    if (l.messages[0]) {
+      const replyDays = (new Date(l.messages[0].sentAt).getTime() - new Date(l.createdAt).getTime()) / 86400000;
+      if (replyDays <= 0) cohorts[month].reply_d0++;
+      if (replyDays <= 1) cohorts[month].reply_d1++;
+      if (replyDays <= 3) cohorts[month].reply_d3++;
+      if (replyDays <= 7) cohorts[month].reply_d7++;
+      if (replyDays <= 14) cohorts[month].reply_d14++;
+      if (replyDays <= 21) cohorts[month].reply_d21++;
+    }
+  });
+
+  // Convert to array sorted by month asc
+  const cohortArray = Object.entries(cohorts)
+    .map(([month, data]) => ({
+      month,
+      monthLabel: new Date(month + "-01").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
+      total: data.total,
+      d0: data.total > 0 ? Math.round((data.reply_d0 / data.total) * 100) : 0,
+      d1: data.total > 0 ? Math.round((data.reply_d1 / data.total) * 100) : 0,
+      d3: data.total > 0 ? Math.round((data.reply_d3 / data.total) * 100) : 0,
+      d7: data.total > 0 ? Math.round((data.reply_d7 / data.total) * 100) : 0,
+      d14: data.total > 0 ? Math.round((data.reply_d14 / data.total) * 100) : 0,
+      d21: data.total > 0 ? Math.round((data.reply_d21 / data.total) * 100) : 0,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  return cohortArray;
+}
+
+// ─── Comparaison "avec vs sans relance" ───
+export async function getSequenceImpact(periodDays: number = 90) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+  const since = new Date(Date.now() - periodDays * 86400000);
+
+  // Leads in sequence
+  const leadsInSequenceIds = await prisma.lead.findMany({
+    where: {
+      organizationId: orgId,
+      createdAt: { gte: since },
+      sequenceExecutions: { some: {} },
+    },
+    select: { id: true },
+  });
+  const inSeqIds = leadsInSequenceIds.map((l) => l.id);
+
+  // Leads NOT in sequence (created in same period, no executions)
+  const leadsNotInSequence = await prisma.lead.findMany({
+    where: {
+      organizationId: orgId,
+      createdAt: { gte: since },
+      sequenceExecutions: { none: {} },
+    },
+    select: { id: true },
+  });
+  const notInSeqIds = leadsNotInSequence.map((l) => l.id);
+
+  // Conversion stats for both groups
+  async function getStats(ids: string[]) {
+    if (ids.length === 0) {
+      return { total: 0, converted: 0, conversionRate: 0, replied: 0, replyRate: 0, lost: 0, lostRate: 0 };
+    }
+    const [converted, replied, lost] = await Promise.all([
+      prisma.lead.count({ where: { id: { in: ids }, isConverted: true } }),
+      prisma.lead.count({
+        where: {
+          id: { in: ids },
+          messages: { some: { direction: "INBOUND" } },
+        },
+      }),
+      prisma.lead.count({
+        where: {
+          id: { in: ids },
+          stage: { name: { contains: "Perdu", mode: "insensitive" } },
+        },
+      }),
+    ]);
+    return {
+      total: ids.length,
+      converted,
+      conversionRate: ids.length > 0 ? Math.round((converted / ids.length) * 1000) / 10 : 0,
+      replied,
+      replyRate: ids.length > 0 ? Math.round((replied / ids.length) * 1000) / 10 : 0,
+      lost,
+      lostRate: ids.length > 0 ? Math.round((lost / ids.length) * 1000) / 10 : 0,
+    };
+  }
+
+  const [withSequence, withoutSequence] = await Promise.all([
+    getStats(inSeqIds),
+    getStats(notInSeqIds),
+  ]);
+
+  // Calculate uplift
+  const uplift = {
+    conversion: withSequence.conversionRate - withoutSequence.conversionRate,
+    reply: withSequence.replyRate - withoutSequence.replyRate,
+  };
+
+  return { withSequence, withoutSequence, uplift, periodDays };
+}
+
+// ─── Export CSV des leads en séquence ───
+export async function exportLeadsInSequenceCSV() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      sequenceExecutions: { some: {} },
+    },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      createdAt: true,
+      stage: { select: { name: true } },
+      assignedTo: { select: { name: true } },
+      sequenceExecutions: {
+        orderBy: { executedAt: "desc" },
+        select: { stepName: true, executedAt: true, status: true },
+      },
+      messages: {
+        where: { direction: "INBOUND" },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+        select: { sentAt: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // CSV header
+  const headers = [
+    "Prénom", "Nom", "Email", "Téléphone", "Date création", "Étape",
+    "Commercial", "Étapes exécutées", "Dernière étape", "Date dernière étape",
+    "A répondu", "Date 1ère réponse",
+  ];
+
+  const rows = leads.map((l) => {
+    const lastStep = l.sequenceExecutions[0];
+    const reply = l.messages[0];
+    return [
+      l.firstName,
+      l.lastName,
+      l.email || "",
+      l.phone,
+      new Date(l.createdAt).toLocaleDateString("fr-FR"),
+      l.stage.name,
+      l.assignedTo?.name || "",
+      l.sequenceExecutions.length.toString(),
+      lastStep?.stepName || "",
+      lastStep ? new Date(lastStep.executedAt).toLocaleDateString("fr-FR") : "",
+      reply ? "Oui" : "Non",
+      reply ? new Date(reply.sentAt).toLocaleDateString("fr-FR") : "",
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\n");
+}
