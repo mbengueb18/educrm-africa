@@ -43,6 +43,8 @@ model Organization {
   calls            Call[]
   appointments     Appointment[]
   portalTokens LeadPortalToken[]
+  sequenceExecutions SequenceExecution[]
+  sequenceConfig     OrganizationSequenceConfig?
   chatbotConfig ChatbotConfig?
 
   @@map("organizations")
@@ -245,6 +247,7 @@ model Lead {
   calls        Call[]
   appointments Appointment[]
   portalTokens LeadPortalToken[]
+  sequenceExecutions SequenceExecution[]
 
   @@index([organizationId])
   @@index([stageId])
@@ -1027,4 +1030,38 @@ model LeadPortalToken {
   @@index([leadId])
   @@index([token])
   @@map("lead_portal_tokens")
+}
+
+model SequenceExecution {
+  id             String   @id @default(cuid())
+  leadId         String
+  organizationId String
+  stepName       String   // "J1_email", "J3_whatsapp", "J7_call_task", "J14_last_chance", "J21_auto_lost"
+  executedAt     DateTime @default(now())
+  status         String   @default("DONE") // DONE, FAILED, SKIPPED
+  metadata       Json?
+
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([organizationId])
+  @@index([stepName])
+  @@unique([leadId, stepName])
+  @@map("sequence_executions")
+}
+
+model OrganizationSequenceConfig {
+  id                       String   @id @default(cuid())
+  organizationId           String   @unique
+  enabled                  Boolean  @default(false)
+  pauseOnReply             Boolean  @default(true)
+  pauseOnAppointment       Boolean  @default(true)
+  autoMarkLostAfterDays    Int      @default(21)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_sequence_configs")
 }

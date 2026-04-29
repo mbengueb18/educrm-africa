@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizontal, Database  } from "lucide-react";
+import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizontal, Database, Repeat  } from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
 
@@ -11,6 +11,7 @@ const settingsMenu = [
   { label: "Champs personnalisés", description: "Champs customs captés depuis les formulaires", icon: SlidersHorizontal, href: "/settings/custom-fields" },
   { label: "Propriétés", description: "Vue d'ensemble de tous les champs collectés", icon: Database, href: "/settings/properties" },
   { label: "Intégrations", description: "Tracking, API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
+  { label: "Relances automatiques", description: "Séquences J1/J3/J7 multi-canal pour les leads silencieux", icon: Repeat, href: "/settings/sequences" },
   { label: "Notifications", description: "Alertes, rappels, préférences", icon: Bell, href: "/settings/notifications" },
   { label: "Apparence", description: "Thème, langue, personnalisation", icon: Palette, href: "/settings/appearance" },
   { label: "Sécurité", description: "Mot de passe, 2FA, sessions", icon: Shield, href: "/settings/security" },
