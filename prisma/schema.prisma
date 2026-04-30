@@ -568,6 +568,8 @@ model MessageTemplate {
   channel        MessageChannel
   subject        String? // For emails
   body           String // With variables: {{firstName}}, {{program}}, etc.
+  blocks         Json?            // Visual builder blocks
+  brandColor     String?          @default("#1B4F72")
   variables      String[] // List of available variables
   category       TemplateCategory
   isApproved     Boolean          @default(false) // WhatsApp template approval
