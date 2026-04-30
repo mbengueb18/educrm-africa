@@ -10,11 +10,12 @@ import {
   Activity as ActivityIcon, History, GraduationCap, MapPin, Building2,
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
-  AlertCircle, CheckCircle2,
+  AlertCircle, CheckCircle2, Video,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
+import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 
 interface LeadDetailClientProps {
   lead: any;
@@ -648,39 +649,311 @@ function DocumentsTab({ lead }: { lead: any }) {
 
 // ─── Appointments Tab ───
 function AppointmentsTab({ lead }: { lead: any }) {
+  const router = useRouter();
+  const [showCreate, setShowCreate] = useState(false);
   const appointments = lead.appointments || [];
 
-  if (appointments.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
-        <Calendar size={36} className="text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-400">Aucun rendez-vous</p>
-      </div>
-    );
-  }
+  const handleStatusChange = async (apptId: string, newStatus: string) => {
+    try {
+      await updateAppointment(apptId, { status: newStatus });
+      toast.success("Statut mis à jour");
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+  };
+
+  const handleDelete = async (apptId: string) => {
+    if (!confirm("Supprimer ce rendez-vous ?")) return;
+    try {
+      await deleteAppointment(apptId);
+      toast.success("Rendez-vous supprimé");
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+  };
+
+  // Sort: upcoming first, then past
+  const now = new Date();
+  const upcoming = appointments.filter((a: any) => new Date(a.startAt) >= now)
+    .sort((a: any, b: any) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  const past = appointments.filter((a: any) => new Date(a.startAt) < now)
+    .sort((a: any, b: any) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+
+  const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+    SCHEDULED: { label: "Planifié", bg: "bg-blue-100", color: "text-blue-700" },
+    CONFIRMED: { label: "Confirmé", bg: "bg-emerald-100", color: "text-emerald-700" },
+    IN_PROGRESS: { label: "En cours", bg: "bg-amber-100", color: "text-amber-700" },
+    COMPLETED: { label: "Terminé", bg: "bg-gray-100", color: "text-gray-600" },
+    CANCELLED: { label: "Annulé", bg: "bg-red-100", color: "text-red-700" },
+    NO_SHOW: { label: "Absent", bg: "bg-red-100", color: "text-red-700" },
+  };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-      {appointments.map((appt: any) => (
-        <div key={appt.id} className="flex items-center gap-3 px-4 py-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-            <Calendar size={16} />
+    <div className="space-y-4">
+      {/* Action bar */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{appointments.length} rendez-vous</p>
+        <button onClick={() => setShowCreate(true)} className="btn-primary py-1.5 px-3 text-xs">
+          <Plus size={13} /> Nouveau RDV
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <CreateAppointmentInline
+          leadId={lead.id}
+          assignedToId={lead.assignedToId || lead.assignedTo?.id}
+          onClose={(created) => { setShowCreate(false); if (created) router.refresh(); }}
+        />
+      )}
+
+      {/* Upcoming */}
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">À venir ({upcoming.length})</p>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {upcoming.map((appt: any) => (
+              <AppointmentRow key={appt.id} appt={appt} statusConfig={STATUS_CONFIG} onStatusChange={handleStatusChange} onDelete={handleDelete} />
+            ))}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{appt.title}</p>
-            <p className="text-xs text-gray-500">
-              {new Date(appt.startAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
-            </p>
-          </div>
-          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
-            appt.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
-            appt.status === "CANCELLED" ? "bg-red-100 text-red-700" :
-            "bg-blue-100 text-blue-700"
-          )}>
-            {appt.status}
-          </span>
         </div>
-      ))}
+      )}
+
+      {/* Past */}
+      {past.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4">Passés ({past.length})</p>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {past.slice(0, 10).map((appt: any) => (
+              <AppointmentRow key={appt.id} appt={appt} statusConfig={STATUS_CONFIG} onStatusChange={handleStatusChange} onDelete={handleDelete} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {appointments.length === 0 && !showCreate && (
+        <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
+          <Calendar size={36} className="text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Aucun rendez-vous</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Appointment Row ───
+function AppointmentRow({ appt, statusConfig, onStatusChange, onDelete }: any) {
+  const [showMenu, setShowMenu] = useState(false);
+  const sc = statusConfig[appt.status] || statusConfig.SCHEDULED;
+  const isPast = new Date(appt.startAt) < new Date();
+
+  const TypeIcon = appt.type === "VIDEO_CALL" ? Video : appt.type === "PHONE" ? Phone : MapPin;
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 group hover:bg-gray-50/50">
+      <div className={cn(
+        "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+        appt.type === "VIDEO_CALL" ? "bg-purple-50 text-purple-600" :
+        appt.type === "PHONE" ? "bg-emerald-50 text-emerald-600" :
+        "bg-blue-50 text-blue-600"
+      )}>
+        <TypeIcon size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="text-sm font-medium text-gray-900 truncate">{appt.title}</p>
+          <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", sc.bg, sc.color)}>{sc.label}</span>
+        </div>
+        <p className="text-xs text-gray-500">
+          {new Date(appt.startAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+          {appt.location && " • " + appt.location}
+        </p>
+        {appt.meetingUrl && (
+          <a href={appt.meetingUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-purple-600 hover:underline mt-0.5 inline-flex items-center gap-0.5">
+            <Video size={10} /> Rejoindre la visio
+          </a>
+        )}
+      </div>
+
+      <div className="relative">
+        <button
+          onClick={() => setShowMenu(!showMenu)}
+          className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"
+          title="Actions"
+        >
+          <Edit3 size={14} />
+        </button>
+        {showMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+            <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-44 animate-scale-in">
+              <p className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wider">Changer le statut</p>
+              {Object.entries(statusConfig).map(([key, conf]: any) => (
+                <button
+                  key={key}
+                  onClick={() => { setShowMenu(false); onStatusChange(appt.id, key); }}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50",
+                    appt.status === key ? "text-brand-600 font-medium" : "text-gray-700"
+                  )}
+                >
+                  {conf.label}
+                </button>
+              ))}
+              <div className="h-px bg-gray-100 my-1" />
+              <button
+                onClick={() => { setShowMenu(false); onDelete(appt.id); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+              >
+                <Trash2 size={12} /> Supprimer
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Create Appointment Inline ───
+function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
+  leadId: string;
+  assignedToId: string;
+  onClose: (created?: boolean) => void;
+}) {
+  const now = new Date();
+  const defaultStart = new Date(now.getTime() + 86400000); // +24h
+  defaultStart.setHours(10, 0, 0, 0);
+  const defaultEnd = new Date(defaultStart.getTime() + 3600000); // +1h
+
+  const toLocalISO = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return y + "-" + m + "-" + day + "T" + h + ":" + min;
+  };
+
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState("IN_PERSON");
+  const [startAt, setStartAt] = useState(toLocalISO(defaultStart));
+  const [endAt, setEndAt] = useState(toLocalISO(defaultEnd));
+  const [location, setLocation] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleStartChange = (val: string) => {
+    setStartAt(val);
+    if (val) {
+      const s = new Date(val);
+      const e = new Date(s.getTime() + 3600000);
+      setEndAt(toLocalISO(e));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) { toast.error("Titre requis"); return; }
+    if (!startAt || !endAt) { toast.error("Dates requises"); return; }
+    setSaving(true);
+    try {
+      await createAppointment({
+        title: title.trim(),
+        type,
+        startAt,
+        endAt,
+        location: location.trim() || undefined,
+        meetingUrl: meetingUrl.trim() || undefined,
+        notes: notes.trim() || undefined,
+        leadId,
+        assignedToId,
+      });
+      toast.success("Rendez-vous créé");
+      onClose(true);
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-brand-200 p-4 space-y-3 animate-scale-in">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Titre du rendez-vous..."
+        className="input text-sm font-medium"
+      />
+
+      {/* Type */}
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Type</label>
+        <div className="flex gap-2">
+          {[
+            { key: "IN_PERSON", label: "Présentiel", icon: MapPin },
+            { key: "PHONE", label: "Téléphone", icon: Phone },
+            { key: "VIDEO_CALL", label: "Visio", icon: Video },
+          ].map((opt) => {
+            const Icon = opt.icon;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setType(opt.key)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border transition-colors",
+                  type === opt.key ? "bg-brand-50 text-brand-600 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                )}
+              >
+                <Icon size={13} /> {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Date/time */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Début</label>
+          <input type="datetime-local" value={startAt} onChange={(e) => handleStartChange(e.target.value)} className="input text-xs py-1.5" />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Fin</label>
+          <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} className="input text-xs py-1.5" />
+        </div>
+      </div>
+
+      {/* Location or URL */}
+      {type === "IN_PERSON" && (
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Lieu</label>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex: Campus Dakar, Bureau 201" className="input text-xs py-1.5" />
+        </div>
+      )}
+      {type === "VIDEO_CALL" && (
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Lien visio</label>
+          <input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="https://meet.google.com/..." className="input text-xs py-1.5" />
+        </div>
+      )}
+
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Notes</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ordre du jour, documents à apporter..." className="input text-xs py-1.5" rows={2} />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={() => onClose()} className="btn-secondary py-1.5 px-3 text-xs">Annuler</button>
+        <button onClick={handleSubmit} disabled={saving || !title.trim()} className="btn-primary py-1.5 px-3 text-xs">
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Calendar size={12} />}
+          Créer
+        </button>
+      </div>
     </div>
   );
 }
