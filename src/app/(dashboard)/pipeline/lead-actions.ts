@@ -63,6 +63,8 @@ export async function getLeadDetail(leadId: string) {
           name: true,
           type: true,
           url: true,
+          size: true,
+          mimeType: true,
           createdAt: true,
         },
       },

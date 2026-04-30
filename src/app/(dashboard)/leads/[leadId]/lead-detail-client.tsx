@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
+import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 
 interface LeadDetailClientProps {
   lead: any;
@@ -485,30 +486,162 @@ function CreateTaskInline({ leadId, assignedToId, onClose }: {
 
 // ─── Documents Tab ───
 function DocumentsTab({ lead }: { lead: any }) {
+  const router = useRouter();
+  const [uploading, setUploading] = useState(false);
+  const [docType, setDocType] = useState("OTHER");
   const documents = lead.documents || [];
 
-  if (documents.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
-        <FileText size={36} className="text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-400">Aucun document</p>
-      </div>
-    );
-  }
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(file.name + " : trop volumineux (max 25 MB)");
+          continue;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("type", docType);
+
+        const response = await fetch("/api/leads/" + lead.id + "/documents/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          toast.success(file.name + " ajouté");
+        } else {
+          toast.error(data.error || "Erreur upload " + file.name);
+        }
+      }
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+    setUploading(false);
+    event.target.value = "";
+  };
+
+  const handleView = async (documentId: string) => {
+    try {
+      const result = await getDocumentSignedUrl(documentId);
+      window.open(result.url, "_blank");
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+  };
+
+  const handleDelete = async (documentId: string) => {
+    if (!confirm("Supprimer ce document ? Cette action est irréversible.")) return;
+    try {
+      await deleteDocument(documentId);
+      toast.success("Document supprimé");
+      router.refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " o";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " Ko";
+    return (bytes / (1024 * 1024)).toFixed(1) + " Mo";
+  };
+
+  const DOC_TYPE_LABELS: Record<string, string> = {
+    ID_CARD: "Pièce d'identité",
+    DIPLOMA: "Diplôme",
+    TRANSCRIPT: "Relevé de notes",
+    PHOTO: "Photo",
+    ENROLLMENT_FORM: "Formulaire",
+    RECEIPT: "Reçu",
+    CERTIFICATE: "Certificat",
+    OTHER: "Autre",
+  };
+
+  const DOC_TYPE_COLORS: Record<string, string> = {
+    ID_CARD: "bg-blue-100 text-blue-700",
+    DIPLOMA: "bg-emerald-100 text-emerald-700",
+    TRANSCRIPT: "bg-violet-100 text-violet-700",
+    PHOTO: "bg-amber-100 text-amber-700",
+    ENROLLMENT_FORM: "bg-indigo-100 text-indigo-700",
+    RECEIPT: "bg-orange-100 text-orange-700",
+    CERTIFICATE: "bg-teal-100 text-teal-700",
+    OTHER: "bg-gray-100 text-gray-600",
+  };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-      {documents.map((doc: any) => (
-        <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
-          <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
-            <FileText size={16} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
-            <p className="text-xs text-gray-400">{new Date(doc.createdAt).toLocaleDateString("fr-FR")}</p>
-          </div>
+    <div className="space-y-4">
+      {/* Upload bar */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-3">
+          <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input text-xs py-1.5 w-44" disabled={uploading}>
+            {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <label className={cn(
+            "btn-primary py-1.5 px-3 text-xs cursor-pointer flex-1 justify-center",
+            uploading && "opacity-50 cursor-not-allowed"
+          )}>
+            {uploading ? (
+              <><Loader2 size={13} className="animate-spin" /> Upload en cours...</>
+            ) : (
+              <><Plus size={13} /> Ajouter un document</>
+            )}
+            <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
+          </label>
         </div>
-      ))}
+        <p className="text-[10px] text-gray-400 mt-2">Formats acceptés : tous • Taille max : 25 MB par fichier</p>
+      </div>
+
+      {/* Documents list */}
+      {documents.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
+          <FileText size={36} className="text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Aucun document</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          {documents.map((doc: any) => (
+            <div key={doc.id} className="flex items-center gap-3 px-4 py-3 group hover:bg-gray-50/50">
+              <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                <FileText size={18} />
+              </div>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleView(doc.id)}>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", DOC_TYPE_COLORS[doc.type] || "bg-gray-100 text-gray-600")}>
+                    {DOC_TYPE_LABELS[doc.type] || doc.type}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  {doc.size ? formatSize(doc.size) : ""}{doc.size ? " • " : ""}
+                  {new Date(doc.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              </div>
+              <button
+                onClick={() => handleView(doc.id)}
+                className="p-2 rounded-lg hover:bg-brand-50 text-gray-400 hover:text-brand-600"
+                title="Voir/Télécharger"
+              >
+                <ExternalLink size={14} />
+              </button>
+              <button
+                onClick={() => handleDelete(doc.id)}
+                className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                title="Supprimer"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
