@@ -10,7 +10,8 @@ export async function sendEmailToLead(
   leadId: string,
   subject: string,
   body: string,
-  attachments?: { path: string; filename: string; contentType?: string; size?: number }[]
+  attachments?: { path: string; filename: string; contentType?: string; size?: number }[],
+  isHtml?: boolean
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -32,6 +33,7 @@ export async function sendEmailToLead(
     organizationId: session.user.organizationId,
     sentById: session.user.id,
     attachments,
+    isHtml,
   });
 
   revalidatePath("/pipeline");
@@ -44,7 +46,8 @@ export async function sendEmailToLead(
 export async function sendBulkEmailToLeads(
   leadIds: string[],
   subject: string,
-  body: string
+  body: string,
+  isHtml?: boolean
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -68,6 +71,7 @@ export async function sendBulkEmailToLeads(
     body,
     organizationId: session.user.organizationId,
     sentById: session.user.id,
+    isHtml,
   });
 
   revalidatePath("/pipeline");

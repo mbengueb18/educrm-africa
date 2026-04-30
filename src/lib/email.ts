@@ -19,6 +19,7 @@ interface SendEmailParams {
   sentById?: string;
   replyTo?: string;
   attachments?: AttachmentInput[];
+  isHtml?: boolean;
 }
 
 interface EmailResult {
@@ -117,12 +118,15 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       }
     }
 
+    const finalHtml = params.isHtml ? body : formatEmailHtml(body, subject, senderName);
+    const finalText = params.isHtml ? stripHtmlForText(body) : body;
+
     const { data, error } = await resend.emails.send({
       from: senderName + " <" + senderEmail + ">",
       to: [to],
       subject,
-      html: formatEmailHtml(body, subject, senderName),
-      text: body,
+      html: finalHtml,
+      text: finalText,
       replyTo: finalReplyTo,
       attachments: resendAttachments,
       tags: [
@@ -213,8 +217,9 @@ export async function sendBulkEmail(params: {
   body: string;
   organizationId: string;
   sentById: string;
+  isHtml?: boolean;
 }): Promise<{ sent: number; failed: number; errors: string[] }> {
-  const { leads, subject, body, organizationId, sentById } = params;
+  const { leads, subject, body, organizationId, sentById, isHtml } = params;
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
@@ -231,6 +236,7 @@ export async function sendBulkEmail(params: {
       leadId: lead.id,
       organizationId,
       sentById,
+      isHtml,
     });
 
     if (result.success) {
@@ -274,4 +280,17 @@ function formatEmailHtml(body: string, subject: string, senderName: string): str
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
     '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via TalibCRM</p>" +
     "</div></div></body></html>";
+}
+
+function stripHtmlForText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n\s*\n/g, "\n\n")
+    .trim();
 }

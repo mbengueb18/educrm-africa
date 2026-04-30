@@ -1,16 +1,27 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { sendEmailToLead } from "@/app/(dashboard)/inbox/actions";
+import { useState, useTransition, useEffect } from "react";
+import { sendEmailToLead, getEmailTemplates } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
-import { Send, Loader2, X, ChevronDown, Paperclip, FileText } from "lucide-react";
+import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
 
 interface UploadedAttachment {
   path: string;
   filename: string;
   size: number;
   contentType?: string;
+}
+
+interface SavedTemplate {
+  id: string;
+  name: string;
+  subject: string | null;
+  body: string;
+  blocks: EmailBlock[] | null;
+  brandColor: string | null;
+  category: string;
 }
 
 interface ComposeEmailProps {
@@ -47,12 +58,24 @@ const QUICK_TEMPLATES = [
 ];
 
 export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSent, onClose, compact = false }: ComposeEmailProps) {
+  const [mode, setMode] = useState<"text" | "visual">("text");
   const [subject, setSubject] = useState(initialSubject || "");
   const [body, setBody] = useState("");
+  const [blocks, setBlocks] = useState<EmailBlock[]>([]);
+  const [html, setHtml] = useState("");
+  const [brandColor, setBrandColor] = useState("#1B4F72");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
   const [isPending, startTransition] = useTransition();
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+
+  // Load saved templates on mount
+  useEffect(function() {
+    getEmailTemplates().then(function(templates) {
+      setSavedTemplates(templates as any);
+    }).catch(function() {});
+  }, []);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -69,11 +92,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
         formData.append("file", file);
         formData.append("leadId", leadId);
 
-        const response = await fetch("/api/attachments/upload", {
-          method: "POST",
-          body: formData,
-        });
-
+        const response = await fetch("/api/attachments/upload", { method: "POST", body: formData });
         const data = await response.json();
         if (response.ok) {
           setAttachments(function(prev) {
@@ -93,7 +112,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
       toast.error(e.message || "Erreur upload");
     }
     setUploading(false);
-    event.target.value = ""; // reset input
+    event.target.value = "";
   };
 
   const removeAttachment = (path: string) => {
@@ -114,29 +133,56 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
     );
   }
 
-  const applyTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
+  const applyQuickTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
     var firstName = leadName.split(" ")[0] || "";
     setSubject(template.subject);
     setBody(template.body.replace(/\{\{prenom\}\}/gi, firstName));
+    setShowTemplates(false);
+    setMode("text");
+  };
+
+  const applySavedTemplate = (template: SavedTemplate) => {
+    setSubject(template.subject || "");
+    if (template.blocks && template.blocks.length > 0) {
+      setBlocks(template.blocks);
+      setHtml(template.body);
+      setBrandColor(template.brandColor || "#1B4F72");
+      setMode("visual");
+    } else {
+      setBody(template.body);
+      setMode("text");
+    }
     setShowTemplates(false);
   };
 
   const handleSend = () => {
     if (!subject.trim()) { toast.error("L'objet est requis"); return; }
-    if (!body.trim()) { toast.error("Le message est requis"); return; }
+
+    const finalBody = mode === "visual" ? html : body;
+    const isHtml = mode === "visual";
+
+    if (!finalBody.trim()) { toast.error("Le message est requis"); return; }
 
     startTransition(async () => {
       try {
-        var result = await sendEmailToLead(leadId, subject, body, attachments.length > 0 ? attachments.map(function(a) {
-          return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
-        }) : undefined);
+        var result = await sendEmailToLead(
+          leadId,
+          subject,
+          finalBody,
+          attachments.length > 0 ? attachments.map(function(a) {
+            return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
+          }) : undefined,
+          isHtml
+        );
         if (result.success) {
           toast.success(result.demoMode
-            ? "Email enregistre (mode demo — configurez BREVO_API_KEY pour envoyer)"
+            ? "Email enregistre (mode demo — configurez RESEND_API_KEY pour envoyer)"
             : "Email envoye a " + leadEmail
           );
           setSubject("");
           setBody("");
+          setBlocks([]);
+          setHtml("");
           setAttachments([]);
           onSent?.();
         } else {
@@ -157,29 +203,71 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
         <span className="text-gray-400">&lt;{leadEmail}&gt;</span>
       </div>
 
-      {/* Templates dropdown */}
-      <div className="relative">
-        <button
-          onClick={() => setShowTemplates(!showTemplates)}
-          className="btn-secondary py-1.5 text-xs w-full justify-between"
-        >
-          <span>Modeles rapides</span>
-          <ChevronDown size={14} className={cn("transition-transform", showTemplates && "rotate-180")} />
-        </button>
-        {showTemplates && (
-          <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg py-1 animate-scale-in">
-            {QUICK_TEMPLATES.map((t) => (
-              <button
-                key={t.name}
-                onClick={() => applyTemplate(t)}
-                className="w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors"
-              >
-                <p className="text-sm font-medium text-gray-900">{t.name}</p>
-                <p className="text-xs text-gray-500 truncate">{t.subject}</p>
-              </button>
-            ))}
-          </div>
-        )}
+      {/* Mode toggle + Templates */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+          <button
+            onClick={function() { setMode("text"); }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors",
+              mode === "text" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+            )}
+          >
+            <Type size={12} /> Texte simple
+          </button>
+          <button
+            onClick={function() { setMode("visual"); }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors",
+              mode === "visual" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+            )}
+          >
+            <Layers size={12} /> Visuel
+          </button>
+        </div>
+
+        <div className="relative flex-1">
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="btn-secondary py-1.5 text-xs w-full justify-between"
+          >
+            <span className="flex items-center gap-1.5"><Sparkles size={12} /> Modèles</span>
+            <ChevronDown size={14} className={cn("transition-transform", showTemplates && "rotate-180")} />
+          </button>
+          {showTemplates && (
+            <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg py-1 animate-scale-in max-h-80 overflow-y-auto">
+              {savedTemplates.length > 0 && (
+                <>
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50">Mes templates</div>
+                  {savedTemplates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => applySavedTemplate(t)}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    >
+                      {t.blocks && t.blocks.length > 0 && <Layers size={12} className="text-violet-500 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{t.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{t.subject}</p>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+              <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50">Modèles rapides</div>
+              {QUICK_TEMPLATES.map((t) => (
+                <button
+                  key={t.name}
+                  onClick={() => applyQuickTemplate(t)}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors"
+                >
+                  <p className="text-sm font-medium text-gray-900">{t.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{t.subject}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Subject */}
@@ -190,28 +278,42 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
         className="input text-sm"
       />
 
-      {/* Body */}
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder="Redigez votre message..."
-        className="input text-sm min-h-[150px] resize-y"
-        rows={compact ? 5 : 8}
-      />
+      {/* Body — Text mode */}
+      {mode === "text" && (
+        <>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Redigez votre message..."
+            className="input text-sm min-h-[150px] resize-y"
+            rows={compact ? 5 : 8}
+          />
 
-      {/* Variables hint */}
-      <div className="flex flex-wrap gap-1.5">
-        <span className="text-[10px] text-gray-400">Variables :</span>
-        {["{{prenom}}", "{{nom}}", "{{email}}"].map((v) => (
-          <button
-            key={v}
-            onClick={() => setBody(body + " " + v)}
-            className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100 transition-colors"
-          >
-            {v}
-          </button>
-        ))}
-      </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] text-gray-400">Variables :</span>
+            {["{{prenom}}", "{{nom}}", "{{email}}"].map((v) => (
+              <button
+                key={v}
+                onClick={() => setBody(body + " " + v)}
+                className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100 transition-colors"
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Body — Visual mode */}
+      {mode === "visual" && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <EmailEditor
+            initialBlocks={blocks.length > 0 ? blocks : undefined}
+            brandColor={brandColor}
+            onChange={(newBlocks, newHtml) => { setBlocks(newBlocks); setHtml(newHtml); }}
+          />
+        </div>
+      )}
 
       {/* Attachments list */}
       {attachments.length > 0 && (
@@ -251,18 +353,12 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             ) : (
               <><Paperclip size={13} /> Joindre</>
             )}
-            <input
-              type="file"
-              multiple
-              onChange={handleFileUpload}
-              disabled={uploading || isPending}
-              className="hidden"
-            />
+            <input type="file" multiple onChange={handleFileUpload} disabled={uploading || isPending} className="hidden" />
           </label>
         </div>
         <button
           onClick={handleSend}
-          disabled={isPending || uploading || !subject.trim() || !body.trim()}
+          disabled={isPending || uploading || !subject.trim() || (mode === "text" ? !body.trim() : !html.trim())}
           className="btn-primary py-1.5 text-xs"
         >
           {isPending ? (

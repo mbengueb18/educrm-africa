@@ -1,15 +1,26 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { sendBulkEmailToLeads } from "@/app/(dashboard)/inbox/actions";
+import { useState, useTransition, useEffect } from "react";
+import { sendBulkEmailToLeads, getEmailTemplates } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
-import { X, Send, Loader2, Users, ChevronDown, AlertTriangle } from "lucide-react";
+import { X, Send, Loader2, Users, ChevronDown, AlertTriangle, Type, Layers, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmailEditor, type EmailBlock } from "@/components/messaging/email-editor";
 
 interface BulkEmailModalProps {
   open: boolean;
   onClose: () => void;
   selectedLeads: { id: string; firstName: string; lastName: string; email: string | null }[];
+}
+
+interface SavedTemplate {
+  id: string;
+  name: string;
+  subject: string | null;
+  body: string;
+  blocks: EmailBlock[] | null;
+  brandColor: string | null;
+  category: string;
 }
 
 const BULK_TEMPLATES = [
@@ -28,34 +39,61 @@ const BULK_TEMPLATES = [
     subject: "Invitation — Journee portes ouvertes ISM Dakar",
     body: "Bonjour {{prenom}},\n\nNous avons le plaisir de vous inviter a notre prochaine journee portes ouvertes :\n\n[DATE] - [HEURE]\nCampus Dakar — Plateau\n12 Rue Felix Faure\n\nAu programme :\n- Presentation des filières\n- Rencontre avec les enseignants\n- Temoignages d'anciens étudiants\n- Visite du campus\n\nL'entree est libre. Venez nombreux !\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
   },
-  {
-    name: "Rappel dossier",
-    subject: "Rappel — Completez votre dossier de candidature",
-    body: "Bonjour {{prenom}},\n\nNous avons remarque que votre dossier de candidature n'est pas encore complet. Pour que nous puissions traiter votre demande, merci de nous transmettre les pieces manquantes.\n\nVous pouvez les envoyer par email ou les deposer directement a l'accueil du campus.\n\nSi vous avez des questions, n'hesitez pas a nous contacter.\n\nCordialement,\nL'equipe d'admission\nISM Dakar",
-  },
 ];
 
 export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalProps) {
+  const [mode, setMode] = useState<"text" | "visual">("text");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [blocks, setBlocks] = useState<EmailBlock[]>([]);
+  const [html, setHtml] = useState("");
+  const [brandColor, setBrandColor] = useState("#1B4F72");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<{ sent: number; failed: number; errors: string[] } | null>(null);
+
+  useEffect(function() {
+    if (open) {
+      getEmailTemplates().then(function(templates) {
+        setSavedTemplates(templates as any);
+      }).catch(function() {});
+    }
+  }, [open]);
 
   if (!open) return null;
 
   const leadsWithEmail = selectedLeads.filter((l) => l.email);
   const leadsWithoutEmail = selectedLeads.filter((l) => !l.email);
 
-  const applyTemplate = (template: typeof BULK_TEMPLATES[0]) => {
+  const applyQuickTemplate = (template: typeof BULK_TEMPLATES[0]) => {
     setSubject(template.subject);
     setBody(template.body);
+    setShowTemplates(false);
+    setMode("text");
+  };
+
+  const applySavedTemplate = (template: SavedTemplate) => {
+    setSubject(template.subject || "");
+    if (template.blocks && template.blocks.length > 0) {
+      setBlocks(template.blocks);
+      setHtml(template.body);
+      setBrandColor(template.brandColor || "#1B4F72");
+      setMode("visual");
+    } else {
+      setBody(template.body);
+      setMode("text");
+    }
     setShowTemplates(false);
   };
 
   const handleSend = () => {
     if (!subject.trim()) { toast.error("L'objet est requis"); return; }
-    if (!body.trim()) { toast.error("Le message est requis"); return; }
+
+    const finalBody = mode === "visual" ? html : body;
+    const isHtml = mode === "visual";
+
+    if (!finalBody.trim()) { toast.error("Le message est requis"); return; }
     if (leadsWithEmail.length === 0) { toast.error("Aucun lead avec email"); return; }
 
     startTransition(async () => {
@@ -63,7 +101,8 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
         var res = await sendBulkEmailToLeads(
           leadsWithEmail.map((l) => l.id),
           subject,
-          body
+          finalBody,
+          isHtml
         );
         setResult(res);
         if (res.sent > 0) {
@@ -81,15 +120,18 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
   const handleClose = () => {
     setSubject("");
     setBody("");
+    setBlocks([]);
+    setHtml("");
+    setMode("text");
     setResult(null);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh]">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={handleClose} />
 
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl animate-scale-in mx-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl animate-scale-in mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
@@ -160,38 +202,79 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
                     <AlertTriangle size={14} className="text-amber-500 shrink-0" />
                     <p className="text-xs text-amber-700">
-                      {leadsWithoutEmail.length} lead{leadsWithoutEmail.length > 1 ? "s" : ""} sans email exclu{leadsWithoutEmail.length > 1 ? "s" : ""} :
-                      {" "}{leadsWithoutEmail.map(function(l) { return l.firstName + " " + l.lastName; }).join(", ")}
+                      {leadsWithoutEmail.length} lead{leadsWithoutEmail.length > 1 ? "s" : ""} sans email exclu{leadsWithoutEmail.length > 1 ? "s" : ""}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Templates */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowTemplates(!showTemplates)}
-                  className="btn-secondary py-2 text-xs w-full justify-between"
-                >
-                  <span>Modeles d'email</span>
-                  <ChevronDown size={14} className={cn("transition-transform", showTemplates && "rotate-180")} />
-                </button>
-                {showTemplates && (
-                  <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg py-1 animate-scale-in">
-                    {BULK_TEMPLATES.map(function(t) {
-                      return (
-                        <button
-                          key={t.name}
-                          onClick={() => applyTemplate(t)}
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
-                        >
-                          <p className="text-sm font-medium text-gray-900">{t.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{t.subject}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              {/* Mode toggle + Templates */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                  <button
+                    onClick={function() { setMode("text"); }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                      mode === "text" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                    )}
+                  >
+                    <Type size={12} /> Texte
+                  </button>
+                  <button
+                    onClick={function() { setMode("visual"); }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                      mode === "visual" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                    )}
+                  >
+                    <Layers size={12} /> Visuel
+                  </button>
+                </div>
+
+                <div className="relative flex-1">
+                  <button
+                    onClick={() => setShowTemplates(!showTemplates)}
+                    className="btn-secondary py-2 text-xs w-full justify-between"
+                  >
+                    <span className="flex items-center gap-1.5"><Sparkles size={12} /> Modèles</span>
+                    <ChevronDown size={14} className={cn("transition-transform", showTemplates && "rotate-180")} />
+                  </button>
+                  {showTemplates && (
+                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white rounded-lg border border-gray-200 shadow-lg py-1 animate-scale-in max-h-80 overflow-y-auto">
+                      {savedTemplates.length > 0 && (
+                        <>
+                          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50">Mes templates</div>
+                          {savedTemplates.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => applySavedTemplate(t)}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                            >
+                              {t.blocks && t.blocks.length > 0 && <Layers size={12} className="text-violet-500 shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{t.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{t.subject}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50">Modèles rapides</div>
+                      {BULK_TEMPLATES.map(function(t) {
+                        return (
+                          <button
+                            key={t.name}
+                            onClick={() => applyQuickTemplate(t)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-900">{t.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{t.subject}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Subject */}
@@ -206,38 +289,48 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
               </div>
 
               {/* Body */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  placeholder="Redigez votre message... Utilisez {{prenom}} et {{nom}} pour personnaliser."
-                  className="input min-h-[200px] resize-y"
-                  rows={10}
-                />
-              </div>
+              {mode === "text" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="Redigez votre message... Utilisez {{prenom}} et {{nom}} pour personnaliser."
+                    className="input min-h-[200px] resize-y"
+                    rows={10}
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[10px] text-gray-400">Variables :</span>
+                    {["{{prenom}}", "{{nom}}", "{{email}}"].map(function(v) {
+                      return (
+                        <button
+                          key={v}
+                          onClick={() => setBody(body + " " + v)}
+                          className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100 transition-colors"
+                        >
+                          {v}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-              {/* Variables */}
-              <div className="flex flex-wrap gap-1.5">
-                <span className="text-[10px] text-gray-400">Variables personnalisees :</span>
-                {["{{prenom}}", "{{nom}}", "{{email}}"].map(function(v) {
-                  return (
-                    <button
-                      key={v}
-                      onClick={() => setBody(body + " " + v)}
-                      className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100 transition-colors"
-                    >
-                      {v}
-                    </button>
-                  );
-                })}
-              </div>
+              {mode === "visual" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Message visuel</label>
+                  <EmailEditor
+                    initialBlocks={blocks.length > 0 ? blocks : undefined}
+                    brandColor={brandColor}
+                    onChange={(newBlocks, newHtml) => { setBlocks(newBlocks); setHtml(newHtml); }}
+                  />
+                </div>
+              )}
 
               {/* Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                 <p className="text-xs text-blue-700">
-                  Chaque email sera personnalise avec le prenom et nom du destinataire.
-                  Les emails sont envoyes un par un via Brevo pour garantir la delivrabilite.
+                  Chaque email sera personnalise avec les variables {"{{prenom}}"}, {"{{nom}}"}, {"{{email}}"} du destinataire.
                 </p>
               </div>
             </div>
@@ -251,7 +344,7 @@ export function BulkEmailModal({ open, onClose, selectedLeads }: BulkEmailModalP
                 <button onClick={handleClose} className="btn-secondary" disabled={isPending}>Annuler</button>
                 <button
                   onClick={handleSend}
-                  disabled={isPending || !subject.trim() || !body.trim() || leadsWithEmail.length === 0}
+                  disabled={isPending || !subject.trim() || (mode === "text" ? !body.trim() : !html.trim()) || leadsWithEmail.length === 0}
                   className="btn-primary"
                 >
                   {isPending ? (
