@@ -80,7 +80,7 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
           <Phone size={13} /> Appeler
         </a>
         {lead.whatsapp && (
-          
+          <a
             href={"https://wa.me/" + lead.whatsapp.replace(/\D/g, "")}
             target="_blank"
             rel="noopener noreferrer"
