@@ -50,6 +50,7 @@ import {
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { ConvertLeadModal } from "@/components/pipeline/convert-lead-modal";
+import Link from "next/link";
 
 type LeadDetail = Awaited<ReturnType<typeof getLeadDetail>>;
 
@@ -225,6 +226,19 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                       <ListTodo size={13} /> Tâche
                     </button>
                   </div>
+
+                  {/* Vertical divider */}
+                  <div className="w-px h-5 bg-gray-200" />
+
+                  {/* Full page */}
+                  <Link
+                    href={"/leads/" + lead.id}
+                    onClick={onClose}
+                    className="btn-secondary py-1.5 px-3 text-xs text-brand-600 border-brand-200 hover:bg-brand-50"
+                    title="Ouvrir la fiche complète"
+                  >
+                    <ExternalLink size={13} /> Fiche complète
+                  </Link>
 
                   {/* Vertical divider */}
                   <div className="w-px h-5 bg-gray-200" />
