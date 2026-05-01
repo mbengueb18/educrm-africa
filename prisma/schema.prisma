@@ -44,6 +44,8 @@ model Organization {
   appointments     Appointment[]
   portalTokens LeadPortalToken[]
   sequenceExecutions SequenceExecution[]
+  workflows           Workflow[]
+  workflowExecutions  WorkflowExecution[]
   sequenceConfig     OrganizationSequenceConfig?
   chatbotConfig ChatbotConfig?
 
@@ -1067,4 +1069,57 @@ model OrganizationSequenceConfig {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("organization_sequence_configs")
+}
+
+model Workflow {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  enabled        Boolean  @default(false)
+  
+  // Trigger config
+  triggerType    String   // LEAD_CREATED, STAGE_CHANGED, NO_RESPONSE_DAYS, EMAIL_OPENED, etc.
+  triggerConfig  Json     @default("{}")
+  
+  // Steps as a JSON graph (nodes + edges)
+  // Format: { nodes: [{id, type, data, position}], edges: [{id, source, target, sourceHandle?}] }
+  graph          Json     @default("{\"nodes\":[],\"edges\":[]}")
+  
+  organizationId String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  executions   WorkflowExecution[]
+
+  @@index([organizationId])
+  @@index([enabled])
+  @@map("workflows")
+}
+
+model WorkflowExecution {
+  id          String   @id @default(cuid())
+  workflowId  String
+  leadId      String?
+  status      String   @default("RUNNING") // RUNNING, COMPLETED, FAILED, WAITING
+  currentNode String?  // ID du noeud en cours d'exécution
+  context     Json     @default("{}")    // Variables disponibles dans le workflow
+  waitUntil   DateTime?                   // Pour les noeuds "Attendre X temps"
+  completedAt DateTime?
+  errorMessage String?
+  
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workflow     Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([leadId])
+  @@index([status])
+  @@index([waitUntil])
+  @@index([organizationId])
+  @@map("workflow_executions")
 }
