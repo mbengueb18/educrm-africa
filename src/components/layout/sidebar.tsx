@@ -18,6 +18,7 @@ import {
   ListTodo,
   Phone,
   CalendarDays,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import type { Permission } from "@/lib/permissions";
@@ -84,6 +85,12 @@ const navItems = [
     href: "/payments",
     icon: CreditCard,
     permission: "payments:view" as Permission,
+  },
+  {
+    label: "Workflows",
+    href: "/workflows",
+    icon: Zap,
+    permission: "campaigns:view" as Permission,
   },
   {
     label: "Reporting",

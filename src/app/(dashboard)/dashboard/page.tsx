@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
   BarChart3, Repeat, Users, GraduationCap, CreditCard,
-  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight,
+  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight, Zap
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -81,6 +81,7 @@ export default async function DashboardPage() {
     { title: "Campagnes", description: "Lancer une campagne", icon: Megaphone, href: "/campaigns", color: "text-rose-600" },
     { title: "Étudiants", description: "Liste des inscrits", icon: GraduationCap, href: "/students", color: "text-teal-600" },
     { title: "Paiements", description: "Suivi financier", icon: CreditCard, href: "/payments", color: "text-orange-600" },
+    { title: "Workflows", description: "Automatisations", icon: Zap, href: "/workflows", color: "text-violet-600" },
   ];
 
   return (

@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizontal, Database, Repeat, Mail  } from "lucide-react";
+import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizontal, Database, Repeat, Mail, Zap  } from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
 
@@ -12,6 +12,7 @@ const settingsMenu = [
   { label: "Propriétés", description: "Vue d'ensemble de tous les champs collectés", icon: Database, href: "/settings/properties" },
   { label: "Intégrations", description: "Tracking, API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
   { label: "Templates email", description: "Créez vos modèles d'emails réutilisables", icon: Mail, href: "/settings/email-templates" },
+  { label: "Workflows", description: "Automatisez vos actions commerciales", icon: Zap, href: "/workflows" },
   { label: "Relances automatiques", description: "Séquences J1/J3/J7 multi-canal pour les leads silencieux", icon: Repeat, href: "/settings/sequences" },
   { label: "Notifications", description: "Alertes, rappels, préférences", icon: Bell, href: "/settings/notifications" },
   { label: "Apparence", description: "Thème, langue, personnalisation", icon: Palette, href: "/settings/appearance" },

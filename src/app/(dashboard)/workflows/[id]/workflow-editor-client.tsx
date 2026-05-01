@@ -414,7 +414,7 @@ export function WorkflowEditorClient({ workflow, stages, templates }: WorkflowEd
           <TriggerSettingsPanel
             triggerType={triggerType}
             triggerConfig={triggerConfig}
-            onChange={(type, config) => { setTriggerType(type); setTriggerConfig(config); }}
+            onChange={(type: string, config: any) => { setTriggerType(type); setTriggerConfig(config); }}
             onClose={() => setShowSettings(false)}
           />
         )}
