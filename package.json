@@ -19,6 +19,7 @@
     "@hello-pangea/dnd": "^17.0.0",
     "@prisma/client": "^6.0.0",
     "@supabase/supabase-js": "^2.100.0",
+    "@xyflow/react": "^12.10.2",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
