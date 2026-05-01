@@ -414,6 +414,7 @@ export function WorkflowEditorClient({ workflow, stages, templates }: WorkflowEd
           <TriggerSettingsPanel
             triggerType={triggerType}
             triggerConfig={triggerConfig}
+            stages={stages}
             onChange={(type: string, config: any) => { setTriggerType(type); setTriggerConfig(config); }}
             onClose={() => setShowSettings(false)}
           />
@@ -686,7 +687,7 @@ function WaitConfig({ data, onUpdate }: any) {
 }
 
 // ─── Trigger settings panel ───
-function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose }: any) {
+function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages }: any) {
   return (
     <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto shrink-0">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -736,6 +737,21 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose }:
               onChange={(e) => onChange(triggerType, { ...triggerConfig, days: parseInt(e.target.value) || 7 })}
               className="input text-xs py-1.5"
             />
+          </div>
+        )}
+
+        {triggerType === "STAGE_CHANGED" && (
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Étape cible</label>
+            <select
+              value={triggerConfig.stageId || ""}
+              onChange={(e) => onChange(triggerType, { ...triggerConfig, stageId: e.target.value || undefined })}
+              className="input text-xs py-1.5"
+            >
+              <option value="">Toute étape</option>
+              {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">Le workflow se déclenchera quand un lead passe à cette étape</p>
           </div>
         )}
       </div>

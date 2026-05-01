@@ -97,6 +97,46 @@ export async function moveLeadToStage(leadId: string, stageId: string) {
     },
   });
 
+  // ─── Trigger workflows on stage change ───
+  try {
+    const matchingWorkflows = await prisma.workflow.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        enabled: true,
+        triggerType: "STAGE_CHANGED",
+      },
+    });
+
+    for (const wf of matchingWorkflows) {
+      const config = (wf.triggerConfig as any) || {};
+      // Match if no specific stage configured, OR if matches target stage
+      if (config.stageId && config.stageId !== stageId) continue;
+
+      // Avoid duplicate execution for same lead/workflow currently active
+      const existing = await prisma.workflowExecution.findFirst({
+        where: { workflowId: wf.id, leadId, status: { in: ["RUNNING", "WAITING"] } },
+      });
+      if (existing) continue;
+
+      const graph = wf.graph as any;
+      const startNode = graph.nodes?.find((n: any) => n.type === "trigger");
+
+      await prisma.workflowExecution.create({
+        data: {
+          workflowId: wf.id,
+          leadId,
+          status: "RUNNING",
+          currentNode: startNode?.id || null,
+          context: { trigger: "STAGE_CHANGED", newStageId: stageId },
+          organizationId: session.user.organizationId,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[Workflow trigger STAGE_CHANGED]", err);
+    // Don't fail the stage change if workflow trigger fails
+  }
+
   revalidatePath("/pipeline");
   return lead;
 }

@@ -240,6 +240,9 @@ async function executeAction(node: any, exec: any) {
     if (!lead.email) return;
     const subject = replaceVars(node.data?.subject || "", lead);
     const body = replaceVars(node.data?.body || "", lead);
+    // Auto-detect HTML: if body starts with HTML tag, mark as HTML
+    const trimmed = body.trim();
+    const isHtml = trimmed.startsWith("<") && (trimmed.includes("<html") || trimmed.includes("<!DOCTYPE") || trimmed.includes("<div") || trimmed.includes("<table") || trimmed.includes("<body"));
     await sendEmail({
       to: lead.email,
       toName: lead.firstName + " " + lead.lastName,
@@ -247,6 +250,7 @@ async function executeAction(node: any, exec: any) {
       body,
       leadId: lead.id,
       organizationId: lead.organizationId,
+      isHtml,
     });
   } else if (action === "CREATE_TASK") {
     await prisma.task.create({
