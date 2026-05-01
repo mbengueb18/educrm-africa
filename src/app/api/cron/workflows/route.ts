@@ -94,18 +94,8 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
   let leads: any[] = [];
 
   if (triggerType === "LEAD_CREATED") {
-    // Recent leads (last 24h) without active execution for this workflow
+    // Recent leads (last 24h) — duplicates filtered out below
     const since = new Date(Date.now() - 86400000);
-    leads = await prisma.lead.findMany({
-      where: {
-        organizationId: wf.organizationId,
-        createdAt: { gte: since },
-        ...(config.source ? { source: config.source as any } : {}),
-        executions: { none: { workflowId: wf.id } } as any,
-      },
-      take: 50,
-    }).catch(() => []);
-    // Note: "executions" relation doesn't exist on Lead. We need a different approach.
     leads = await prisma.lead.findMany({
       where: {
         organizationId: wf.organizationId,
