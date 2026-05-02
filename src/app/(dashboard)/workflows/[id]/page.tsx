@@ -37,7 +37,7 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
     }),
     prisma.messageTemplate.findMany({
       where: { organizationId: session.user.organizationId, channel: "EMAIL" },
-      select: { id: true, name: true, subject: true, body: true },
+      select: { id: true, name: true, subject: true, body: true, blocks: true, brandColor: true },
     }),
   ]);
 

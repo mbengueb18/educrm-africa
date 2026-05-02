@@ -240,9 +240,12 @@ async function executeAction(node: any, exec: any) {
     if (!lead.email) return;
     const subject = replaceVars(node.data?.subject || "", lead);
     const body = replaceVars(node.data?.body || "", lead);
-    // Auto-detect HTML: if body starts with HTML tag, mark as HTML
-    const trimmed = body.trim();
-    const isHtml = trimmed.startsWith("<") && (trimmed.includes("<html") || trimmed.includes("<!DOCTYPE") || trimmed.includes("<div") || trimmed.includes("<table") || trimmed.includes("<body"));
+    // Use isHtml flag from node config (set by editor) or auto-detect
+    let isHtml = node.data?.isHtml === true;
+    if (!isHtml) {
+      const trimmed = body.trim();
+      isHtml = trimmed.startsWith("<") && (trimmed.includes("<html") || trimmed.includes("<!DOCTYPE") || trimmed.includes("<div") || trimmed.includes("<table") || trimmed.includes("<body"));
+    }
     await sendEmail({
       to: lead.email,
       toName: lead.firstName + " " + lead.lastName,

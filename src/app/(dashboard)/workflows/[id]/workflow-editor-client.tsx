@@ -22,9 +22,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { ArrowLeft, Save, Play, Plus, Zap, GitBranch, Mail, Phone, ListTodo, Tag, Clock, StopCircle, X, Settings2, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Play, Plus, Zap, GitBranch, Mail, Phone, ListTodo, Tag, Clock, StopCircle, X, Check, Settings2, Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { updateWorkflow, toggleWorkflow } from "../actions";
+import { EmailEditor } from "@/components/messaging/email-editor";
 
 // ─── Custom node components ───
 function TriggerNode({ data, selected }: any) {
@@ -502,26 +503,48 @@ function NodeConfigPanel({ node, stages, templates, onUpdate, onDelete, onClose 
 
 // ─── Action configs ───
 function SendEmailConfig({ data, templates, onUpdate }: any) {
+  const [showEditor, setShowEditor] = useState(false);
+  const selectedTemplate = templates.find((t: any) => t.id === data.templateId);
+  const hasVisualBlocks = data.blocks && data.blocks.length > 0;
+
   return (
     <>
       <div>
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Template (optionnel)</label>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Template</label>
         <select
           value={data.templateId || ""}
           onChange={(e) => {
             const template = templates.find((t: any) => t.id === e.target.value);
-            onUpdate({
-              templateId: e.target.value || null,
-              subject: template?.subject || data.subject || "",
-              body: template?.body || data.body || "",
-            });
+            if (template) {
+              onUpdate({
+                templateId: template.id,
+                subject: template.subject || "",
+                body: template.body || "",
+                blocks: template.blocks || null,
+                brandColor: template.brandColor || "#1B4F72",
+                isHtml: !!(template.blocks && template.blocks.length > 0),
+              });
+            } else {
+              onUpdate({
+                templateId: null,
+                subject: data.subject || "",
+                body: data.body || "",
+                blocks: null,
+                isHtml: false,
+              });
+            }
           }}
           className="input text-xs py-1.5"
         >
-          <option value="">— Personnalisé —</option>
-          {templates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          <option value="">— Personnalisé (texte) —</option>
+          {templates.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.name} {t.blocks && t.blocks.length > 0 ? "(visuel)" : ""}
+            </option>
+          ))}
         </select>
       </div>
+
       <div>
         <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Objet</label>
         <input
@@ -531,18 +554,119 @@ function SendEmailConfig({ data, templates, onUpdate }: any) {
           className="input text-xs py-1.5"
         />
       </div>
-      <div>
-        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Message</label>
-        <textarea
-          value={data.body || ""}
-          onChange={(e) => onUpdate({ body: e.target.value })}
-          placeholder="Bonjour {{prenom}}, ..."
-          className="input text-xs py-1.5"
-          rows={6}
+
+      {/* Visual mode preview */}
+      {hasVisualBlocks ? (
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Message (visuel)</label>
+          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Mail size={14} className="text-violet-500" />
+              <span className="text-xs text-gray-700">{data.blocks.length} bloc{data.blocks.length > 1 ? "s" : ""} visuels</span>
+            </div>
+            <button
+              onClick={() => setShowEditor(true)}
+              className="btn-secondary py-1.5 text-xs w-full"
+            >
+              <Settings2 size={12} /> Modifier dans l'éditeur visuel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Message (texte)</label>
+          <textarea
+            value={data.body || ""}
+            onChange={(e) => onUpdate({ body: e.target.value })}
+            placeholder="Bonjour {{prenom}}, ..."
+            className="input text-xs py-1.5"
+            rows={6}
+          />
+          <button
+            onClick={() => setShowEditor(true)}
+            className="btn-secondary py-1.5 text-xs w-full mt-2"
+          >
+            <Settings2 size={12} /> Passer en mode visuel
+          </button>
+        </div>
+      )}
+
+      <p className="text-[10px] text-gray-400">Variables : {"{{prenom}}"} {"{{nom}}"} {"{{email}}"}</p>
+
+      {/* Visual editor modal */}
+      {showEditor && (
+        <EmailEditorModal
+          subject={data.subject || ""}
+          blocks={data.blocks || []}
+          brandColor={data.brandColor || "#1B4F72"}
+          onSave={(newBlocks: any, newHtml: string, newColor: string) => {
+            onUpdate({
+              blocks: newBlocks,
+              body: newHtml,
+              brandColor: newColor,
+              isHtml: true,
+            });
+            setShowEditor(false);
+          }}
+          onClose={() => setShowEditor(false)}
         />
-        <p className="text-[10px] text-gray-400 mt-1">Variables : {"{{prenom}}"} {"{{nom}}"} {"{{email}}"}</p>
-      </div>
+      )}
     </>
+  );
+}
+
+// ─── Email editor modal (réutilise EmailEditor) ───
+function EmailEditorModal({ subject, blocks, brandColor, onSave, onClose }: any) {
+  const [currentBlocks, setCurrentBlocks] = useState(blocks);
+  const [currentHtml, setCurrentHtml] = useState("");
+  const [currentColor, setCurrentColor] = useState(brandColor);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Éditeur visuel</h2>
+            <p className="text-xs text-gray-500">Construisez votre email avec des blocs</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={currentColor}
+              onChange={(e) => setCurrentColor(e.target.value)}
+              className="w-9 h-9 rounded border border-gray-200 cursor-pointer"
+              title="Couleur principale"
+            />
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4 bg-gray-50">
+          <EmailEditor
+            initialBlocks={currentBlocks.length > 0 ? currentBlocks : undefined}
+            brandColor={currentColor}
+            onChange={(newBlocks: any, newHtml: string) => {
+              setCurrentBlocks(newBlocks);
+              setCurrentHtml(newHtml);
+            }}
+          />
+        </div>
+
+        <div className="px-6 py-3 border-t border-gray-200 bg-white flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary py-2 px-4 text-sm">Annuler</button>
+          <button
+            onClick={() => onSave(currentBlocks, currentHtml, currentColor)}
+            disabled={currentBlocks.length === 0}
+            className="btn-primary py-2 px-4 text-sm"
+          >
+            <Check size={14} /> Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
