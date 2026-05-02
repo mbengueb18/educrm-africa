@@ -6,6 +6,40 @@ import { blocksToHtml } from "@/lib/email-blocks";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+
+// ─── Evaluate lead against filters ───
+function evaluateFilters(lead: any, filters: any): boolean {
+  if (!filters || !filters.rules || filters.rules.length === 0) return true;
+
+  const op = filters.operator || "AND";
+  const results = filters.rules.map((rule: any) => {
+    // Nested group
+    if (rule.operator_group) {
+      return evaluateFilters(lead, { operator: rule.operator_group, rules: rule.rules || [] });
+    }
+    // Simple rule
+    return evaluateRule(lead, rule);
+  });
+
+  if (op === "AND") return results.every((r: boolean) => r);
+  return results.some((r: boolean) => r);
+}
+
+function evaluateRule(lead: any, rule: any): boolean {
+  const field = rule.field;
+  const operator = rule.operator || "equals";
+  const value = rule.value;
+  const leadValue = lead[field];
+
+  if (operator === "exists") return leadValue !== null && leadValue !== undefined && leadValue !== "";
+  if (operator === "equals") return String(leadValue || "") === String(value || "");
+  if (operator === "not_equals") return String(leadValue || "") !== String(value || "");
+  if (operator === "contains") return String(leadValue || "").toLowerCase().includes(String(value || "").toLowerCase());
+  if (operator === "greater_than") return Number(leadValue) > Number(value);
+  if (operator === "less_than") return Number(leadValue) < Number(value);
+  return false;
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (process.env.CRON_SECRET && authHeader !== "Bearer " + process.env.CRON_SECRET) {
@@ -95,7 +129,6 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
   let leads: any[] = [];
 
   if (triggerType === "LEAD_CREATED") {
-    // Recent leads (last 24h) — duplicates filtered out below
     const since = new Date(Date.now() - 86400000);
     leads = await prisma.lead.findMany({
       where: {
@@ -103,8 +136,12 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
         createdAt: { gte: since },
         ...(config.source ? { source: config.source as any } : {}),
       },
-      take: 50,
+      take: 200,
     });
+    // Apply advanced filters
+    if (config.filters) {
+      leads = leads.filter((l) => evaluateFilters(l, config.filters));
+    }
   } else if (triggerType === "NO_RESPONSE_DAYS") {
     const days = config.days || 7;
     const cutoff = new Date(Date.now() - days * 86400000);
@@ -117,6 +154,10 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
       },
       take: 50,
     });
+    // Apply advanced filters
+    if (config.filters) {
+      leads = leads.filter((l) => evaluateFilters(l, config.filters));
+    }
   } else if (triggerType === "STAGE_CHANGED") {
     // Triggered manually via activity event — skip in cron
     return 0;

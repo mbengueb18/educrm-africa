@@ -26,6 +26,7 @@ import { ArrowLeft, Save, Play, Plus, Zap, GitBranch, Mail, Phone, ListTodo, Tag
 import { cn } from "@/lib/utils";
 import { updateWorkflow, toggleWorkflow } from "../actions";
 import { EmailEditor } from "@/components/messaging/email-editor";
+import { LeadFiltersBuilder, type FilterGroup } from "./lead-filters-builder";
 
 // ─── Custom node components ───
 function TriggerNode({ data, selected }: any) {
@@ -165,9 +166,11 @@ interface WorkflowEditorClientProps {
   workflow: any;
   stages: { id: string; name: string; color: string }[];
   templates: { id: string; name: string; subject: string; body: string }[];
+  programs: { id: string; name: string }[];
+  campuses: { id: string; name: string }[];
 }
 
-export function WorkflowEditorClient({ workflow, stages, templates }: WorkflowEditorClientProps) {
+export function WorkflowEditorClient({ workflow, stages, templates, programs, campuses }: WorkflowEditorClientProps) {
   const router = useRouter();
   const initialGraph = workflow.graph || { nodes: [], edges: [] };
 
@@ -416,6 +419,8 @@ export function WorkflowEditorClient({ workflow, stages, templates }: WorkflowEd
             triggerType={triggerType}
             triggerConfig={triggerConfig}
             stages={stages}
+            programs={programs}
+            campuses={campuses}
             onChange={(type: string, config: any) => { setTriggerType(type); setTriggerConfig(config); }}
             onClose={() => setShowSettings(false)}
           />
@@ -811,9 +816,15 @@ function WaitConfig({ data, onUpdate }: any) {
 }
 
 // ─── Trigger settings panel ───
-function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages }: any) {
+function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages, programs, campuses }: any) {
+  const filters: FilterGroup = triggerConfig.filters || { operator: "AND", rules: [] };
+
+  const updateFilters = (newFilters: FilterGroup) => {
+    onChange(triggerType, { ...triggerConfig, filters: newFilters });
+  };
+
   return (
-    <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto shrink-0">
+    <div className="w-96 bg-white border-l border-gray-200 overflow-y-auto shrink-0">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Déclencheur</h3>
         <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400">
@@ -821,35 +832,15 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
         </button>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-4">
         <div>
           <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Quand le workflow se déclenche-t-il ?</label>
           <select value={triggerType} onChange={(e) => onChange(e.target.value, {})} className="input text-xs py-1.5">
             <option value="LEAD_CREATED">Quand un lead est créé</option>
             <option value="NO_RESPONSE_DAYS">Quand un lead n'a pas répondu depuis X jours</option>
-            <option value="STAGE_CHANGED">Quand le lead change d'étape (manuel)</option>
+            <option value="STAGE_CHANGED">Quand le lead change d'étape</option>
           </select>
         </div>
-
-        {triggerType === "LEAD_CREATED" && (
-          <div>
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Filtrer par source (optionnel)</label>
-            <select
-              value={triggerConfig.source || ""}
-              onChange={(e) => onChange(triggerType, { ...triggerConfig, source: e.target.value || undefined })}
-              className="input text-xs py-1.5"
-            >
-              <option value="">Toutes les sources</option>
-              <option value="WEBSITE">Site web</option>
-              <option value="FACEBOOK">Facebook</option>
-              <option value="INSTAGRAM">Instagram</option>
-              <option value="WHATSAPP">WhatsApp</option>
-              <option value="PHONE_CALL">Appel</option>
-              <option value="WALK_IN">Visite</option>
-              <option value="REFERRAL">Parrainage</option>
-            </select>
-          </div>
-        )}
 
         {triggerType === "NO_RESPONSE_DAYS" && (
           <div>
@@ -878,6 +869,39 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
             <p className="text-[10px] text-gray-400 mt-1">Le workflow se déclenchera quand un lead passe à cette étape</p>
           </div>
         )}
+
+        {/* Filters builder */}
+        <div className="pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider">Filtres avancés (optionnel)</label>
+            {filters.rules.length > 0 && (
+              <button
+                onClick={() => updateFilters({ operator: "AND", rules: [] })}
+                className="text-[10px] text-red-500 hover:text-red-700"
+              >
+                Tout effacer
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-400 mb-2">Le workflow ne se déclenchera que si le lead correspond aux conditions ci-dessous</p>
+
+          {filters.rules.length === 0 ? (
+            <button
+              onClick={() => updateFilters({ operator: "AND", rules: [{ field: "source", operator: "equals", value: "" }] })}
+              className="w-full text-[11px] text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-lg border border-dashed border-brand-300 transition-colors"
+            >
+              + Ajouter un filtre
+            </button>
+          ) : (
+            <LeadFiltersBuilder
+              filters={filters}
+              onChange={updateFilters}
+              programs={programs}
+              campuses={campuses}
+              stages={stages}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

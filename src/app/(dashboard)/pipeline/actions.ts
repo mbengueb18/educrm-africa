@@ -112,6 +112,12 @@ export async function moveLeadToStage(leadId: string, stageId: string) {
       // Match if no specific stage configured, OR if matches target stage
       if (config.stageId && config.stageId !== stageId) continue;
 
+      // Apply advanced filters
+      if (config.filters && config.filters.rules && config.filters.rules.length > 0) {
+        const fullLead = await prisma.lead.findUnique({ where: { id: leadId } });
+        if (!fullLead || !evaluateFiltersInline(fullLead, config.filters)) continue;
+      }
+
       // Avoid duplicate execution for same lead/workflow currently active
       const existing = await prisma.workflowExecution.findFirst({
         where: { workflowId: wf.id, leadId, status: { in: ["RUNNING", "WAITING"] } },
@@ -767,4 +773,33 @@ export async function mergeDuplicateLeads(keepId: string, removeIds: string[]) {
 
   revalidatePath("/pipeline");
   return { success: true };
+}
+
+// ─── Evaluate filters helper (duplicated for server actions) ───
+function evaluateFiltersInline(lead: any, filters: any): boolean {
+  if (!filters || !filters.rules || filters.rules.length === 0) return true;
+  const op = filters.operator || "AND";
+  const results = filters.rules.map((rule: any) => {
+    if (rule.operator_group) {
+      return evaluateFiltersInline(lead, { operator: rule.operator_group, rules: rule.rules || [] });
+    }
+    return evaluateRuleInline(lead, rule);
+  });
+  if (op === "AND") return results.every((r: boolean) => r);
+  return results.some((r: boolean) => r);
+}
+
+function evaluateRuleInline(lead: any, rule: any): boolean {
+  const field = rule.field;
+  const operator = rule.operator || "equals";
+  const value = rule.value;
+  const leadValue = lead[field];
+
+  if (operator === "exists") return leadValue !== null && leadValue !== undefined && leadValue !== "";
+  if (operator === "equals") return String(leadValue || "") === String(value || "");
+  if (operator === "not_equals") return String(leadValue || "") !== String(value || "");
+  if (operator === "contains") return String(leadValue || "").toLowerCase().includes(String(value || "").toLowerCase());
+  if (operator === "greater_than") return Number(leadValue) > Number(value);
+  if (operator === "less_than") return Number(leadValue) < Number(value);
+  return false;
 }

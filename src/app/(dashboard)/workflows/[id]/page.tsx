@@ -29,7 +29,7 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
   }
 
   // Load helper data
-  const [stages, templates] = await Promise.all([
+  const [stages, templates, programs, campuses] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: { organizationId: session.user.organizationId },
       orderBy: { order: "asc" },
@@ -39,7 +39,25 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
       where: { organizationId: session.user.organizationId, channel: "EMAIL" },
       select: { id: true, name: true, subject: true, body: true, blocks: true, brandColor: true },
     }),
+    prisma.program.findMany({
+      where: { organizationId: session.user.organizationId, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.campus.findMany({
+      where: { organizationId: session.user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
 
-  return <WorkflowEditorClient workflow={workflow as any} stages={stages} templates={templates as any} />;
+  return (
+    <WorkflowEditorClient
+      workflow={workflow as any}
+      stages={stages}
+      templates={templates as any}
+      programs={programs}
+      campuses={campuses}
+    />
+  );
 }
