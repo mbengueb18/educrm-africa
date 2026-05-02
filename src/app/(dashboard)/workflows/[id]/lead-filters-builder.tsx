@@ -17,33 +17,88 @@ export interface FilterGroup {
   rules: FilterRule[];
 }
 
-const FIELDS = [
-  { key: "source", label: "Source", type: "select", options: [
-    { value: "WEBSITE", label: "Site web" },
-    { value: "FACEBOOK", label: "Facebook" },
-    { value: "INSTAGRAM", label: "Instagram" },
-    { value: "WHATSAPP", label: "WhatsApp" },
-    { value: "PHONE_CALL", label: "Appel" },
-    { value: "WALK_IN", label: "Visite" },
-    { value: "REFERRAL", label: "Parrainage" },
-    { value: "SALON", label: "Salon" },
-    { value: "PARTNER", label: "Partenaire" },
-  ]},
-  { key: "programId", label: "Filière", type: "select_dynamic", source: "programs" },
-  { key: "campusId", label: "Campus", type: "select_dynamic", source: "campuses" },
-  { key: "city", label: "Ville", type: "text" },
-  { key: "score", label: "Score", type: "number" },
-  { key: "stageId", label: "Étape", type: "select_dynamic", source: "stages" },
+const GROUP_LABELS: Record<string, string> = {
+  contact: "👤 Contact",
+  acquisition: "📣 Acquisition",
+  formation: "🎓 Formation",
+  pipeline: "📊 Pipeline",
+  custom: "⚙️ Personnalisés",
+  unmapped: "❓ Non mappés",
+};
+
+const GROUP_ORDER = ["contact", "acquisition", "formation", "pipeline", "custom", "unmapped"];
+
+const OPERATORS_BY_TYPE: Record<string, { key: string; label: string }[]> = {
+  text: [
+    { key: "equals", label: "est égal à" },
+    { key: "not_equals", label: "n'est pas égal à" },
+    { key: "contains", label: "contient" },
+    { key: "starts_with", label: "commence par" },
+    { key: "exists", label: "existe" },
+    { key: "not_exists", label: "n'existe pas" },
+  ],
+  email: [
+    { key: "equals", label: "est égal à" },
+    { key: "contains", label: "contient" },
+    { key: "exists", label: "existe" },
+    { key: "not_exists", label: "n'existe pas" },
+  ],
+  phone: [
+    { key: "equals", label: "est égal à" },
+    { key: "contains", label: "contient" },
+    { key: "exists", label: "existe" },
+    { key: "not_exists", label: "n'existe pas" },
+  ],
+  number: [
+    { key: "equals", label: "est égal à" },
+    { key: "not_equals", label: "différent de" },
+    { key: "greater_than", label: "supérieur à" },
+    { key: "less_than", label: "inférieur à" },
+    { key: "exists", label: "existe" },
+  ],
+  select: [
+    { key: "equals", label: "est égal à" },
+    { key: "not_equals", label: "n'est pas égal à" },
+    { key: "exists", label: "existe" },
+  ],
+  date: [
+    { key: "equals", label: "le" },
+    { key: "greater_than", label: "après" },
+    { key: "less_than", label: "avant" },
+    { key: "exists", label: "existe" },
+  ],
+  json: [
+    { key: "equals", label: "est égal à" },
+    { key: "contains", label: "contient" },
+    { key: "exists", label: "existe" },
+  ],
+};
+
+const SOURCE_OPTIONS = [
+  { value: "WEBSITE", label: "Site web" },
+  { value: "FACEBOOK", label: "Facebook" },
+  { value: "INSTAGRAM", label: "Instagram" },
+  { value: "WHATSAPP", label: "WhatsApp" },
+  { value: "PHONE_CALL", label: "Appel" },
+  { value: "WALK_IN", label: "Visite" },
+  { value: "REFERRAL", label: "Parrainage" },
+  { value: "SALON", label: "Salon" },
+  { value: "PARTNER", label: "Partenaire" },
 ];
 
-const OPERATORS = [
-  { key: "equals", label: "est égal à" },
-  { key: "not_equals", label: "n'est pas égal à" },
-  { key: "contains", label: "contient" },
-  { key: "greater_than", label: "supérieur à" },
-  { key: "less_than", label: "inférieur à" },
-  { key: "exists", label: "existe" },
+const GENDER_OPTIONS = [
+  { value: "MALE", label: "Homme" },
+  { value: "FEMALE", label: "Femme" },
+  { value: "OTHER", label: "Autre" },
 ];
+
+interface FieldDef {
+  key: string;
+  label: string;
+  group: string;
+  type: string;
+  source: string;
+}
 
 interface BuilderProps {
   filters: FilterGroup;
@@ -51,6 +106,8 @@ interface BuilderProps {
   programs?: { id: string; name: string }[];
   campuses?: { id: string; name: string }[];
   stages?: { id: string; name: string }[];
+  users?: { id: string; name: string | null }[];
+  fields?: FieldDef[];
   level?: number;
 }
 
@@ -60,6 +117,8 @@ export function LeadFiltersBuilder({
   programs = [],
   campuses = [],
   stages = [],
+  users = [],
+  fields = [],
   level = 0,
 }: BuilderProps) {
   const updateGroup = (newOp: "AND" | "OR") => {
@@ -69,14 +128,14 @@ export function LeadFiltersBuilder({
   const addRule = () => {
     onChange({
       ...filters,
-      rules: [...filters.rules, { field: "source", operator: "equals", value: "" }],
+      rules: [...filters.rules, { field: fields[0]?.key || "source", operator: "equals", value: "" }],
     });
   };
 
   const addGroup = () => {
     onChange({
       ...filters,
-      rules: [...filters.rules, { operator_group: "AND", rules: [{ field: "source", operator: "equals", value: "" }] }],
+      rules: [...filters.rules, { operator_group: "AND", rules: [{ field: fields[0]?.key || "source", operator: "equals", value: "" }] }],
     });
   };
 
@@ -90,12 +149,41 @@ export function LeadFiltersBuilder({
     onChange({ ...filters, rules: filters.rules.filter((_, i) => i !== index) });
   };
 
-  const getDynamicOptions = (source: string) => {
-    if (source === "programs") return programs.map((p) => ({ value: p.id, label: p.name }));
-    if (source === "campuses") return campuses.map((c) => ({ value: c.id, label: c.name }));
-    if (source === "stages") return stages.map((s) => ({ value: s.id, label: s.name }));
+  const getValueOptions = (fieldKey: string): { value: string; label: string }[] => {
+    if (fieldKey === "source") return SOURCE_OPTIONS;
+    if (fieldKey === "gender") return GENDER_OPTIONS;
+    if (fieldKey === "programId") return programs.map((p) => ({ value: p.id, label: p.name }));
+    if (fieldKey === "campusId") return campuses.map((c) => ({ value: c.id, label: c.name }));
+    if (fieldKey === "stageId") return stages.map((s) => ({ value: s.id, label: s.name }));
+    if (fieldKey === "assignedToId") return users.map((u) => ({ value: u.id, label: u.name || "Sans nom" }));
+
+    // Custom field with options
+    const fieldDef = fields.find((f) => f.key === fieldKey);
+    if (fieldDef?.type === "select") {
+      // For custom fields with options, look at sampleValues or rely on text
+      return [];
+    }
     return [];
   };
+
+  const getInputType = (fieldKey: string): string => {
+    const fieldDef = fields.find((f) => f.key === fieldKey);
+    if (!fieldDef) return "text";
+    if (fieldKey === "source" || fieldKey === "gender" || fieldKey === "programId" || fieldKey === "campusId" || fieldKey === "stageId" || fieldKey === "assignedToId") {
+      return "select";
+    }
+    if (fieldDef.type === "number") return "number";
+    if (fieldDef.type === "date") return "date";
+    if (fieldDef.type === "email") return "email";
+    return "text";
+  };
+
+  // Group fields by category
+  const fieldsByGroup: Record<string, FieldDef[]> = {};
+  fields.forEach((f) => {
+    if (!fieldsByGroup[f.group]) fieldsByGroup[f.group] = [];
+    fieldsByGroup[f.group].push(f);
+  });
 
   return (
     <div className={cn("border-l-2 pl-3 py-2", level === 0 ? "border-brand-200" : "border-gray-200")}>
@@ -127,7 +215,7 @@ export function LeadFiltersBuilder({
       </div>
 
       {/* Rules */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {filters.rules.map((rule, index) => {
           // Group (nested)
           if (rule.operator_group) {
@@ -146,6 +234,8 @@ export function LeadFiltersBuilder({
                   programs={programs}
                   campuses={campuses}
                   stages={stages}
+                  users={users}
+                  fields={fields}
                   level={level + 1}
                 />
               </div>
@@ -153,74 +243,70 @@ export function LeadFiltersBuilder({
           }
 
           // Simple rule
-          const fieldDef = FIELDS.find((f) => f.key === rule.field);
+          const inputType = getInputType(rule.field || "source");
+          const valueOptions = getValueOptions(rule.field || "source");
+          const fieldDef = fields.find((f) => f.key === rule.field);
+          const operators = OPERATORS_BY_TYPE[fieldDef?.type || "text"] || OPERATORS_BY_TYPE.text;
+
           return (
-            <div key={index} className="flex items-center gap-1.5">
+            <div key={index} className="bg-white border border-gray-200 rounded-lg p-2 space-y-1.5">
+              {/* Field selector with optgroup */}
               <select
                 value={rule.field || "source"}
-                onChange={(e) => updateRule(index, { ...rule, field: e.target.value, value: "" })}
-                className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
+                onChange={(e) => updateRule(index, { ...rule, field: e.target.value, value: "", operator: "equals" })}
+                className="input text-[11px] py-1 px-1.5 w-full"
               >
-                {FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                {GROUP_ORDER.filter((g) => fieldsByGroup[g]?.length > 0).map((groupKey) => (
+                  <optgroup key={groupKey} label={GROUP_LABELS[groupKey] || groupKey}>
+                    {fieldsByGroup[groupKey].map((f) => (
+                      <option key={f.key} value={f.key}>{f.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
 
-              <select
-                value={rule.operator || "equals"}
-                onChange={(e) => updateRule(index, { ...rule, operator: e.target.value })}
-                className="input text-[11px] py-1 px-1.5 w-28"
-              >
-                {OPERATORS.map((op) => <option key={op.key} value={op.key}>{op.label}</option>)}
-              </select>
+              <div className="flex items-center gap-1.5">
+                {/* Operator */}
+                <select
+                  value={rule.operator || "equals"}
+                  onChange={(e) => updateRule(index, { ...rule, operator: e.target.value })}
+                  className="input text-[11px] py-1 px-1.5 w-32 shrink-0"
+                >
+                  {operators.map((op) => <option key={op.key} value={op.key}>{op.label}</option>)}
+                </select>
 
-              {rule.operator !== "exists" && (
-                <>
-                  {fieldDef?.type === "select" && (
-                    <select
-                      value={rule.value || ""}
-                      onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
-                      className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
-                    >
-                      <option value="">Sélectionner...</option>
-                      {fieldDef.options?.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  )}
-                  {fieldDef?.type === "select_dynamic" && (
-                    <select
-                      value={rule.value || ""}
-                      onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
-                      className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
-                    >
-                      <option value="">Sélectionner...</option>
-                      {getDynamicOptions(fieldDef.source!).map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  )}
-                  {fieldDef?.type === "text" && (
-                    <input
-                      type="text"
-                      value={rule.value || ""}
-                      onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
-                      className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
-                      placeholder="Valeur"
-                    />
-                  )}
-                  {fieldDef?.type === "number" && (
-                    <input
-                      type="number"
-                      value={rule.value || ""}
-                      onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
-                      className="input text-[11px] py-1 px-1.5 w-20"
-                      placeholder="0"
-                    />
-                  )}
-                </>
-              )}
+                {/* Value */}
+                {rule.operator !== "exists" && rule.operator !== "not_exists" && (
+                  <>
+                    {inputType === "select" && valueOptions.length > 0 ? (
+                      <select
+                        value={rule.value || ""}
+                        onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
+                        className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
+                      >
+                        <option value="">Sélectionner...</option>
+                        {valueOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type={inputType === "number" ? "number" : inputType === "date" ? "date" : "text"}
+                        value={rule.value || ""}
+                        onChange={(e) => updateRule(index, { ...rule, value: e.target.value })}
+                        className="input text-[11px] py-1 px-1.5 flex-1 min-w-0"
+                        placeholder="Valeur"
+                      />
+                    )}
+                  </>
+                )}
 
-              <button
-                onClick={() => removeRule(index)}
-                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-              >
-                <X size={12} />
-              </button>
+                <button
+                  onClick={() => removeRule(index)}
+                  className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                  title="Supprimer"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             </div>
           );
         })}
@@ -232,14 +318,14 @@ export function LeadFiltersBuilder({
           onClick={addRule}
           className="text-[10px] text-brand-600 hover:text-brand-700 hover:bg-brand-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"
         >
-          <Plus size={10} /> Ajouter une condition
+          <Plus size={10} /> Condition
         </button>
         {level < 2 && (
           <button
             onClick={addGroup}
             className="text-[10px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"
           >
-            <Plus size={10} /> Ajouter un groupe
+            <Plus size={10} /> Groupe ET/OU
           </button>
         )}
       </div>

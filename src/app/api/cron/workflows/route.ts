@@ -29,14 +29,31 @@ function evaluateRule(lead: any, rule: any): boolean {
   const field = rule.field;
   const operator = rule.operator || "equals";
   const value = rule.value;
-  const leadValue = lead[field];
+
+  // Handle custom fields
+  let leadValue: any = lead[field];
+  if (leadValue === undefined && lead.customFields && typeof lead.customFields === "object") {
+    leadValue = (lead.customFields as any)[field];
+  }
 
   if (operator === "exists") return leadValue !== null && leadValue !== undefined && leadValue !== "";
+  if (operator === "not_exists") return leadValue === null || leadValue === undefined || leadValue === "";
   if (operator === "equals") return String(leadValue || "") === String(value || "");
   if (operator === "not_equals") return String(leadValue || "") !== String(value || "");
   if (operator === "contains") return String(leadValue || "").toLowerCase().includes(String(value || "").toLowerCase());
-  if (operator === "greater_than") return Number(leadValue) > Number(value);
-  if (operator === "less_than") return Number(leadValue) < Number(value);
+  if (operator === "starts_with") return String(leadValue || "").toLowerCase().startsWith(String(value || "").toLowerCase());
+  if (operator === "greater_than") {
+    if (rule.field?.includes("date") || rule.field?.includes("Date") || rule.field?.includes("At")) {
+      return new Date(leadValue) > new Date(value);
+    }
+    return Number(leadValue) > Number(value);
+  }
+  if (operator === "less_than") {
+    if (rule.field?.includes("date") || rule.field?.includes("Date") || rule.field?.includes("At")) {
+      return new Date(leadValue) < new Date(value);
+    }
+    return Number(leadValue) < Number(value);
+  }
   return false;
 }
 

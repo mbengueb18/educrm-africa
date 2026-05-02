@@ -168,9 +168,11 @@ interface WorkflowEditorClientProps {
   templates: { id: string; name: string; subject: string; body: string }[];
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string }[];
+  fields: any[];
+  users: { id: string; name: string | null }[];
 }
 
-export function WorkflowEditorClient({ workflow, stages, templates, programs, campuses }: WorkflowEditorClientProps) {
+export function WorkflowEditorClient({ workflow, stages, templates, programs, campuses, fields, users }: WorkflowEditorClientProps) {
   const router = useRouter();
   const initialGraph = workflow.graph || { nodes: [], edges: [] };
 
@@ -421,6 +423,8 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
             stages={stages}
             programs={programs}
             campuses={campuses}
+            fields={fields}
+            users={users}
             onChange={(type: string, config: any) => { setTriggerType(type); setTriggerConfig(config); }}
             onClose={() => setShowSettings(false)}
           />
@@ -816,7 +820,7 @@ function WaitConfig({ data, onUpdate }: any) {
 }
 
 // ─── Trigger settings panel ───
-function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages, programs, campuses }: any) {
+function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages, programs, campuses, fields, users }: any) {
   const filters: FilterGroup = triggerConfig.filters || { operator: "AND", rules: [] };
 
   const updateFilters = (newFilters: FilterGroup) => {
@@ -899,6 +903,8 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
               programs={programs}
               campuses={campuses}
               stages={stages}
+              fields={fields}
+              users={users}
             />
           )}
         </div>

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getWorkflow } from "../actions";
 import { WorkflowEditorClient } from "./workflow-editor-client";
+import { getAllFieldProperties } from "@/lib/field-properties";
 
 export const metadata: Metadata = {
   title: "Éditeur de workflow",
@@ -29,7 +30,7 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
   }
 
   // Load helper data
-  const [stages, templates, programs, campuses] = await Promise.all([
+  const [stages, templates, programs, campuses, fieldProps, users] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: { organizationId: session.user.organizationId },
       orderBy: { order: "asc" },
@@ -49,6 +50,12 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    getAllFieldProperties(),
+    prisma.user.findMany({
+      where: { organizationId: session.user.organizationId, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
 
   return (
@@ -58,6 +65,8 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
       templates={templates as any}
       programs={programs}
       campuses={campuses}
+      fields={fieldProps.fields}
+      users={users}
     />
   );
 }
