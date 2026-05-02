@@ -16,6 +16,7 @@ import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
+import { stripHtml } from "@/lib/email-blocks";
 
 interface LeadDetailClientProps {
   lead: any;
@@ -242,7 +243,7 @@ function HistoryTab({ lead }: { lead: any }) {
                     <p className="text-sm font-medium text-gray-900">{isInbound ? "Email reçu" : "Email envoyé"} : {parsed.subject || "Sans objet"}</p>
                     <span className="text-xs text-gray-400">{date}</span>
                   </div>
-                  <p className="text-xs text-gray-600 line-clamp-2">{(parsed.body || "").replace(/<[^>]+>/g, "").substring(0, 200)}</p>
+                  <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap">{stripHtml(parsed.body || "").substring(0, 600)}</p>
                 </div>
               </div>
             );

@@ -51,6 +51,7 @@ import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { ConvertLeadModal } from "@/components/pipeline/convert-lead-modal";
 import Link from "next/link";
+import { stripHtml } from "@/lib/email-blocks";
 
 type LeadDetail = Awaited<ReturnType<typeof getLeadDetail>>;
 
@@ -848,6 +849,20 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
 
               // Clean inbound replies: remove quoted text and signatures
               var displayBody = parsedContent.body || "";
+
+              // Detect HTML and convert to clean text for preview
+              var isHtmlBody = displayBody.trim().startsWith("<") && (
+                displayBody.includes("<html") ||
+                displayBody.includes("<!DOCTYPE") ||
+                displayBody.includes("<div") ||
+                displayBody.includes("<table") ||
+                displayBody.includes("<body") ||
+                displayBody.includes("<p")
+              );
+              if (isHtmlBody) {
+                displayBody = stripHtml(displayBody);
+              }
+
               if (msg.direction === "INBOUND") {
                 // Remove quoted thread (everything from "On ... wrote:" or "Le ... a écrit :")
                 displayBody = displayBody
@@ -879,7 +894,7 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                       </span>
                     </div>
                     {parsedContent.subject && <p className="text-xs font-semibold text-gray-800 mb-1.5">{parsedContent.subject}</p>}
-                    <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{displayBody}</p>
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{displayBody}</p>
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div className="mt-2 space-y-1">
                         {msg.attachments.map(function(att: any) {
