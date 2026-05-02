@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { blocksToHtml } from "@/lib/email-blocks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -239,13 +240,28 @@ async function executeAction(node: any, exec: any) {
   if (action === "SEND_EMAIL") {
     if (!lead.email) return;
     const subject = replaceVars(node.data?.subject || "", lead);
-    const body = replaceVars(node.data?.body || "", lead);
-    // Use isHtml flag from node config (set by editor) or auto-detect
+
+    let body = node.data?.body || "";
     let isHtml = node.data?.isHtml === true;
+
+    // If we have visual blocks, regenerate HTML from them
+    if (node.data?.blocks && Array.isArray(node.data.blocks) && node.data.blocks.length > 0) {
+      body = blocksToHtml(node.data.blocks, node.data?.brandColor || "#1B4F72");
+      isHtml = true;
+    }
+
+    body = replaceVars(body, lead);
+
     if (!isHtml) {
       const trimmed = body.trim();
       isHtml = trimmed.startsWith("<") && (trimmed.includes("<html") || trimmed.includes("<!DOCTYPE") || trimmed.includes("<div") || trimmed.includes("<table") || trimmed.includes("<body"));
     }
+
+    if (!body.trim()) {
+      console.error("[Workflow SEND_EMAIL] Empty body for lead", lead.id);
+      return;
+    }
+
     await sendEmail({
       to: lead.email,
       toName: lead.firstName + " " + lead.lastName,
