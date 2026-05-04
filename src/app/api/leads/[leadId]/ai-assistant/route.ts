@@ -17,10 +17,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lead = await prisma.lead.findFirst({
       where: { id: leadId, organizationId: session.user.organizationId },
       include: {
-        aiAnalysis: true,
-        _count: {
-          select: { messages: true, calls: true, appointments: true, tasks: true },
-        },
+        stage: true,
+        program: true,
+        // ... autres relations ...
+        _count: { select: { messages: true, calls: true, appointments: true, tasks: true } },
       },
     });
 
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const leadContext = buildLeadContext(lead);
     const prompt = buildPrompt(mode, leadContext, extraContext);
 
-    const response = await callGemini(prompt);
+    const response = await callGemini([{ role: "user", parts: [{ text: prompt }] }]);
     if (!response) {
       return NextResponse.json({ error: "Aucune réponse de l'IA" }, { status: 500 });
     }
