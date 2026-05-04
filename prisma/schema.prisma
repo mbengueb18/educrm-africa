@@ -250,6 +250,7 @@ model Lead {
   appointments Appointment[]
   portalTokens LeadPortalToken[]
   sequenceExecutions SequenceExecution[]
+  aiAnalysis  LeadAIAnalysis?
 
   @@index([organizationId])
   @@index([stageId])
@@ -1122,4 +1123,33 @@ model WorkflowExecution {
   @@index([waitUntil])
   @@index([organizationId])
   @@map("workflow_executions")
+}
+
+model LeadAIAnalysis {
+  id          String   @id @default(cuid())
+  leadId      String   @unique
+  
+  // Cached AI analyses (JSON for flexibility)
+  briefData         Json?
+  actionsData       Json?
+  
+  // Snapshot of lead state at analysis time (for change detection)
+  snapshotMessageCount    Int      @default(0)
+  snapshotCallCount       Int      @default(0)
+  snapshotAppointmentCount Int     @default(0)
+  snapshotTaskCount       Int      @default(0)
+  snapshotStageId         String?
+  snapshotScore           Int      @default(0)
+  snapshotIsConverted     Boolean  @default(false)
+  
+  briefGeneratedAt    DateTime?
+  actionsGeneratedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_ai_analyses")
 }

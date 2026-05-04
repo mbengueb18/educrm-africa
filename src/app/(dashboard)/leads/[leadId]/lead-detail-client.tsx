@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn, formatPhone, getInitials } from "@/lib/utils";
@@ -10,7 +10,8 @@ import {
   Activity as ActivityIcon, History, GraduationCap, MapPin, Building2,
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
-  AlertCircle, CheckCircle2, Video,
+  AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
+  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
@@ -25,6 +26,7 @@ interface LeadDetailClientProps {
 
 const TABS = [
   { id: "overview", label: "Aperçu", icon: UserIcon },
+  { id: "ai", label: "Assistant IA", icon: Sparkles },
   { id: "email", label: "Email", icon: Mail },
   { id: "history", label: "Historique", icon: History },
   { id: "tasks", label: "Tâches", icon: ListTodo },
@@ -128,6 +130,7 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
 
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab lead={lead} />}
+      {activeTab === "ai" && <AIAssistantTab lead={lead} />}
       {activeTab === "email" && <EmailTab lead={lead} onSent={() => router.refresh()} />}
       {activeTab === "history" && <HistoryTab lead={lead} />}
       {activeTab === "tasks" && <TasksTab lead={lead} />}
@@ -958,6 +961,504 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
     </div>
   );
 }
+
+// ─── AI Assistant Tab ───
+function AIAssistantTab({ lead }: { lead: any }) {
+  const [activeMode, setActiveMode] = useState<"brief" | "actions" | "draft_email" | "draft_whatsapp">("brief");
+  const [briefData, setBriefData] = useState<any>(null);
+  const [actionsData, setActionsData] = useState<any>(null);
+  const [emailDraft, setEmailDraft] = useState<any>(null);
+  const [whatsappDraft, setWhatsappDraft] = useState<any>(null);
+  const [briefGeneratedAt, setBriefGeneratedAt] = useState<string | null>(null);
+  const [actionsGeneratedAt, setActionsGeneratedAt] = useState<string | null>(null);
+  const [hasMajorChange, setHasMajorChange] = useState(false);
+  const [changeReasons, setChangeReasons] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [extraContext, setExtraContext] = useState("");
+
+  // Charger le cache au montage
+  useEffect(() => {
+    fetch("/api/leads/" + lead.id + "/ai-assistant")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setBriefData(data.briefData);
+          setActionsData(data.actionsData);
+          setBriefGeneratedAt(data.briefGeneratedAt);
+          setActionsGeneratedAt(data.actionsGeneratedAt);
+          setHasMajorChange(data.hasMajorChange);
+          setChangeReasons(data.changeReasons || []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
+  }, [lead.id]);
+
+  const callAI = async (mode: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/leads/" + lead.id + "/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, context: extraContext || undefined }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erreur");
+
+      if (mode === "brief") {
+        setBriefData(data.data);
+        setBriefGeneratedAt(new Date().toISOString());
+        setHasMajorChange(false);
+        setChangeReasons([]);
+      } else if (mode === "actions") {
+        setActionsData(data.data);
+        setActionsGeneratedAt(new Date().toISOString());
+        setHasMajorChange(false);
+        setChangeReasons([]);
+      } else if (mode === "draft_email") {
+        setEmailDraft(data.data);
+      } else if (mode === "draft_whatsapp") {
+        setWhatsappDraft(data.data);
+      }
+
+      toast.success("Analyse générée");
+    } catch (e: any) {
+      toast.error(e.message || "Erreur IA");
+    }
+    setLoading(false);
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copié dans le presse-papiers");
+  };
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={24} className="text-violet-500 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header banner */}
+      <div className="bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 rounded-xl border border-violet-200 p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-md">
+            <Sparkles size={18} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-gray-900">Assistant IA commercial</h3>
+            <p className="text-xs text-gray-600 mt-0.5">Analysez ce lead, obtenez des recommandations et rédigez des messages personnalisés.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Major change alert */}
+      {hasMajorChange && (briefData || actionsData) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">Nouvelle analyse recommandée</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Activité importante depuis la dernière analyse : {changeReasons.join(", ")}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mode selector */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <ModeButton active={activeMode === "brief"} icon={UserIcon} label="Brief lead" onClick={() => setActiveMode("brief")} />
+        <ModeButton active={activeMode === "actions"} icon={Zap} label="Actions suggérées" onClick={() => setActiveMode("actions")} />
+        <ModeButton active={activeMode === "draft_email"} icon={Mail} label="Brouillon email" onClick={() => setActiveMode("draft_email")} />
+        <ModeButton active={activeMode === "draft_whatsapp"} icon={MessageCircle} label="Brouillon WhatsApp" onClick={() => setActiveMode("draft_whatsapp")} />
+      </div>
+
+      {/* Content */}
+      {activeMode === "brief" && (
+        <BriefContent
+          data={briefData}
+          generatedAt={briefGeneratedAt}
+          loading={loading}
+          hasMajorChange={hasMajorChange}
+          onGenerate={() => callAI("brief")}
+        />
+      )}
+      {activeMode === "actions" && (
+        <ActionsContent
+          data={actionsData}
+          generatedAt={actionsGeneratedAt}
+          loading={loading}
+          hasMajorChange={hasMajorChange}
+          onGenerate={() => callAI("actions")}
+        />
+      )}
+      {activeMode === "draft_email" && (
+        <DraftContent
+          type="email"
+          data={emailDraft}
+          loading={loading}
+          extraContext={extraContext}
+          setExtraContext={setExtraContext}
+          onGenerate={() => callAI("draft_email")}
+          onCopy={copyText}
+          lead={lead}
+        />
+      )}
+      {activeMode === "draft_whatsapp" && (
+        <DraftContent
+          type="whatsapp"
+          data={whatsappDraft}
+          loading={loading}
+          extraContext={extraContext}
+          setExtraContext={setExtraContext}
+          onGenerate={() => callAI("draft_whatsapp")}
+          onCopy={copyText}
+          lead={lead}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Mode button ───
+function ModeButton({ active, icon: Icon, label, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-all",
+        active
+          ? "bg-violet-50 border-violet-300 text-violet-700 shadow-sm"
+          : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+      )}
+    >
+      <Icon size={16} />
+      <span className="text-xs font-medium">{label}</span>
+    </button>
+  );
+}
+
+// ─── Empty state with action button ───
+function EmptyAIState({ icon: Icon, title, description, buttonLabel, onAction, loading }: any) {
+  return (
+    <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 py-12 px-6 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-sm">
+        <Icon size={26} className="text-violet-500" />
+      </div>
+      <h3 className="text-sm font-bold text-gray-900 mb-1">{title}</h3>
+      <p className="text-xs text-gray-600 mb-5 max-w-sm mx-auto">{description}</p>
+      <button
+        onClick={onAction}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-md transition-all disabled:opacity-50"
+      >
+        {loading ? (
+          <><Loader2 size={14} className="animate-spin" /> Analyse en cours...</>
+        ) : (
+          <><Sparkles size={14} /> {buttonLabel}</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ─── Brief content ───
+function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }: any) {
+  if (loading && !data) return <AILoadingState message="L'IA analyse ce lead..." />;
+  if (!data) {
+    return (
+      <EmptyAIState
+        icon={UserIcon}
+        title="Aucune analyse pour ce lead"
+        description="Lancez l'IA pour obtenir un brief complet : qui est ce lead, son niveau d'engagement, les points clés et l'approche recommandée."
+        buttonLabel="Analyser ce lead"
+        onAction={onGenerate}
+        loading={loading}
+      />
+    );
+  }
+
+  const engagementConfig: Record<string, { color: string; bg: string; label: string }> = {
+    HOT: { color: "text-red-700", bg: "bg-red-100", label: "🔥 Lead chaud" },
+    WARM: { color: "text-amber-700", bg: "bg-amber-100", label: "☀️ Lead tiède" },
+    COLD: { color: "text-blue-700", bg: "bg-blue-100", label: "❄️ Lead froid" },
+  };
+  const engConf = engagementConfig[data.engagement] || engagementConfig.WARM;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+          Brief commercial {generatedAt && "• Généré " + formatRelativeDate(generatedAt)}
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          className={cn(
+            "text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors",
+            hasMajorChange
+              ? "bg-amber-100 text-amber-700 hover:bg-amber-200 font-medium"
+              : "text-violet-600 hover:bg-violet-50"
+          )}
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          {loading ? "Régénération..." : (hasMajorChange ? "Régénérer (recommandé)" : "Régénérer")}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-sm text-gray-800 leading-relaxed">{data.summary}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider">Niveau d'engagement</span>
+          <span className={cn("text-xs px-2 py-0.5 rounded-full font-semibold", engConf.bg, engConf.color)}>
+            {engConf.label}
+          </span>
+        </div>
+        <p className="text-sm text-gray-700">{data.engagementReason}</p>
+      </div>
+
+      {data.keyPoints && data.keyPoints.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Points clés à retenir</p>
+          <ul className="space-y-1.5">
+            {data.keyPoints.map((point: string, i: number) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.concerns && data.concerns.length > 0 && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+          <p className="text-[10px] text-amber-700 uppercase tracking-wider mb-2 font-semibold">⚠️ Points d'attention</p>
+          <ul className="space-y-1.5">
+            {data.concerns.map((concern: string, i: number) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                <span>{concern}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.approach && (
+        <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 p-4">
+          <p className="text-[10px] text-violet-700 uppercase tracking-wider mb-1 font-semibold">💡 Approche recommandée</p>
+          <p className="text-sm text-gray-800">{data.approach}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Actions content ───
+function ActionsContent({ data, generatedAt, loading, hasMajorChange, onGenerate }: any) {
+  if (loading && !data) return <AILoadingState message="L'IA génère les meilleures actions..." />;
+  if (!data) {
+    return (
+      <EmptyAIState
+        icon={Zap}
+        title="Aucune suggestion d'action"
+        description="Lancez l'IA pour obtenir 3 à 5 prochaines actions priorisées avec leur timing optimal."
+        buttonLabel="Suggérer des actions"
+        onAction={onGenerate}
+        loading={loading}
+      />
+    );
+  }
+
+  const actions = data.actions || [];
+
+  const PRIORITY_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
+    URGENT: { color: "text-red-700", bg: "bg-red-100", label: "Urgent" },
+    HIGH: { color: "text-amber-700", bg: "bg-amber-100", label: "Haute" },
+    MEDIUM: { color: "text-blue-700", bg: "bg-blue-100", label: "Moyenne" },
+  };
+
+  const TYPE_ICONS: Record<string, any> = {
+    CALL: Phone,
+    EMAIL: Mail,
+    WHATSAPP: MessageCircle,
+    MEETING: Calendar,
+    FOLLOW_UP: RefreshCw,
+    OTHER: Zap,
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+          Actions recommandées {generatedAt && "• Généré " + formatRelativeDate(generatedAt)}
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          className={cn(
+            "text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors",
+            hasMajorChange
+              ? "bg-amber-100 text-amber-700 hover:bg-amber-200 font-medium"
+              : "text-violet-600 hover:bg-violet-50"
+          )}
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          {loading ? "Régénération..." : (hasMajorChange ? "Régénérer (recommandé)" : "Régénérer")}
+        </button>
+      </div>
+
+      {actions.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 py-8 text-center">
+          <p className="text-sm text-gray-400">Aucune action suggérée</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {actions.map((action: any, i: number) => {
+            const Icon = TYPE_ICONS[action.type] || Zap;
+            const pConf = PRIORITY_CONFIG[action.priority] || PRIORITY_CONFIG.MEDIUM;
+            return (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-violet-200 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                    <Icon size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-sm font-semibold text-gray-900">{action.title}</p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0", pConf.bg, pConf.color)}>
+                        {pConf.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-1.5">{action.reason}</p>
+                    {action.timing && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-500">
+                        <Clock size={10} />
+                        <span>{action.timing}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Draft content (email or whatsapp) ───
+function DraftContent({ type, data, loading, extraContext, setExtraContext, onGenerate, onCopy, lead }: any) {
+  const isEmail = type === "email";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Contexte / instructions (facultatif)</label>
+        <textarea
+          value={extraContext}
+          onChange={(e) => setExtraContext(e.target.value)}
+          placeholder={isEmail
+            ? "Ex: Relance après RDV, proposition de RDV, bienvenue chaleureuse, rappel paiement..."
+            : "Ex: Relance courte, proposition de RDV, suivi de visite..."
+          }
+          className="input text-xs"
+          rows={2}
+        />
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          className="btn-primary py-2 px-4 text-xs mt-2 w-full"
+        >
+          {loading ? (
+            <><Loader2 size={14} className="animate-spin" /> Génération...</>
+          ) : (
+            <><Sparkles size={14} /> {data ? "Régénérer" : "Générer le brouillon"}</>
+          )}
+        </button>
+      </div>
+
+      {data && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {isEmail && data.subject && (
+            <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Objet</p>
+              <p className="text-sm font-semibold text-gray-900">{data.subject}</p>
+            </div>
+          )}
+          <div className="p-4">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">{isEmail ? "Corps de l'email" : "Message WhatsApp"}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{isEmail ? data.body : data.message}</p>
+          </div>
+          {data.rationale && (
+            <div className="px-4 py-2.5 bg-violet-50/50 border-t border-violet-100">
+              <p className="text-[10px] text-violet-700 uppercase tracking-wider mb-0.5 font-semibold">💡 Pourquoi ce message</p>
+              <p className="text-xs text-gray-700">{data.rationale}</p>
+            </div>
+          )}
+          <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+            <button
+              onClick={() => onCopy(isEmail ? (data.subject + "\n\n" + data.body) : data.message)}
+              className="btn-secondary py-2 px-3 text-xs flex-1"
+            >
+              <Copy size={13} /> Copier
+            </button>
+            {!isEmail && lead.whatsapp && (
+              <a
+                href={"https://wa.me/" + lead.whatsapp.replace(/\D/g, "") + "?text=" + encodeURIComponent(data.message)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium px-3 py-2 rounded-lg flex items-center gap-1.5 flex-1 justify-center"
+              >
+                <MessageCircle size={13} /> Ouvrir WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Loading state for AI ───
+function AILoadingState({ message }: { message: string }) {
+  return (
+    <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 py-12 text-center">
+      <Loader2 size={32} className="text-violet-500 animate-spin mx-auto mb-3" />
+      <p className="text-sm text-gray-700 font-medium">{message}</p>
+      <p className="text-xs text-gray-500 mt-1">Cela peut prendre quelques secondes</p>
+    </div>
+  );
+}
+
+// ─── Helper: relative date ───
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return "à l'instant";
+  if (diffMin < 60) return "il y a " + diffMin + " min";
+  if (diffHours < 24) return "il y a " + diffHours + "h";
+  if (diffDays < 7) return "il y a " + diffDays + " jour" + (diffDays > 1 ? "s" : "");
+  return "le " + date.toLocaleDateString("fr-FR");
+}
+
 
 // ─── Helpers ───
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
