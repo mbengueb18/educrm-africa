@@ -17,9 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lead = await prisma.lead.findFirst({
       where: { id: leadId, organizationId: session.user.organizationId },
       include: {
-        stage: true,
-        program: true,
-        // ... autres relations ...
+        aiAnalysis: true,
         _count: { select: { messages: true, calls: true, appointments: true, tasks: true } },
       },
     });
