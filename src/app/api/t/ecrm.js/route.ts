@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   var orgSlug = request.nextUrl.searchParams.get("id") || "";
   var baseUrl = request.nextUrl.origin;
+
+  // Vérifier si le tracking pageview est activé pour cette org
+  let pageviewTrackingEnabled = false;
+  if (orgSlug) {
+    try {
+      const org = await prisma.organization.findUnique({
+        where: { slug: orgSlug },
+        select: { webTrackingEnabled: true },
+      });
+      pageviewTrackingEnabled = org?.webTrackingEnabled || false;
+    } catch (e) {
+      // En cas d'erreur, on laisse désactivé pour ne pas casser le tracker
+    }
+  }
 
   var js = `
 (function(){
@@ -476,12 +491,18 @@ export async function GET(request: NextRequest) {
 
   // ─── Attach form listeners ───
   function attachListeners() {
-    log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ')');
+    log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ', pageviewTracking: ${pageviewTrackingEnabled})');
 
+    ${pageviewTrackingEnabled ? `
+    // Pageview tracking activé pour cette organisation
     startEngagementTracking();
     trackPageView();
     setupSpaTracking();
     startHeartbeat();
+    ` : `
+    // Pageview tracking désactivé pour cette organisation
+    log('info', 'Tracking de pages vues désactivé (activable depuis les paramètres TalibCRM)');
+    `}
 
     document.addEventListener('submit', function(e) {
       var form = e.target;
@@ -676,7 +697,8 @@ export async function GET(request: NextRequest) {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "public, max-age=3600",
+      // Cache court : 60s pour que les changements ON/OFF se propagent rapidement
+      "Cache-Control": "public, max-age=60, s-maxage=60",
     },
   });
 }

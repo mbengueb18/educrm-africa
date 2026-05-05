@@ -24,6 +24,7 @@ model Organization {
   settings  Json     @default("{}") // Custom config: timezone, currency, etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  webTrackingEnabled Boolean  @default(false)
 
   campuses         Campus[]
   users            User[]

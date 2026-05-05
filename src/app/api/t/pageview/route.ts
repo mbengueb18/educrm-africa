@@ -29,6 +29,15 @@ export async function POST(request: NextRequest) {
     const organizationId = await validateApiKey(apiKey);
     if (!organizationId) return corsResponse({ error: "Unauthorized" }, 401);
 
+    // Vérifier que le tracking web est activé pour cette organisation
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { webTrackingEnabled: true },
+    });
+    if (!org?.webTrackingEnabled) {
+      return corsResponse({ success: true, disabled: true }, 200);
+    }
+
     const body = await request.json();
     const {
       eventType, // "pageview" | "heartbeat"
