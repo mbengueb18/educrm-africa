@@ -48,6 +48,9 @@ model Organization {
   workflowExecutions  WorkflowExecution[]
   sequenceConfig     OrganizationSequenceConfig?
   chatbotConfig ChatbotConfig?
+  visitors  Visitor[]
+  sessions  Session[]
+  pageViews PageView[]
 
   @@map("organizations")
 }
@@ -251,6 +254,7 @@ model Lead {
   portalTokens LeadPortalToken[]
   sequenceExecutions SequenceExecution[]
   aiAnalysis  LeadAIAnalysis?
+  visitors  Visitor[]
 
   @@index([organizationId])
   @@index([stageId])
@@ -1152,4 +1156,89 @@ model LeadAIAnalysis {
 
   @@index([leadId])
   @@map("lead_ai_analyses")
+}
+
+model Visitor {
+  id             String   @id @default(cuid())
+  visitorId      String   // Cookie ID côté navigateur
+  
+  // Lead linkage
+  leadId         String?
+  organizationId String
+  
+  // Fingerprint (capté à la 1ère visite)
+  userAgent      String?  @db.Text
+  language       String?
+  screenSize     String?
+  timezone       String?
+  
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  
+  sessions       Session[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([visitorId, organizationId])
+  @@index([leadId])
+  @@index([organizationId])
+  @@map("visitors")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  visitorDbId    String
+  sessionId      String   @unique  // ID généré côté navigateur
+  
+  // Source captée au démarrage de la session
+  referrer       String?  @db.Text
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  utmContent     String?
+  utmTerm        String?
+  gclid          String?
+  fbclid         String?
+  
+  // Cycle de vie
+  startedAt      DateTime @default(now())
+  lastActivityAt DateTime @default(now())
+  endedAt        DateTime?
+  
+  // Métriques d'engagement (issues des heartbeats)
+  engagedTimeMs  Int      @default(0)
+  pageviewCount  Int      @default(0)
+  
+  organizationId String
+  
+  pageViews      PageView[]
+  visitor        Visitor      @relation(fields: [visitorDbId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([visitorDbId])
+  @@index([organizationId, startedAt])
+  @@map("sessions")
+}
+
+model PageView {
+  id             String   @id @default(cuid())
+  sessionDbId    String
+  
+  url            String   @db.Text
+  path           String
+  title          String?
+  
+  engagedTimeMs  Int      @default(0)
+  
+  organizationId String
+  viewedAt       DateTime @default(now())
+  
+  session        Session      @relation(fields: [sessionDbId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([sessionDbId])
+  @@index([organizationId, viewedAt])
+  @@index([path])
+  @@map("page_views")
 }

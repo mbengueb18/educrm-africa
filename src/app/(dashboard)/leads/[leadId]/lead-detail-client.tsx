@@ -11,13 +11,14 @@ import {
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
-  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw,
+  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
-import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
+import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";0
 import { stripHtml } from "@/lib/email-blocks";
+import { getLeadJourney } from "./journey-actions";
 
 interface LeadDetailClientProps {
   lead: any;
@@ -27,6 +28,7 @@ interface LeadDetailClientProps {
 const TABS = [
   { id: "overview", label: "Aperçu", icon: UserIcon },
   { id: "ai", label: "Assistant IA", icon: Sparkles },
+  { id: "journey", label: "Parcours web", icon: Globe2 },
   { id: "email", label: "Email", icon: Mail },
   { id: "history", label: "Historique", icon: History },
   { id: "tasks", label: "Tâches", icon: ListTodo },
@@ -131,6 +133,7 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab lead={lead} />}
       {activeTab === "ai" && <AIAssistantTab lead={lead} />}
+      {activeTab === "journey" && <JourneyTab lead={lead} />}
       {activeTab === "email" && <EmailTab lead={lead} onSent={() => router.refresh()} />}
       {activeTab === "history" && <HistoryTab lead={lead} />}
       {activeTab === "tasks" && <TasksTab lead={lead} />}
@@ -1459,6 +1462,180 @@ function formatRelativeDate(dateStr: string): string {
   return "le " + date.toLocaleDateString("fr-FR");
 }
 
+// ─── Journey Tab ───
+function JourneyTab({ lead }: { lead: any }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getLeadJourney(lead.id)
+      .then(setData)
+      .catch((e) => toast.error(e.message || "Erreur"))
+      .finally(() => setLoading(false));
+  }, [lead.id]);
+
+  const formatDuration = (ms: number) => {
+    if (!ms || ms <= 0) return "0s";
+    if (ms < 1000) return Math.round(ms) + "ms";
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return seconds + "s";
+    const minutes = Math.floor(seconds / 60);
+    const remainSec = seconds % 60;
+    if (minutes < 60) return minutes + "min" + (remainSec > 0 ? " " + remainSec + "s" : "");
+    const hours = Math.floor(minutes / 60);
+    return hours + "h " + (minutes % 60) + "min";
+  };
+
+  const formatDateTime = (dateValue: any) => {
+    if (!dateValue) return "Date inconnue";
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) return "Date inconnue";
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  const formatTime = (dateValue: any) => {
+    if (!dateValue) return "—";
+    const d = new Date(dateValue);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={24} className="text-brand-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!data || data.sessions.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
+        <Globe2 size={36} className="text-gray-300 mx-auto mb-2" />
+        <p className="text-sm text-gray-400">Aucune visite tracée</p>
+        <p className="text-xs text-gray-400 mt-1">Le parcours web s'affichera ici dès qu'une session sera liée à ce lead.</p>
+      </div>
+    );
+  }
+
+  const { sessions, stats } = data;
+
+  return (
+    <div className="space-y-4">
+      {/* Stats banner */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Sessions</p>
+            <Globe2 size={14} className="text-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{stats.sessionCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Pages vues</p>
+            <MousePointer2 size={14} className="text-violet-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{stats.totalPageViews}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Temps visible</p>
+            <Clock size={14} className="text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{formatDuration(stats.totalEngagedTimeMs)}</p>
+        </div>
+      </div>
+
+      {/* Top pages */}
+      {stats.topPages.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Pages les plus consultées</p>
+          <div className="space-y-2">
+            {stats.topPages.map((p: any, i: number) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-gray-400 w-6">#{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{p.title}</p>
+                  <p className="text-[10px] text-gray-500 font-mono truncate">{p.path}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900">{p.count}</p>
+                  <p className="text-[10px] text-gray-400">{p.count > 1 ? "vues" : "vue"}</p>
+                </div>
+                <div className="text-right ml-2">
+                  <p className="text-sm font-medium text-gray-700">{formatDuration(p.totalEngagedMs)}</p>
+                  <p className="text-[10px] text-gray-400">visible</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sessions timeline */}
+      <div>
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Sessions ({sessions.length})</p>
+        <div className="space-y-3">
+          {sessions.map((s: any, idx: number) => (
+            <div key={s.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Session header */}
+              <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Globe2 size={14} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Session #{idx + 1}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {formatDateTime(s.startedAt)}
+                      {" • "}{s.pageViews.length} page{s.pageViews.length > 1 ? "s" : ""}
+                      {" • "}{formatDuration(s.engagedTimeMs)} visible
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {s.utmSource && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{s.utmSource}</span>
+                  )}
+                  {!s.utmSource && s.referrer && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium truncate max-w-[120px]">
+                      {(() => { try { return new URL(s.referrer).hostname; } catch { return "Direct"; } })()}
+                    </span>
+                  )}
+                  {!s.utmSource && !s.referrer && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">Direct</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Page views */}
+              <div className="divide-y divide-gray-50">
+                {s.pageViews.map((pv: any, pvIdx: number) => (
+                  <div key={pv.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/50">
+                    <div className="w-6 h-6 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                      {pvIdx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{pv.title || pv.path}</p>
+                      <p className="text-[10px] text-gray-500 font-mono truncate">{pv.path}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-gray-700">{formatTime(pv.viewedAt)}</p>
+                      {pv.engagedTimeMs > 0 && (
+                        <p className="text-[10px] text-gray-400">{formatDuration(pv.engagedTimeMs)}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Helpers ───
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {

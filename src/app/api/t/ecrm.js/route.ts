@@ -13,63 +13,157 @@ export async function GET(request: NextRequest) {
 
   ECRM.orgSlug = '${orgSlug}';
   ECRM.endpoint = '${baseUrl}/api/leads/ingest';
+  ECRM.pageviewEndpoint = '${baseUrl}/api/t/pageview';
   ECRM.apiKey = null;
   ECRM.debug = false;
   ECRM.excludeForms = [];
   ECRM.capturedForms = [];
+  ECRM.visitorId = null;
+  ECRM.sessionId = null;
 
   if (window._ecrmConfig) {
     Object.keys(window._ecrmConfig).forEach(function(k) { ECRM[k] = window._ecrmConfig[k]; });
   }
 
-  // ─── Capture traffic source data on page load ───
-  var trafficData = {};
+  // ─── Constants ───
+  var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes idle
+  var HEARTBEAT_INTERVAL_MS = 15 * 1000;   // ping every 15s when visible
+  var SESSION_KEY = '_ecrm_session';
+  var VISITOR_KEY = '_ecrm_vid';
 
-  function captureTrafficSource() {
-    // Referrer
-    trafficData._referrer = document.referrer || '';
-
-    // URL parameters (UTMs + click IDs)
+  // ─── Visitor ID (cookie permanent) ───
+  function getVisitorId() {
     try {
-      var params = new URLSearchParams(window.location.search);
-      var trackParams = [
-        'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
-        'gclid', 'fbclid', 'msclkid', 'ttclid', 'dclid', 'li_fat_id',
-      ];
-      for (var i = 0; i < trackParams.length; i++) {
-        var val = params.get(trackParams[i]);
-        if (val) {
-          trafficData[trackParams[i]] = val;
-        }
+      var vid = localStorage.getItem(VISITOR_KEY);
+      if (!vid) {
+        vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+        localStorage.setItem(VISITOR_KEY, vid);
       }
-    } catch(e) {}
+      return vid;
+    } catch(e) {
+      return 'v_anon_' + Math.random().toString(36).slice(2, 15);
+    }
+  }
+  ECRM.visitorId = getVisitorId();
 
-    // Store in sessionStorage so it persists across pages (SPA or multi-page)
-    try {
-      var existing = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
-      // Only overwrite if we have new data (first page with params wins)
-      if (!existing._referrer && trafficData._referrer) {
-        existing._referrer = trafficData._referrer;
-      }
-      // UTMs and click IDs: first touch wins (don't overwrite)
-      var keys = Object.keys(trafficData);
-      for (var j = 0; j < keys.length; j++) {
-        if (!existing[keys[j]]) {
-          existing[keys[j]] = trafficData[keys[j]];
-        }
-      }
-      sessionStorage.setItem('_ecrm_traffic', JSON.stringify(existing));
-      trafficData = existing;
-    } catch(e) {}
-
-    log('info', 'Traffic source captured:', trafficData);
+  // ─── Session management (GA4-style) ───
+  function generateSessionId() {
+    return 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
   }
 
-  // ─── Fetch API key ───
-  function init() {
-    captureTrafficSource();
+  function getStoredSession() {
+    try {
+      var raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(e) { return null; }
+  }
 
-    if (ECRM.apiKey) { attachListeners(); return; }
+  function saveSession(session) {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch(e) {}
+  }
+
+  function clearSession() {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch(e) {}
+  }
+
+  function captureCurrentSource() {
+    var source = { referrer: document.referrer || '' };
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid'];
+      for (var i = 0; i < keys.length; i++) {
+        var v = params.get(keys[i]);
+        if (v) source[keys[i]] = v;
+      }
+    } catch(e) {}
+    return source;
+  }
+
+  function shouldStartNewSession(stored, currentSource) {
+    if (!stored || !stored.sessionId) return true;
+    var idle = Date.now() - (stored.lastActivityAt || 0);
+    if (idle > SESSION_TIMEOUT_MS) return true;
+    // Nouveau UTM source = nouvelle session (comportement GA4)
+    if (currentSource.utm_source && currentSource.utm_source !== stored.utm_source) return true;
+    if (currentSource.gclid && currentSource.gclid !== stored.gclid) return true;
+    if (currentSource.fbclid && currentSource.fbclid !== stored.fbclid) return true;
+    return false;
+  }
+
+  function getOrCreateSession() {
+    var currentSource = captureCurrentSource();
+    var stored = getStoredSession();
+
+    if (shouldStartNewSession(stored, currentSource)) {
+      var newSession = {
+        sessionId: generateSessionId(),
+        startedAt: Date.now(),
+        lastActivityAt: Date.now(),
+        referrer: currentSource.referrer,
+        utm_source: currentSource.utm_source || (stored && stored.utm_source) || null,
+        utm_medium: currentSource.utm_medium || null,
+        utm_campaign: currentSource.utm_campaign || null,
+        utm_content: currentSource.utm_content || null,
+        utm_term: currentSource.utm_term || null,
+        gclid: currentSource.gclid || null,
+        fbclid: currentSource.fbclid || null,
+      };
+      saveSession(newSession);
+      return newSession;
+    }
+
+    // Update lastActivityAt on existing session
+    stored.lastActivityAt = Date.now();
+    saveSession(stored);
+    return stored;
+  }
+
+  // ─── Engagement tracking (Page Visibility API) ───
+  var lastEngagedTime = null;
+  var pageStartTime = null;
+
+  function isPageVisible() {
+    return !document.hidden;
+  }
+
+  function startEngagementTracking() {
+    if (isPageVisible()) {
+      lastEngagedTime = Date.now();
+      pageStartTime = Date.now();
+    }
+  }
+
+  function getEngagedDeltaMs() {
+    if (!lastEngagedTime || !isPageVisible()) return 0;
+    var now = Date.now();
+    var delta = now - lastEngagedTime;
+    lastEngagedTime = now;
+    return delta;
+  }
+
+  // ─── Visibility handlers ───
+  document.addEventListener('visibilitychange', function() {
+    if (isPageVisible()) {
+      lastEngagedTime = Date.now();
+      ECRM.sessionData = getOrCreateSession();
+      ECRM.sessionId = ECRM.sessionData.sessionId;
+    } else {
+      // Tab became hidden — flush engaged time
+      var delta = getEngagedDeltaMs();
+      if (delta > 0 && delta < 60000) {
+        sendHeartbeat(delta);
+      }
+      lastEngagedTime = null;
+    }
+  });
+
+  // ─── Init ───
+  function init() {
+    if (ECRM.apiKey) {
+      attachListeners();
+      return;
+    }
     var meta = document.querySelector('meta[name="educrm-key"]');
     if (meta) { ECRM.apiKey = meta.getAttribute('content'); attachListeners(); return; }
     var scripts = document.querySelectorAll('script[src*="ecrm"]');
@@ -209,6 +303,111 @@ export async function GET(request: NextRequest) {
     return hasContact;
   }
 
+  // ─── Send pageview ───
+  function trackPageView() {
+    if (!ECRM.apiKey) return;
+    ECRM.sessionData = getOrCreateSession();
+    ECRM.sessionId = ECRM.sessionData.sessionId;
+    pageStartTime = Date.now();
+    lastEngagedTime = isPageVisible() ? Date.now() : null;
+
+    var s = ECRM.sessionData;
+    var payload = {
+      eventType: 'pageview',
+      visitorId: ECRM.visitorId,
+      sessionId: s.sessionId,
+      url: window.location.href,
+      path: window.location.pathname,
+      title: document.title,
+      referrer: s.referrer || null,
+      utm_source: s.utm_source || null,
+      utm_medium: s.utm_medium || null,
+      utm_campaign: s.utm_campaign || null,
+      utm_content: s.utm_content || null,
+      utm_term: s.utm_term || null,
+      gclid: s.gclid || null,
+      fbclid: s.fbclid || null,
+      userAgent: navigator.userAgent || '',
+      language: navigator.language || '',
+      screenSize: window.screen.width + 'x' + window.screen.height,
+      timezone: (Intl.DateTimeFormat().resolvedOptions().timeZone) || '',
+    };
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', ECRM.pageviewEndpoint, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('x-api-key', ECRM.apiKey);
+    xhr.onload = function() {
+      if (xhr.status === 409) {
+        // Session expired server-side, regenerate locally
+        clearSession();
+        ECRM.sessionData = getOrCreateSession();
+        ECRM.sessionId = ECRM.sessionData.sessionId;
+      }
+      log('info', 'Pageview tracked:', payload.path);
+    };
+    xhr.send(JSON.stringify(payload));
+  }
+
+  // ─── Send heartbeat ───
+  function sendHeartbeat(deltaMs) {
+    if (!ECRM.apiKey || !ECRM.sessionId) return;
+    var payload = {
+      eventType: 'heartbeat',
+      visitorId: ECRM.visitorId,
+      sessionId: ECRM.sessionId,
+      engagedDeltaMs: deltaMs,
+    };
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', ECRM.pageviewEndpoint, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('x-api-key', ECRM.apiKey);
+      xhr.send(JSON.stringify(payload));
+    } catch(e) {}
+  }
+
+  // ─── Heartbeat loop ───
+  function startHeartbeat() {
+    setInterval(function() {
+      if (!isPageVisible()) return;
+      var delta = getEngagedDeltaMs();
+      if (delta > 0 && delta < 60000) sendHeartbeat(delta);
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  // ─── beforeunload : flush remaining engagement ───
+  window.addEventListener('beforeunload', function() {
+    if (!ECRM.sessionId || !isPageVisible()) return;
+    var delta = getEngagedDeltaMs();
+    if (delta > 0 && delta < 60000) {
+      try {
+        var blob = new Blob([JSON.stringify({
+          eventType: 'heartbeat',
+          visitorId: ECRM.visitorId,
+          sessionId: ECRM.sessionId,
+          engagedDeltaMs: delta,
+        })], { type: 'application/json' });
+        navigator.sendBeacon(ECRM.pageviewEndpoint + '?key=' + ECRM.apiKey, blob);
+      } catch(e) {}
+    }
+  });
+
+  // ─── SPA tracking ───
+  function setupSpaTracking() {
+    var pushState = history.pushState;
+    var replaceState = history.replaceState;
+    history.pushState = function() {
+      pushState.apply(history, arguments);
+      setTimeout(trackPageView, 0);
+    };
+    history.replaceState = function() {
+      replaceState.apply(history, arguments);
+      setTimeout(trackPageView, 0);
+    };
+    window.addEventListener('popstate', function() { setTimeout(trackPageView, 0); });
+  }
+
   // ─── Send to EduCRM ───
   function sendLead(data) {
     var payload = {
@@ -227,32 +426,9 @@ export async function GET(request: NextRequest) {
       niveau: data.niveau || '',
       _capturedBy: 'ecrm-tracker',
       _pageUrl: data._pageUrl || '',
+      _visitorId: ECRM.visitorId,
     };
 
-    // ─── Inject traffic source data ───
-    var traffic = trafficData || {};
-    try {
-      var stored = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
-      // Merge: stored data takes priority (first touch)
-      var tKeys = Object.keys(stored);
-      for (var t = 0; t < tKeys.length; t++) {
-        if (!traffic[tKeys[t]]) traffic[tKeys[t]] = stored[tKeys[t]];
-      }
-    } catch(e) {}
-
-    // Add traffic data to payload
-    if (traffic._referrer) payload._referrer = traffic._referrer;
-    if (traffic.utm_source) payload.utm_source = traffic.utm_source;
-    if (traffic.utm_medium) payload.utm_medium = traffic.utm_medium;
-    if (traffic.utm_campaign) payload.utm_campaign = traffic.utm_campaign;
-    if (traffic.utm_content) payload.utm_content = traffic.utm_content;
-    if (traffic.utm_term) payload.utm_term = traffic.utm_term;
-    if (traffic.gclid) payload.gclid = traffic.gclid;
-    if (traffic.fbclid) payload.fbclid = traffic.fbclid;
-    if (traffic.msclkid) payload.msclkid = traffic.msclkid;
-    if (traffic.ttclid) payload.ttclid = traffic.ttclid;
-
-    // Add raw form fields for custom field capture
     if (data._raw) {
       Object.keys(data._raw).forEach(function(key) {
         if (!payload[key]) payload[key] = data._raw[key];
@@ -272,14 +448,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    log('info', 'Lead capturé avec source:', {
-      lead: payload.firstName + ' ' + payload.lastName,
-      referrer: payload._referrer || 'direct',
-      utm_source: payload.utm_source || 'none',
-      utm_medium: payload.utm_medium || 'none',
-      gclid: payload.gclid ? 'present' : 'none',
-      fbclid: payload.fbclid ? 'present' : 'none',
-    });
+    log('info', 'Lead capturé:', payload.firstName + ' ' + payload.lastName);
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', ECRM.endpoint, true);
@@ -295,7 +464,6 @@ export async function GET(request: NextRequest) {
             event: 'educrm_lead_captured',
             ecrmLeadId: result.leadId,
             ecrmDuplicate: result.duplicate || false,
-            ecrmTrafficChannel: result.trafficSource ? result.trafficSource.channel : 'unknown',
           });
         }
       } else {
@@ -308,7 +476,12 @@ export async function GET(request: NextRequest) {
 
   // ─── Attach form listeners ───
   function attachListeners() {
-    log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', traffic: ' + (trafficData.utm_source || trafficData._referrer || 'direct') + ')');
+    log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ')');
+
+    startEngagementTracking();
+    trackPageView();
+    setupSpaTracking();
+    startHeartbeat();
 
     document.addEventListener('submit', function(e) {
       var form = e.target;
@@ -331,11 +504,9 @@ export async function GET(request: NextRequest) {
   // ─── Public API ───
   ECRM.track = function(data) { sendLead(data); };
   ECRM.identify = function(data) { sendLead(data); };
-  ECRM.getTrafficSource = function() { return trafficData; };
+  ECRM.getSession = function() { return ECRM.sessionData; };
 
-
-
-  // ─── Chatbot Module ───
+  // ─── Chatbot Module (inchangé) ───
   function initChatbot() {
     fetch('${baseUrl}/api/chatbot/config?id=' + ECRM.orgSlug)
       .then(function(r) { return r.json(); })
@@ -356,7 +527,6 @@ export async function GET(request: NextRequest) {
     var primary = config.primaryColor || '#1B4F72';
     var position = config.position === 'bottom-left' ? 'left:24px;' : 'right:24px;';
 
-    // Bubble button
     var bubble = document.createElement('div');
     bubble.id = '_ecrm_chat_bubble';
     bubble.style.cssText = 'position:fixed;bottom:24px;' + position + 'z-index:999998;width:60px;height:60px;border-radius:50%;background:' + primary + ';box-shadow:0 4px 16px rgba(0,0,0,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s;';
@@ -366,7 +536,6 @@ export async function GET(request: NextRequest) {
     bubble.onclick = toggleChat;
     document.body.appendChild(bubble);
 
-    // Chat window
     var chat = document.createElement('div');
     chat.id = '_ecrm_chat';
     chat.style.cssText = 'position:fixed;bottom:96px;' + position + 'z-index:999999;width:360px;max-width:calc(100vw - 48px);height:520px;max-height:calc(100vh - 120px);background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.16);display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
@@ -428,14 +597,11 @@ export async function GET(request: NextRequest) {
       var step = scenario.find(function(s) { return s.id === stepId; });
       if (!step) return;
       currentStepId = stepId;
-
       addBotMessage(step.message);
-
       var inputZone = document.getElementById('_ecrm_input_zone');
       inputZone.innerHTML = '';
 
       if (step.type === 'bot' && step.options) {
-        // Render option buttons
         step.options.forEach(function(opt) {
           var btn = document.createElement('button');
           btn.style.cssText = 'display:block;width:100%;margin:0 0 6px 0;padding:10px;background:white;border:1px solid ' + primary + ';color:' + primary + ';border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;text-align:left;transition:background 0.15s;';
@@ -458,13 +624,11 @@ export async function GET(request: NextRequest) {
         var sendBtn = document.createElement('button');
         sendBtn.style.cssText = 'padding:10px 14px;background:' + primary + ';color:white;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;';
         sendBtn.textContent = '→';
-
         var wrap = document.createElement('div');
         wrap.style.cssText = 'display:flex;gap:6px;';
         wrap.appendChild(input);
         wrap.appendChild(sendBtn);
         inputZone.appendChild(wrap);
-
         var handleSend = function() {
           var val = input.value.trim();
           if (!val) return;
@@ -477,14 +641,6 @@ export async function GET(request: NextRequest) {
         input.addEventListener('keypress', function(e) { if (e.key === 'Enter') handleSend(); });
         setTimeout(function() { input.focus(); }, 100);
       } else if (step.type === 'submit') {
-        // Send the lead
-        var traffic = trafficData || {};
-        try {
-          var stored = JSON.parse(sessionStorage.getItem('_ecrm_traffic') || '{}');
-          var k = Object.keys(stored);
-          for (var i = 0; i < k.length; i++) { if (!traffic[k[i]]) traffic[k[i]] = stored[k[i]]; }
-        } catch(e) {}
-
         fetch('${baseUrl}/api/chatbot/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -496,7 +652,6 @@ export async function GET(request: NextRequest) {
             email: collected.email || '',
             message: collected.message || '',
             programLevel: collected.programLevel || '',
-            traffic: traffic,
             history: history,
           }),
         }).then(function(r) { return r.json(); })

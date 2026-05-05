@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
   BarChart3, Repeat, Users, GraduationCap, CreditCard,
-  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight, Zap
+  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight, Zap, Globe2
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -20,7 +20,10 @@ export default async function DashboardPage() {
   const orgId = session.user.organizationId;
 
   // Quick stats for the home page
-  const [totalLeads, leadsThisMonth, totalStudents, totalAppointments, totalCampaigns, leadsInSequence] = await Promise.all([
+  const last28Days = new Date();
+  last28Days.setDate(last28Days.getDate() - 28);
+
+  const [totalLeads, leadsThisMonth, totalStudents, totalAppointments, totalCampaigns, leadsInSequence, webSessions28d, webVisitors28d] = await Promise.all([
     prisma.lead.count({ where: { organizationId: orgId } }),
     prisma.lead.count({
       where: {
@@ -43,6 +46,12 @@ export default async function DashboardPage() {
         isConverted: false,
         sequenceExecutions: { some: {} },
       },
+    }),
+    prisma.session.count({
+      where: { organizationId: orgId, startedAt: { gte: last28Days } },
+    }),
+    prisma.visitor.count({
+      where: { organizationId: orgId, lastSeenAt: { gte: last28Days } },
     }),
   ]);
 
@@ -68,6 +77,18 @@ export default async function DashboardPage() {
       href: "/analytics/sequences",
       stats: [
         { label: "Leads en séquence", value: leadsInSequence.toLocaleString("fr-FR") },
+      ],
+    },
+    {
+      title: "Analytics web",
+      description: "Trafic du site, sources, parcours visiteurs et funnel de conversion",
+      icon: Globe2,
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      href: "/analytics/web",
+      stats: [
+        { label: "Visiteurs (28j)", value: webVisitors28d.toLocaleString("fr-FR") },
+        { label: "Sessions (28j)", value: webSessions28d.toLocaleString("fr-FR") },
       ],
     },
   ];
@@ -107,7 +128,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
           <TrendingUp size={14} className="text-brand-500" /> Rapports & analyses
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {reports.map((r) => (
             <Link
               key={r.href}

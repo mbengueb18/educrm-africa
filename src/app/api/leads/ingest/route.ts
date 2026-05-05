@@ -449,6 +449,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
+// ─── Link visitor to this lead (retroactive linking) ───
+    if (rawData._visitorId) {
+      try {
+        await prisma.visitor.updateMany({
+          where: {
+            visitorId: rawData._visitorId,
+            organizationId,
+            leadId: null,
+          },
+          data: { leadId: lead.id },
+        });
+      } catch (e) {
+        console.error("[Lead Ingest] Visitor linking failed", e);
+      }
+    }
+
     await prisma.activity.create({
       data: {
         type: "LEAD_CREATED",
