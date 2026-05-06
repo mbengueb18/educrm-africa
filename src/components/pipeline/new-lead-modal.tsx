@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import { createLead } from "@/app/(dashboard)/pipeline/actions";
 import { cn } from "@/lib/utils";
@@ -28,8 +28,31 @@ const sources = [
 ];
 
 export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLeadModalProps) {
+  // ⚠️ All hooks MUST be called before any conditional return (Rules of Hooks)
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Lock body scroll when modal is open — prevents internal events
+  // (HTML5 validation tooltips, autoscroll to invalid field, etc.)
+  // from causing horizontal overflow on the page underneath.
+  useEffect(() => {
+    if (!open) return;
+
+    var previousOverflow = document.body.style.overflow;
+    var previousPaddingRight = document.body.style.paddingRight;
+
+    // Compensate for scrollbar disappearance to avoid layout shift
+    var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = scrollbarWidth + "px";
+    }
+
+    return function () {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -69,7 +92,7 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
           </button>
         </div>
 
-        <form ref={formRef} action={handleSubmit} className="overflow-y-auto flex-1">
+        <form ref={formRef} action={handleSubmit} className="overflow-y-auto overscroll-contain flex-1">
           <div className="px-6 py-5 space-y-5">
             <div>
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Identité</h3>
