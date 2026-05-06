@@ -8,9 +8,10 @@
     --header-height: 64px;
   }
 
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
-  }
+  html, body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  overflow-x: hidden;
+}
 
   /* Custom scrollbar */
   ::-webkit-scrollbar {
