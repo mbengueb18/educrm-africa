@@ -109,7 +109,12 @@ const bottomItems = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { can } = usePermissions();
@@ -124,8 +129,14 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-30 flex flex-col bg-sidebar-bg transition-all duration-300",
-        collapsed ? "w-[72px]" : "w-[var(--sidebar-width)]"
+        "fixed inset-y-0 left-0 z-30 flex flex-col bg-sidebar-bg",
+        "transition-[transform,width] duration-300 ease-out",
+        // Width
+        collapsed ? "w-[72px]" : "w-[var(--sidebar-width)]",
+        // Mobile: drawer behavior (hidden off-screen by default)
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop: always visible
+        "lg:translate-x-0"
       )}
     >
       {/* Logo */}
@@ -156,6 +167,7 @@ export function Sidebar() {
             <Link
               key={item.href + item.label}
               href={item.href}
+              onClick={onMobileClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
                 isActive
@@ -200,6 +212,7 @@ export function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onMobileClose}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-text hover:bg-sidebar-hover hover:text-white transition-colors"
           >
             <item.icon size={20} className="shrink-0" />
@@ -207,10 +220,10 @@ export function Sidebar() {
           </Link>
         ))}
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle — desktop only (no sense on mobile drawer) */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-text hover:bg-sidebar-hover hover:text-white transition-colors w-full"
+          className="hidden lg:flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-text hover:bg-sidebar-hover hover:text-white transition-colors w-full"
         >
           <ChevronLeft
             size={20}

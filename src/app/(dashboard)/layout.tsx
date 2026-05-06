@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PermissionProvider } from "@/components/permission-provider";
 
 export default async function DashboardLayout({
@@ -51,26 +50,18 @@ export default async function DashboardLayout({
 
   return (
     <PermissionProvider role={session.user.role} userId={session.user.id}>
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="pl-[var(--sidebar-width)] transition-all duration-300">
-        <Header
-          user={{
-            name: session.user.name,
-            email: session.user.email,
-            role: session.user.role,
-            organizationSlug: session.user.organizationSlug,
-          }}
-          overdueTasks={overdueTasks}
-          dueTodayTasks={dueTodayTasks}
-        />
-        <PermissionProvider role={session.user.role} userId={session.user.id}>
-          <PermissionProvider role={session.user.role} userId={session.user.id}>
-          <main className="p-6">{children}</main>
-        </PermissionProvider>
-        </PermissionProvider>
-      </div>
-    </div>
+      <DashboardShell
+        user={{
+          name: session.user.name,
+          email: session.user.email,
+          role: session.user.role,
+          organizationSlug: session.user.organizationSlug,
+        }}
+        overdueTasks={overdueTasks}
+        dueTodayTasks={dueTodayTasks}
+      >
+        {children}
+      </DashboardShell>
     </PermissionProvider>
   );
 }

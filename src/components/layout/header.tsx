@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2 } from "lucide-react";
+import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2, Menu } from "lucide-react";
 import { getInitials, formatRelative } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ interface HeaderProps {
   };
   overdueTasks?: OverdueTask[];
   dueTodayTasks?: OverdueTask[];
+  onMenuClick?: () => void;
 }
 
 var PRIORITY_COLORS: Record<string, string> = {
@@ -43,22 +44,31 @@ var TYPE_LABELS: Record<string, string> = {
   OTHER: "Autre",
 };
 
-export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderProps) {
+export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClick }: HeaderProps) {
   var [showNotifs, setShowNotifs] = useState(false);
 
   var totalNotifs = overdueTasks.length + dueTodayTasks.length;
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between h-[var(--header-height)] px-6 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
-      <div className="flex items-center gap-3 flex-1 max-w-xl">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-2 h-[var(--header-height)] px-3 sm:px-6 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+      {/* Mobile menu button — hidden on desktop */}
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 -ml-1 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
+        aria-label="Ouvrir le menu"
+      >
+        <Menu size={22} />
+      </button>
+
+      <div className="flex items-center gap-3 flex-1 max-w-xl min-w-0">
         <div className="relative flex-1">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Rechercher un lead, étudiant, paiement..."
+            placeholder="Rechercher..."
             className="input pl-10 bg-gray-50/80 border-gray-100 focus:bg-white"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-mono">
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-mono hidden sm:inline-block">
             ⌘K
           </kbd>
         </div>
@@ -90,7 +100,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [] }: HeaderPr
           {showNotifs && (
             <>
               <div className="fixed inset-0 z-40" onClick={function() { setShowNotifs(false); }} />
-              <div className="absolute top-full right-0 mt-2 z-50 bg-white rounded-xl shadow-xl border border-gray-200 w-96 max-h-[480px] overflow-hidden flex flex-col animate-scale-in">
+              <div className="fixed sm:absolute inset-x-3 sm:inset-x-auto sm:right-0 top-[calc(var(--header-height)+0.5rem)] sm:top-full sm:mt-2 z-50 bg-white rounded-xl shadow-xl border border-gray-200 sm:w-96 max-h-[480px] overflow-hidden flex flex-col animate-scale-in">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                   <h3 className="text-sm font-bold text-gray-900">Notifications</h3>

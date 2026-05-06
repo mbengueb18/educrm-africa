@@ -8,9 +8,10 @@
     --header-height: 64px;
   }
 
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
-  }
+  html, body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  overflow-x: hidden;
+}
 
   /* Custom scrollbar */
   ::-webkit-scrollbar {
@@ -91,5 +92,15 @@
   .btn-ghost {
     @apply btn bg-transparent text-gray-600 hover:bg-gray-100 
            focus:ring-gray-300;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
