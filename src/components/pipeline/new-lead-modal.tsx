@@ -49,13 +49,13 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] sm:pt-[10vh] px-3 sm:px-4 overflow-hidden">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         onClick={() => onClose()}
       />
 
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl animate-scale-in mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl animate-scale-in max-h-[90vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Nouveau lead</h2>
@@ -63,7 +63,7 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
           </div>
           <button
             onClick={() => onClose()}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
           >
             <X size={20} />
           </button>
@@ -73,7 +73,7 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
           <div className="px-6 py-5 space-y-5">
             <div>
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Identité</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Prénom <span className="text-danger-500">*</span></label>
                   <input name="firstName" required className="input" placeholder="Amadou" />
@@ -128,7 +128,7 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
 
             <div>
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Affectation</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {programs.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Filière souhaitée</label>
