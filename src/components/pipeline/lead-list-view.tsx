@@ -7,6 +7,7 @@ import {
   Search, Filter, ChevronDown, ChevronUp, ChevronRight,
   Phone, MessageCircle, Mail, SlidersHorizontal, X,
   Download, Columns3, Check, Send, Trash2, Loader2, UserPlus,
+  ArrowUpDown,
 } from "lucide-react";
 import { BulkEmailModal } from "@/components/messaging/bulk-email-modal";
 import { deleteLeads, assignLead } from "@/app/(dashboard)/pipeline/actions";
@@ -82,6 +83,17 @@ const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "createdAt", label: "Date création", group: "Dates" },
   { key: "updatedAt", label: "Dernière maj", group: "Dates" },
   { key: "lastContact", label: "Dernier contact", group: "Dates" },
+];
+
+// Mobile-friendly sort options
+const MOBILE_SORT_OPTIONS: { value: string; dir: "asc" | "desc"; label: string }[] = [
+  { value: "createdAt", dir: "desc", label: "Plus récents" },
+  { value: "createdAt", dir: "asc", label: "Plus anciens" },
+  { value: "score", dir: "desc", label: "Score décroissant" },
+  { value: "score", dir: "asc", label: "Score croissant" },
+  { value: "name", dir: "asc", label: "Nom A → Z" },
+  { value: "name", dir: "desc", label: "Nom Z → A" },
+  { value: "lastContact", dir: "desc", label: "Dernier contact" },
 ];
 
 export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead }: LeadListViewProps) {
@@ -328,12 +340,20 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
     }
   };
 
+  // Mobile sort: encode as "key:dir" for the select value
+  var mobileSortValue = sortKey + ":" + sortDir;
+  var handleMobileSortChange = function(value: string) {
+    var parts = value.split(":");
+    setSortKey(parts[0]);
+    setSortDir(parts[1] as "asc" | "desc");
+  };
+
   return (
     <div>
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -357,13 +377,29 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
           </button>
           <button
             onClick={() => setShowColumns(!showColumns)}
-            className="btn-secondary py-2 text-xs"
+            className="btn-secondary py-2 text-xs hidden sm:inline-flex"
           >
             <Columns3 size={14} />
             Colonnes
           </button>
+
+          {/* Mobile-only: sort selector (table headers aren't accessible in card view) */}
+          <div className="relative md:hidden">
+            <ArrowUpDown size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={mobileSortValue}
+              onChange={(e) => handleMobileSortChange(e.target.value)}
+              className="input text-xs py-2 pl-7 pr-2 w-auto"
+            >
+              {MOBILE_SORT_OPTIONS.map((opt) => (
+                <option key={opt.value + ":" + opt.dir} value={opt.value + ":" + opt.dir}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedLeads.size > 0 && (
             <>
               <span className="text-xs text-brand-600 font-medium">
@@ -454,7 +490,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Étape</label>
               <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="input text-sm py-1.5">
@@ -478,7 +514,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Filière</label>
               <select value={filterProgram} onChange={(e) => setFilterProgram(e.target.value)} className="input text-sm py-1.5">
@@ -529,8 +565,126 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* ─── Mobile cards view (< md) ─── */}
+      <div className="md:hidden">
+        {/* Select all bar — only when at least one is selected */}
+        {selectedLeads.size > 0 && (
+          <div className="bg-brand-50 border border-brand-200 rounded-lg px-3 py-2 mb-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selectedLeads.size === sorted.length && sorted.length > 0}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded border-gray-300 text-brand-600"
+            />
+            <span className="text-xs text-brand-700 font-medium">
+              {selectedLeads.size === sorted.length ? "Tout désélectionner" : "Tout sélectionner"} ({sorted.length})
+            </span>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+          {sorted.length === 0 && (
+            <div className="py-16 text-center">
+              <p className="text-sm text-gray-400">Aucun lead ne correspond aux filtres</p>
+            </div>
+          )}
+          {sorted.map((lead) => {
+            var stage = stages.find((s) => s.id === lead.stageId);
+            var isSelected = selectedLeads.has(lead.id);
+            return (
+              <div
+                key={lead.id}
+                onClick={() => onOpenLead?.(lead.id)}
+                className={cn(
+                  "p-3 active:bg-gray-50 transition-colors cursor-pointer",
+                  isSelected && "bg-brand-50/40"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  {/* Checkbox */}
+                  <div onClick={(e) => e.stopPropagation()} className="pt-1">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(lead.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-brand-600"
+                    />
+                  </div>
+
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
+                    {getInitials(lead.firstName + " " + lead.lastName)}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    {/* Name + score */}
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {lead.firstName} {lead.lastName}
+                      </p>
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0", getScoreBg(lead.score))}>
+                        {lead.score}
+                      </span>
+                    </div>
+
+                    {/* Phone (tap-to-call) */}
+                    <a
+                      href={"tel:" + lead.phone}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs text-brand-600 mb-2 active:text-brand-800"
+                    >
+                      <Phone size={11} />
+                      {formatPhone(lead.phone)}
+                    </a>
+
+                    {/* Tags row */}
+                    <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                      {stage && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded">
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stage.color }} />
+                          {stage.name}
+                        </span>
+                      )}
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded", SOURCE_COLORS[lead.source] || "bg-gray-50 text-gray-600")}>
+                        {SOURCE_LABELS[lead.source] || lead.source}
+                      </span>
+                      {lead.program && (
+                        <span className="text-[10px] text-brand-600 font-medium bg-brand-50 px-1.5 py-0.5 rounded">
+                          {lead.program.code || lead.program.name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Footer row: assignedTo + last contact */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-50">
+                      {lead.assignedTo ? (
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-600 min-w-0">
+                          <div className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 text-[8px] font-bold flex items-center justify-center shrink-0">
+                            {getInitials(lead.assignedTo.name)}
+                          </div>
+                          <span className="truncate">{lead.assignedTo.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-gray-400">Non assigné</span>
+                      )}
+                      <span className={cn("text-[10px] shrink-0",
+                        lead.daysSinceContact !== undefined && lead.daysSinceContact >= 7 ? "text-red-500 font-medium" :
+                        lead.daysSinceContact !== undefined && lead.daysSinceContact >= 3 ? "text-amber-600" :
+                        "text-gray-400"
+                      )}>
+                        {lead.lastContactAt ? formatRelative(lead.lastContactAt) : "Jamais contacté"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── Desktop table view (>= md) ─── */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

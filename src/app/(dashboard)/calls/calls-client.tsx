@@ -118,7 +118,7 @@ export function CallsClient({ calls, stats, users, leads, currentUserId }: Calls
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Rechercher par nom, numéro, notes..." className="input pl-9 text-sm" value={search} onChange={function(e) { setSearch(e.target.value); }} />

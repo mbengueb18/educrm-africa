@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
   Upload, Download, Copy, Check, Loader2, X, AlertTriangle,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
@@ -54,21 +55,28 @@ export function PipelineClient({
   var [duplicates, setDuplicates] = useState<any[]>([]);
   var [loadingDuplicates, setLoadingDuplicates] = useState(false);
   var [merging, setMerging] = useState(false);
+  var [showMoreMenu, setShowMoreMenu] = useState(false);
 
   var handleDetectDuplicates = async function() {
-    setLoadingDuplicates(true);
-    try {
-      var result = await detectDuplicates();
-      setDuplicates(result);
-      setDuplicatesOpen(true);
-      if (result.length === 0) {
-        toast.success("Aucun doublon détecté !");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Erreur");
+  setShowMoreMenu(false);
+  setLoadingDuplicates(true);
+  var toastId = toast.loading("Détection des doublons en cours...");
+  try {
+    var result = await detectDuplicates();
+    toast.dismiss(toastId);
+    setDuplicates(result);
+    setDuplicatesOpen(true);
+    if (result.length === 0) {
+      toast.success("Aucun doublon détecté !");
+    } else {
+      toast.success(result.length + " groupe(s) de doublons trouvé(s)");
     }
-    setLoadingDuplicates(false);
-  };
+  } catch (err: any) {
+    toast.dismiss(toastId);
+    toast.error(err.message || "Erreur");
+  }
+  setLoadingDuplicates(false);
+};
 
   var handleMerge = async function(keepId: string, removeIds: string[]) {
     setMerging(true);
@@ -117,13 +125,19 @@ export function PipelineClient({
       : 0;
 
   var handleExport = function() {
-  setExportOpen(true);
-};
+    setShowMoreMenu(false);
+    setExportOpen(true);
+  };
+
+  var handleOpenImport = function() {
+    setShowMoreMenu(false);
+    setImportOpen(true);
+  };
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             Pipeline de recrutement
@@ -133,9 +147,9 @@ export function PipelineClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
 
-          {/* Mes leads */}
+          {/* Mes leads — always visible */}
           <button onClick={function() { setFilterMine(!filterMine); }}
             className={cn("btn-secondary py-1.5 text-xs",
               filterMine && "bg-brand-100 text-brand-700 border-brand-200"
@@ -144,23 +158,64 @@ export function PipelineClient({
             Mes leads
           </button>
 
-          {/* Duplicates */}
+          {/* Doublons — desktop only */}
           <button onClick={handleDetectDuplicates} disabled={loadingDuplicates}
-            className="btn-secondary py-1.5 text-xs">
+            className="btn-secondary py-1.5 text-xs hidden sm:inline-flex">
             {loadingDuplicates ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
             Doublons
           </button>
 
-          {/* Import / Export */}
+          {/* Import / Export — desktop only */}
           <button
             onClick={function() { setImportOpen(true); }}
-            className="btn-secondary py-1.5 text-xs"
+            className="btn-secondary py-1.5 text-xs hidden sm:inline-flex"
           >
             <Upload size={13} /> Importer
           </button>
-          <button onClick={handleExport} className="btn-secondary py-1.5 text-xs">
+          <button onClick={handleExport} className="btn-secondary py-1.5 text-xs hidden sm:inline-flex">
             <Download size={13} /> Exporter
           </button>
+
+          {/* "Plus" dropdown — mobile only */}
+          <div className="relative sm:hidden">
+            <button
+              onClick={function() { setShowMoreMenu(!showMoreMenu); }}
+              className="btn-secondary py-1.5 px-2.5 text-xs"
+              aria-label="Plus d'actions"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+            {showMoreMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={function() { setShowMoreMenu(false); }} />
+                <div className="absolute top-full right-0 mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-44 animate-scale-in">
+                  <button
+                    onClick={handleDetectDuplicates}
+                    disabled={loadingDuplicates}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {loadingDuplicates ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
+                    Détecter les doublons
+                  </button>
+                  <div className="h-px bg-gray-100 my-1" />
+                  <button
+                    onClick={handleOpenImport}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Upload size={13} />
+                    Importer (CSV)
+                  </button>
+                  <button
+                    onClick={handleExport}
+                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Download size={13} />
+                    Exporter (CSV)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* View toggle */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">

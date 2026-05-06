@@ -152,9 +152,9 @@ export function KanbanBoard({
 
   return (
     <div className="h-full">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -177,7 +177,7 @@ export function KanbanBoard({
             )}
           </button>
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-            <span className="text-[10px] text-gray-500 px-2">Tri:</span>
+            <span className="text-[10px] text-gray-500 px-2 hidden sm:inline">Tri:</span>
             {[
               { key: "score" as const, label: "Score" },
               { key: "createdAt" as const, label: "Date" },
@@ -195,7 +195,7 @@ export function KanbanBoard({
               </button>
             ))}
           </div>
-          <span className="text-sm text-gray-500 ml-2">
+          <span className="text-sm text-gray-500 whitespace-nowrap">
             {filteredLeads.length} lead{filteredLeads.length > 1 ? "s" : ""}
           </span>
         </div>

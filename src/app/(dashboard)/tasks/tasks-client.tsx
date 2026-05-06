@@ -168,12 +168,12 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Rechercher une tâche..." className="input pl-9 text-sm" value={search} onChange={function(e) { setSearch(e.target.value); }} />
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto max-w-full no-scrollbar">
           {[
             { key: "active", label: "Actives" },
             { key: "TODO", label: "À faire" },
@@ -208,7 +208,7 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
             <h4 className="text-sm font-semibold text-gray-700">Filtres avancés</h4>
             <button onClick={function() { setFilterAssigned(""); setFilterType(""); setFilterPriority(""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Assigné à</label>
               <select value={filterAssigned} onChange={function(e) { setFilterAssigned(e.target.value); }} className="input text-sm py-1.5">
