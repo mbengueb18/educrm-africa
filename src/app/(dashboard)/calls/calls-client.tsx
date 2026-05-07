@@ -243,69 +243,95 @@ function CallRow({ call, onUpdate, onEdit }: { call: Call; onUpdate: () => void;
   };
 
   return (
-    <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition-colors group">
-      {/* Direction icon */}
-      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", outcomeConf.bg)}>
-        <DirIcon size={18} className={dirConf.color} />
-      </div>
+    <div className="px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-gray-50/50 transition-colors group">
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+        {/* Direction icon */}
+        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", outcomeConf.bg)}>
+          <DirIcon size={18} className={dirConf.color} />
+        </div>
 
-      {/* Lead / Phone */}
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
-        <div className="flex items-center gap-2">
+        {/* Main content */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
+          {/* Title — own line, truncate to prevent vertical break */}
           {call.lead ? (
-            <p className="text-sm font-medium text-gray-900 truncate">{call.lead.firstName} {call.lead.lastName}</p>
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {call.lead.firstName} {call.lead.lastName}
+            </p>
           ) : (
-            <p className="text-sm font-medium text-gray-700">{formatPhone(call.phoneNumber)}</p>
+            <p className="text-sm font-medium text-gray-700 truncate">
+              {formatPhone(call.phoneNumber)}
+            </p>
           )}
-          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", outcomeConf.bg, outcomeConf.color)}>
-            {outcomeConf.label}
-          </span>
-        </div>
-        <div className="flex items-center gap-3 mt-0.5">
-          {call.lead && <span className="text-xs text-gray-400">{formatPhone(call.phoneNumber)}</span>}
-          {call.notes && <span className="text-xs text-gray-400 truncate max-w-[250px]">{call.notes}</span>}
-        </div>
-      </div>
 
-      {/* Duration */}
-      <div className="shrink-0 text-right">
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          <Timer size={12} />
-          {formatDuration(call.duration)}
+          {/* Meta line — wraps cleanly */}
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
+              outcomeConf.bg,
+              outcomeConf.color
+            )}>
+              {outcomeConf.label}
+            </span>
+
+            {call.duration !== null && call.duration !== undefined && (
+              <div className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
+                <Timer size={12} />
+                {formatDuration(call.duration)}
+              </div>
+            )}
+
+            {/* Date inline on mobile only */}
+            <span className="sm:hidden text-xs text-gray-500 whitespace-nowrap">
+              {formatRelative(call.calledAt)}
+            </span>
+
+            {/* Phone shown here only if lead exists (otherwise phone is the title above) */}
+            {call.lead && (
+              <span className="text-xs text-gray-400 truncate max-w-[140px]">
+                {formatPhone(call.phoneNumber)}
+              </span>
+            )}
+
+            {call.notes && (
+              <span className="text-xs text-gray-400 truncate max-w-[250px] hidden md:inline">
+                {call.notes}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Date */}
-      <div className="shrink-0 text-right min-w-[80px]">
-        <span className="text-xs text-gray-500">{formatRelative(call.calledAt)}</span>
-      </div>
-
-      {/* Called by */}
-      <div className="shrink-0">
-        <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={call.calledBy.name}>
-          {getInitials(call.calledBy.name)}
+        {/* Date — desktop column only */}
+        <div className="hidden sm:block shrink-0 text-right min-w-[80px]">
+          <span className="text-xs text-gray-500">{formatRelative(call.calledAt)}</span>
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className="shrink-0">
-        <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-          <MoreHorizontal size={16} />
-        </button>
-        {showMenu && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={function() { setShowMenu(false); }} />
-            <div className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-40 animate-scale-in" style={{ right: "2rem" }}>
-              <button onClick={function() { setShowMenu(false); onEdit(); }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
-                <Pencil size={14} /> Modifier
-              </button>
-              <div className="h-px bg-gray-100 my-1" />
-              <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
-                <Trash2 size={14} /> Supprimer
-              </button>
-            </div>
-          </>
-        )}
+        {/* Called by avatar */}
+        <div className="shrink-0">
+          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={call.calledBy.name}>
+            {getInitials(call.calledBy.name)}
+          </div>
+        </div>
+
+        {/* Actions menu */}
+        <div className="shrink-0 relative">
+          <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <MoreHorizontal size={16} />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={function() { setShowMenu(false); }} />
+              <div className="absolute top-full right-0 mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-40 animate-scale-in">
+                <button onClick={function() { setShowMenu(false); onEdit(); }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
+                  <Pencil size={14} /> Modifier
+                </button>
+                <div className="h-px bg-gray-100 my-1" />
+                <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
+                  <Trash2 size={14} /> Supprimer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
