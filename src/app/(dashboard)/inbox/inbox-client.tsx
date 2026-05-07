@@ -5,7 +5,7 @@ import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
   Search, Send, Mail, MessageCircle, MessageSquare, Phone,
-  Plus, ChevronRight, Inbox as InboxIcon, Reply, Paperclip, Download, Bot,
+  Plus, ChevronRight, ChevronLeft, Inbox as InboxIcon, Reply, Paperclip, Download, Bot,
 } from "lucide-react";
 
 interface Conversation {
@@ -105,19 +105,25 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Page header — compact on mobile */}
+      <div className="flex items-center justify-between mb-3 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Inbox</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Inbox</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">
             {conversations.length} conversation{conversations.length > 1 ? "s" : ""}
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ height: "calc(100vh - 220px)" }}>
-        <div className="grid grid-cols-[340px_1fr] h-full overflow-hidden">
-          {/* Conversation list */}
-          <div className="border-r border-gray-200 flex flex-col">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden h-[calc(100vh-180px)] md:h-[calc(100vh-220px)]">
+        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] lg:grid-cols-[340px_1fr] h-full overflow-hidden">
+
+          {/* ─── Conversation list ─── */}
+          {/* Hidden on mobile when a conversation is selected */}
+          <div className={cn(
+            "border-r border-gray-200 flex flex-col",
+            selectedId ? "hidden md:flex" : "flex"
+          )}>
             <div className="p-3 border-b border-gray-100">
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -131,8 +137,8 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               </div>
             </div>
 
-            {/* Channel tabs */}
-            <div className="flex border-b border-gray-100">
+            {/* Channel tabs — horizontal scroll on small width */}
+            <div className="flex border-b border-gray-100 overflow-x-auto no-scrollbar">
               {[
                 { key: null, label: "Tous" },
                 { key: "EMAIL", label: "Email" },
@@ -144,7 +150,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                   key={tab.key || "all"}
                   onClick={() => setChannelFilter(tab.key)}
                   className={cn(
-                    "flex-1 py-2.5 text-xs font-medium transition-colors",
+                    "px-3 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 flex-1",
                     channelFilter === tab.key
                       ? "text-brand-600 border-b-2 border-brand-600"
                       : "text-gray-500 hover:text-gray-700"
@@ -175,16 +181,16 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                           {getInitials(conv.lead.firstName + " " + conv.lead.lastName)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-baseline justify-between gap-2 mb-0.5">
                             <p className="text-sm font-semibold text-gray-900 truncate">
                               {conv.lead.firstName} {conv.lead.lastName}
                             </p>
-                            <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                            <span className="text-[10px] text-gray-400 shrink-0 ml-2 whitespace-nowrap">
                               {formatRelative(conv.lastMessage.sentAt)}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <ChannelIcon size={12} className={CHANNEL_COLORS[conv.lastMessage.channel] || "text-gray-400"} />
+                            <ChannelIcon size={12} className={cn("shrink-0", CHANNEL_COLORS[conv.lastMessage.channel] || "text-gray-400")} />
                             <p className="text-xs text-gray-500 truncate">
                               {conv.lastMessage.direction === "OUTBOUND" ? "Vous: " : ""}
                               {getMessagePreview(conv.lastMessage)}
@@ -211,36 +217,50 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
             </div>
           </div>
 
-          {/* Message thread */}
+          {/* ─── Message thread ─── */}
           {selected ? (
-            <div className="flex flex-col h-full overflow-hidden">
+            <div className={cn(
+              "flex-col h-full overflow-hidden",
+              // Show on mobile only when selected, always show on desktop
+              selectedId ? "flex" : "hidden md:flex"
+            )}>
               {/* Thread header */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 text-sm font-bold flex items-center justify-center">
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100 shrink-0 gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  {/* Back button — mobile only */}
+                  <button
+                    onClick={() => setSelectedId(null)}
+                    className="md:hidden p-1.5 -ml-1.5 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
+                    aria-label="Retour à la liste"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-100 text-brand-700 text-xs sm:text-sm font-bold flex items-center justify-center shrink-0">
                     {getInitials(selected.lead.firstName + " " + selected.lead.lastName)}
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
                       {selected.lead.firstName} {selected.lead.lastName}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 truncate">
                       {selected.lead.email || selected.lead.phone}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => { setComposing(true); setReplySubject(""); }}
-                  className="btn-primary py-1.5 text-xs"
+                  className="btn-primary py-1.5 text-xs shrink-0"
+                  aria-label="Envoyer un email"
                 >
-                  <Send size={13} /> Envoyer un email
+                  <Send size={13} />
+                  <span className="hidden sm:inline">Envoyer un email</span>
                 </button>
               </div>
 
               {/* Messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 min-h-0">
                 {composing && (
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-4 animate-scale-in">
+                  <div className="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-200 mb-4 animate-scale-in">
                     <ComposeEmail
                       leadId={selected.lead.id}
                       leadName={selected.lead.firstName + " " + selected.lead.lastName}
@@ -259,7 +279,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                   var parsed = formatMessageContent(msg.content);
 
                   return (
-                    <div key={msg.id} className={cn("flex gap-3", isOutbound && "flex-row-reverse")}>
+                    <div key={msg.id} className={cn("flex gap-2 sm:gap-3", isOutbound && "flex-row-reverse")}>
                       <div className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
                         isOutbound ? "bg-brand-100" : "bg-gray-100"
@@ -273,18 +293,18 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                         )}
                       </div>
                       <div className={cn(
-                        "max-w-[70%] rounded-xl px-4 py-3 group",
+                        "max-w-[85%] sm:max-w-[70%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 group min-w-0",
                         isOutbound ? "bg-brand-50" : "bg-gray-100"
                       )}>
                         {parsed.subject && (
-                          <p className="text-xs font-semibold text-gray-700 mb-1">{parsed.subject}</p>
+                          <p className="text-xs font-semibold text-gray-700 mb-1 break-words">{parsed.subject}</p>
                         )}
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{parsed.body}</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{parsed.body}</p>
                         {msg.attachments && msg.attachments.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {msg.attachments.map(function(att) {
                               return (
-                                 <a
+                                <a
                                   key={att.id}
                                   href={"/api/attachments/" + att.id}
                                   target="_blank"
@@ -304,14 +324,14 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                             })}
                           </div>
                         )}
-                        <div className="flex items-center justify-between gap-2 mt-2">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <ChannelIcon size={11} className={CHANNEL_COLORS[msg.channel] || "text-gray-400"} />
-                            <span className="text-[10px] text-gray-400">{formatRelative(msg.sentAt)}</span>
+                            <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatRelative(msg.sentAt)}</span>
                             {isOutbound && msg.sentBy && (
-                              <span className="text-[10px] text-gray-400">par {msg.sentBy.name}</span>
+                              <span className="text-[10px] text-gray-400 truncate max-w-[100px]">par {msg.sentBy.name}</span>
                             )}
-                            <span className={cn("text-[10px] font-medium",
+                            <span className={cn("text-[10px] font-medium whitespace-nowrap",
                               msg.status === "SENT" || msg.status === "DELIVERED" ? "text-emerald-500" :
                               msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
                             )}>
@@ -327,7 +347,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                                 setReplySubject(subj);
                                 setComposing(true);
                               }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium"
+                              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium whitespace-nowrap"
                             >
                               <Reply size={11} /> Répondre
                             </button>
@@ -340,7 +360,7 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 h-full">
+            <div className="hidden md:flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 h-full">
               <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mb-4">
                 <Send size={36} className="text-brand-400" />
               </div>
