@@ -319,7 +319,7 @@ function DailyTrafficChart({ data, loading }: { data: any[]; loading: boolean })
   }));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900">Trafic journalier</h3>
         {loading && <Loader2 size={14} className="text-gray-300 animate-spin" />}
@@ -327,7 +327,7 @@ function DailyTrafficChart({ data, loading }: { data: any[]; loading: boolean })
       {data.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">Aucune donnée sur la période</div>
       ) : (
-        <div className="w-full" style={{ height: 280 }}>
+        <div className="w-full" style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formatted}>
               <defs>
@@ -377,7 +377,7 @@ function ChannelReport({ data, dimensions, onDimensionsChange, loading }: any) {
   const totalSessions = data.reduce((s: number, r: any) => s + r.sessions, 0);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 overflow-hidden">
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
@@ -407,19 +407,19 @@ function ChannelReport({ data, dimensions, onDimensionsChange, loading }: any) {
       {data.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">Aucune donnée</div>
       ) : (
-        <div className="overflow-x-auto -mx-2">
+        <div className="overflow-x-auto -mx-3 sm:-mx-2">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider border-b border-gray-100">
                 {dimensions.map((d: ChannelDimension) => (
-                  <th key={d} className="px-2 py-2 font-semibold">{ALL_DIMENSIONS.find((x) => x.key === d)?.label || d}</th>
+                  <th key={d} className="px-2 py-2 font-semibold whitespace-nowrap">{ALL_DIMENSIONS.find((x) => x.key === d)?.label || d}</th>
                 ))}
-                <th className="px-2 py-2 font-semibold text-right">Visiteurs</th>
-                <th className="px-2 py-2 font-semibold text-right">Sessions</th>
-                <th className="px-2 py-2 font-semibold text-right">Pages vues</th>
-                <th className="px-2 py-2 font-semibold text-right">Tps visible</th>
-                <th className="px-2 py-2 font-semibold text-right">Leads</th>
-                <th className="px-2 py-2 font-semibold text-right">Conv.</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap hidden md:table-cell">Visiteurs</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap">Sessions</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap hidden lg:table-cell">Pages vues</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap hidden lg:table-cell">Tps visible</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap hidden md:table-cell">Leads</th>
+                <th className="px-2 py-2 font-semibold text-right whitespace-nowrap">Conv.</th>
               </tr>
             </thead>
             <tbody>
@@ -432,16 +432,16 @@ function ChannelReport({ data, dimensions, onDimensionsChange, loading }: any) {
                         <span className="text-sm text-gray-900 font-medium">{row.dimensions[d] || "—"}</span>
                       </td>
                     ))}
-                    <td className="px-2 py-2.5 text-right tabular-nums">{row.visitors.toLocaleString("fr-FR")}</td>
+                    <td className="px-2 py-2.5 text-right tabular-nums hidden md:table-cell">{row.visitors.toLocaleString("fr-FR")}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums">
                       <div className="flex items-center justify-end gap-2">
-                        <span className="text-[10px] text-gray-400 w-10 text-right">{sharePct.toFixed(1)}%</span>
+                        <span className="text-[10px] text-gray-400 w-10 text-right hidden sm:inline">{sharePct.toFixed(1)}%</span>
                         <span className="font-medium">{row.sessions.toLocaleString("fr-FR")}</span>
                       </div>
                     </td>
-                    <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{row.pageViews.toLocaleString("fr-FR")}</td>
-                    <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{formatDuration(row.avgEngagedMs)}</td>
-                    <td className="px-2 py-2.5 text-right tabular-nums">
+                    <td className="px-2 py-2.5 text-right tabular-nums text-gray-700 hidden lg:table-cell">{row.pageViews.toLocaleString("fr-FR")}</td>
+                    <td className="px-2 py-2.5 text-right tabular-nums text-gray-700 hidden lg:table-cell">{formatDuration(row.avgEngagedMs)}</td>
+                    <td className="px-2 py-2.5 text-right tabular-nums hidden md:table-cell">
                       <span className={cn("font-medium", row.leads > 0 && "text-emerald-600")}>
                         {row.leads.toLocaleString("fr-FR")}
                       </span>
