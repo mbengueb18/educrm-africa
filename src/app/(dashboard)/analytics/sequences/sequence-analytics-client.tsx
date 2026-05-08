@@ -264,22 +264,22 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
 
       {/* Cohort analysis */}
       {cohorts.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mb-6 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <Calendar size={16} className="text-blue-500 shrink-0" /> Cohortes : à quel moment les leads répondent
+            <Calendar size={16} className="text-blue-500" /> Cohortes : à quel moment les leads répondent
           </h3>
           <p className="text-xs text-gray-500 mb-4">
             % cumulé de leads ayant répondu après leur création (par mois)
           </p>
 
-          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
-            <table className="w-full text-xs min-w-[420px] sm:min-w-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 font-medium text-gray-500 whitespace-nowrap">Cohorte</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-500">Cohorte</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">Total</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-500 hidden sm:table-cell">J+0</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-500 hidden sm:table-cell">J+1</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+0</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+1</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+3</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+7</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+14</th>
@@ -289,10 +289,10 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
               <tbody>
                 {cohorts.map((c) => (
                   <tr key={c.month} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2 px-2 font-medium text-gray-700 capitalize whitespace-nowrap">{c.monthLabel}</td>
+                    <td className="py-2 px-2 font-medium text-gray-700 capitalize">{c.monthLabel}</td>
                     <td className="text-center py-2 px-2 text-gray-500">{c.total}</td>
-                    <td className="hidden sm:table-cell"><CohortCell value={c.d0} /></td>
-                    <td className="hidden sm:table-cell"><CohortCell value={c.d1} /></td>
+                    <CohortCell value={c.d0} />
+                    <CohortCell value={c.d1} />
                     <CohortCell value={c.d3} />
                     <CohortCell value={c.d7} />
                     <CohortCell value={c.d14} />
