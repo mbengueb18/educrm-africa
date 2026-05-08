@@ -113,13 +113,13 @@ export function CampaignDetailClient({ campaign }: Props) {
               key={tab.key}
               onClick={function() { setActiveTab(tab.key); }}
               className={cn(
-                "flex items-center gap-2 px-3 sm:px-5 py-3 text-sm font-medium transition-colors -mb-px whitespace-nowrap shrink-0",
+                "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-3 text-sm font-medium transition-colors -mb-px whitespace-nowrap shrink-0",
                 activeTab === tab.key
                   ? "text-brand-600 border-b-2 border-brand-500"
                   : "text-gray-500 hover:text-gray-700"
               )}
             >
-              <TabIcon size={16} />
+              <TabIcon size={16} className="hidden sm:block" />
               {tab.label}
               {tab.key === "recipients" && (
                 <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{campaign.recipients.length}</span>
