@@ -306,7 +306,26 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
   }, [triggerType, setNodes]);
 
   return (
-    <div className="fixed inset-0 bg-gray-50 flex flex-col z-30">
+    <>
+      {/* Mobile/tablet blocker — visual workflow editor is desktop-only */}
+      <div className="lg:hidden fixed inset-0 z-50 bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-violet-50 flex items-center justify-center mb-5">
+          <GitBranch size={40} className="text-violet-500" />
+        </div>
+        <h1 className="text-lg font-bold text-gray-900 mb-2">Éditeur réservé au desktop</h1>
+        <p className="text-sm text-gray-600 max-w-xs mb-1">
+          L'éditeur de workflow visuel nécessite un grand écran pour manipuler le graphe et configurer les actions.
+        </p>
+        <p className="text-xs text-gray-400 max-w-xs mb-6">
+          Connectez-vous depuis un ordinateur (1024px minimum) pour créer et modifier vos automatisations.
+        </p>
+        <Link href="/workflows" className="btn-primary text-sm">
+          <ArrowLeft size={14} /> Retour aux workflows
+        </Link>
+      </div>
+
+      {/* Desktop editor */}
+      <div className="hidden lg:flex fixed inset-0 bg-gray-50 flex-col z-30">
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 shrink-0">
         <Link href="/workflows" className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
@@ -431,6 +450,7 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
         )}
       </div>
     </div>
+    </>
   );
 }
 
