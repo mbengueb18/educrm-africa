@@ -85,27 +85,27 @@ export function CampaignDetailClient({ campaign }: Props) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/campaigns" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/campaigns" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5 mb-0.5">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">{campaign.name}</h1>
-            <span className={cn("badge text-[10px]", statusStyle.color)}>
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate min-w-0">{campaign.name}</h1>
+            <span className={cn("badge text-[10px] whitespace-nowrap shrink-0", statusStyle.color)}>
               <StatusIcon size={11} className={campaign.status === "SENDING" ? "animate-spin" : ""} />
               {statusStyle.label}
             </span>
           </div>
-          <p className="text-sm text-gray-500">
+          <p className="text-xs sm:text-sm text-gray-500">
             {campaign.createdBy ? "Par " + campaign.createdBy.name : ""}
             {campaign.sentAt ? " — Envoye le " + formatDateTime(campaign.sentAt) : " — Créé le " + formatDate(campaign.createdAt)}
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 mb-6">
+      {/* Tabs — horizontal scroll on small screens */}
+      <div className="flex border-b border-gray-200 mb-4 sm:mb-6 overflow-x-auto no-scrollbar">
         {TABS.map(function(tab) {
           var TabIcon = tab.icon;
           return (
@@ -113,7 +113,7 @@ export function CampaignDetailClient({ campaign }: Props) {
               key={tab.key}
               onClick={function() { setActiveTab(tab.key); }}
               className={cn(
-                "flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors -mb-px",
+                "flex items-center gap-2 px-3 sm:px-5 py-3 text-sm font-medium transition-colors -mb-px whitespace-nowrap shrink-0",
                 activeTab === tab.key
                   ? "text-brand-600 border-b-2 border-brand-500"
                   : "text-gray-500 hover:text-gray-700"
