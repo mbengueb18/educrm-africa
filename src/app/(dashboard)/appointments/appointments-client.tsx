@@ -203,8 +203,8 @@ export function AppointmentsClient({ appointments, stats, users, leads, currentU
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Rechercher..." className="input pl-9 text-sm" value={search} onChange={function(e) { setSearch(e.target.value); }} />
         </div>
@@ -244,7 +244,7 @@ export function AppointmentsClient({ appointments, stats, users, leads, currentU
             <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
             <button onClick={function() { setFilterStatus(""); setFilterType(""); setFilterUser(""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Statut</label>
               <select value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value); }} className="input text-sm py-1.5">
@@ -361,7 +361,8 @@ function WeekView({ days, currentDate, onNavigate, onEdit, onRefresh }: {
         <button onClick={function() { onNavigate(1); }} className="btn-secondary py-1.5 px-2"><ChevronRight size={16} /></button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+        <div className="grid grid-cols-7 gap-2 min-w-[700px] sm:min-w-0">
         {days.map(function(day, i) {
           var isToday = isSameDay(day.date, today);
           return (
@@ -392,6 +393,7 @@ function WeekView({ days, currentDate, onNavigate, onEdit, onRefresh }: {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -452,73 +454,96 @@ function AppointmentCard({ appointment, onEdit, onRefresh }: { appointment: Appo
   };
 
   return (
-    <div className={cn("flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition-colors group", isPast && "bg-amber-50/20")}>
-      {/* Time */}
-      <div className="shrink-0 text-center w-16">
-        <div className="text-sm font-bold text-gray-900">{formatTime(appointment.startAt)}</div>
-        <div className="text-[10px] text-gray-400">{formatTime(appointment.endAt)}</div>
-      </div>
-
-      {/* Type icon */}
-      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", typeConf.bg)}>
-        <TypeIcon size={18} className={typeConf.color} />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={function() { onEdit(appointment); }}>
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-900 truncate">{appointment.title}</p>
-          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", statusConf.bg, statusConf.color)}>{statusConf.label}</span>
+    <div className={cn(
+      "px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-gray-50/50 transition-colors group",
+      isPast && "bg-amber-50/20"
+    )}>
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+        {/* Time */}
+        <div className="shrink-0 text-center w-12 sm:w-16">
+          <div className="text-sm font-bold text-gray-900 whitespace-nowrap">{formatTime(appointment.startAt)}</div>
+          <div className="text-[10px] text-gray-400 whitespace-nowrap">{formatTime(appointment.endAt)}</div>
         </div>
-        <div className="flex items-center gap-3 mt-0.5">
-          {appointment.lead && <span className="text-xs text-brand-600 font-medium">{appointment.lead.firstName} {appointment.lead.lastName}</span>}
-          {appointment.location && <span className="text-xs text-gray-400 flex items-center gap-0.5"><MapPin size={10} /> {appointment.location}</span>}
-          {appointment.meetingUrl && (
-            <a href={appointment.meetingUrl} target="_blank" onClick={function(e) { e.stopPropagation(); }}
-              className="text-xs text-purple-600 flex items-center gap-0.5 hover:underline">
-              <Video size={10} /> {PROVIDER_LABELS[appointment.meetingProvider || ""] || "Rejoindre"}
-            </a>
+
+        {/* Type icon */}
+        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", typeConf.bg)}>
+          <TypeIcon size={18} className={typeConf.color} />
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={function() { onEdit(appointment); }}>
+          <p className="text-sm font-medium text-gray-900 truncate">{appointment.title}</p>
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
+              statusConf.bg,
+              statusConf.color
+            )}>
+              {statusConf.label}
+            </span>
+            {appointment.lead && (
+              <span className="text-xs text-brand-600 font-medium truncate max-w-[140px]">
+                {appointment.lead.firstName} {appointment.lead.lastName}
+              </span>
+            )}
+            {appointment.location && (
+              <span className="text-xs text-gray-400 flex items-center gap-0.5 truncate max-w-[140px]">
+                <MapPin size={10} className="shrink-0" />
+                <span className="truncate">{appointment.location}</span>
+              </span>
+            )}
+            {appointment.meetingUrl && (
+              <a href={appointment.meetingUrl} target="_blank" rel="noopener noreferrer" onClick={function(e) { e.stopPropagation(); }} className="text-xs text-purple-600 flex items-center gap-0.5 hover:underline whitespace-nowrap">
+                <Video size={10} className="shrink-0" />
+                {PROVIDER_LABELS[appointment.meetingProvider || ""] || "Rejoindre"}
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Assigned to */}
+        <div className="shrink-0">
+          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={appointment.assignedTo.name}>
+            {getInitials(appointment.assignedTo.name)}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="shrink-0 relative">
+          <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <MoreHorizontal size={16} />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40 bg-black/30 sm:bg-transparent" onClick={function() { setShowMenu(false); }} />
+              <div className="fixed left-0 right-0 bottom-0 sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-full sm:mt-1 z-50 bg-white rounded-t-2xl sm:rounded-xl shadow-xl border border-gray-200 sm:w-48 max-h-[75vh] overflow-y-auto animate-fade-in">
+                <div className="sm:hidden flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 bg-gray-300 rounded-full" />
+                </div>
+                <div className="py-1">
+                  <button onClick={function() { setShowMenu(false); onEdit(appointment); }} className="w-full text-left px-4 sm:px-3 py-3 sm:py-2 text-sm sm:text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
+                    <Pencil size={14} /> Modifier
+                  </button>
+                  <div className="h-px bg-gray-100 my-1" />
+                  {Object.entries(STATUS_CONFIG).map(function(entry) {
+                    return (
+                      <button key={entry[0]} onClick={function() { handleStatusChange(entry[0]); }}
+                        className={cn("w-full text-left px-4 sm:px-3 py-3 sm:py-2 text-sm sm:text-xs flex items-center gap-2 hover:bg-gray-50",
+                          appointment.status === entry[0] ? "text-brand-600 font-medium" : "text-gray-700"
+                        )}>
+                        {entry[1].label}
+                      </button>
+                    );
+                  })}
+                  <div className="h-px bg-gray-100 my-1" />
+                  <button onClick={handleDelete} className="w-full text-left px-4 sm:px-3 py-3 sm:py-2 text-sm sm:text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
+                    <Trash2 size={14} /> Supprimer
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
-      </div>
-
-      {/* Assigned to */}
-      <div className="shrink-0">
-        <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={appointment.assignedTo.name}>
-          {getInitials(appointment.assignedTo.name)}
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="shrink-0">
-        <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-          <MoreHorizontal size={16} />
-        </button>
-        {showMenu && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={function() { setShowMenu(false); }} />
-            <div className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-48 animate-scale-in" style={{ right: "2rem" }}>
-              <button onClick={function() { setShowMenu(false); onEdit(appointment); }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
-                <Pencil size={14} /> Modifier
-              </button>
-              <div className="h-px bg-gray-100 my-1" />
-              {Object.entries(STATUS_CONFIG).map(function(entry) {
-                return (
-                  <button key={entry[0]} onClick={function() { handleStatusChange(entry[0]); }}
-                    className={cn("w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-50",
-                      appointment.status === entry[0] ? "text-brand-600 font-medium" : "text-gray-700"
-                    )}>
-                    {entry[1].label}
-                  </button>
-                );
-              })}
-              <div className="h-px bg-gray-100 my-1" />
-              <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
-                <Trash2 size={14} /> Supprimer
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );

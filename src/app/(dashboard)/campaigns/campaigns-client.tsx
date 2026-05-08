@@ -82,10 +82,10 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campagnes email</h1>
-          <p className="text-sm text-gray-500 mt-1">Creez et gérez vos campagnes de communication</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Campagnes email</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Creez et gérez vos campagnes de communication</p>
         </div>
         <button onClick={function() {
           startTransition(async function() {
@@ -95,7 +95,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
             } catch (e: any) { toast.error(e.message); }
           });
         }} className="btn-primary text-sm" disabled={isPending}>
-          {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Nouvelle campagne
+          {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} <span className="hidden sm:inline">Nouvelle campagne</span><span className="sm:hidden">Nouvelle</span>
       </button>
       </div>
 
@@ -137,12 +137,12 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
             var clickRate = campaign.openedCount > 0 ? Math.round((campaign.clickedCount / campaign.openedCount) * 100) : 0;
 
             return (
-              <div key={campaign.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-card-hover transition-all">
-                <div className="flex items-start justify-between mb-3">
+              <div key={campaign.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 hover:shadow-card-hover transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-semibold text-gray-900 truncate">{campaign.name}</h3>
-                      <span className={cn("badge text-[10px]", style.color)}>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="text-base font-semibold text-gray-900 truncate min-w-0">{campaign.name}</h3>
+                      <span className={cn("badge text-[10px] whitespace-nowrap shrink-0", style.color)}>
                         <StatusIcon size={11} className={campaign.status === "SENDING" ? "animate-spin" : ""} />
                         {style.label}
                       </span>
@@ -154,7 +154,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     {campaign.status === "DRAFT" && (
                       <>
                         <Link href={"/campaigns/" + campaign.id + "/edit"} className="btn-secondary py-1.5 px-3 text-xs">
@@ -181,7 +181,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
 
                 {/* Stats row for sent campaigns */}
                 {campaign.status === "SENT" && (
-                  <div className="grid grid-cols-5 gap-3 pt-3 border-t border-gray-100">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-gray-100">
                     <MiniMetric label="Envoyes" value={campaign.sentCount} icon={Send} color="text-brand-600" />
                     <MiniMetric label="Delivres" value={campaign.deliveredCount} icon={CheckCircle} color="text-emerald-600" />
                     <MiniMetric label="Ouverts" value={campaign.openedCount} subtitle={openRate + "%"} icon={Eye} color="text-blue-600" />

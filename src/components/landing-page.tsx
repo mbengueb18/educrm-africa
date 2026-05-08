@@ -54,7 +54,7 @@ export default function LandingPage() {
           color: "#fff", fontWeight: 700, fontSize: 22,
         }}>T</div>
         <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 28 }}>
-          TalibCRM<span style={{ color: "#F5A623", fontWeight: 400 }}>.africa</span>
+          TalibCRM<span style={{ color: "#F5A623", fontWeight: 400 }}></span>
         </span>
       </div>
 

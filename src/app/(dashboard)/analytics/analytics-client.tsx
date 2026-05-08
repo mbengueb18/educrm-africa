@@ -88,14 +88,14 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId }: 
   return (
     <div>
       {/* Header + Filters */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
             {getGreeting()}, {userName.split(" ")[0]} 👋
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Voici un aperçu de votre activité</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Voici un aperçu de votre activité</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Period selector */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             {[
@@ -127,12 +127,12 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId }: 
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 animate-scale-in">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 sm:mb-6 animate-scale-in">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
             <button onClick={function() { handleFilterChange(undefined, "", ""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
               <select value={filterUser} onChange={function(e) { handleFilterChange(undefined, e.target.value); }} className="input text-sm py-1.5">
@@ -336,11 +336,11 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId }: 
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="text-left py-2 text-gray-500 font-medium">Commercial</th>
-                    <th className="text-center py-2 text-gray-500 font-medium">Leads</th>
+                    <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Leads</th>
                     <th className="text-center py-2 text-gray-500 font-medium">Convertis</th>
                     <th className="text-center py-2 text-gray-500 font-medium">Taux</th>
-                    <th className="text-center py-2 text-gray-500 font-medium">Appels</th>
-                    <th className="text-center py-2 text-gray-500 font-medium">RDV</th>
+                    <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Appels</th>
+                    <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">RDV</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -349,23 +349,23 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId }: 
                       <tr key={user.id} className="hover:bg-gray-50/50">
                         <td className="py-2.5">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center">{getInitials(user.name)}</div>
-                            <span className="font-medium text-gray-900">{user.name}</span>
+                            <div className="w-6 h-6 rounded-md bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center shrink-0">{getInitials(user.name)}</div>
+                            <span className="font-medium text-gray-900 truncate">{user.name}</span>
                           </div>
                         </td>
-                        <td className="text-center py-2.5 text-gray-700">{user.assigned}</td>
+                        <td className="text-center py-2.5 text-gray-700 hidden sm:table-cell">{user.assigned}</td>
                         <td className="text-center py-2.5">
                           <span className="font-bold text-emerald-600">{user.converted}</span>
                         </td>
                         <td className="text-center py-2.5">
-                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap",
                             user.convRate >= 20 ? "bg-emerald-50 text-emerald-600" :
                             user.convRate >= 10 ? "bg-amber-50 text-amber-600" :
                             "bg-gray-100 text-gray-500"
                           )}>{user.convRate}%</span>
                         </td>
-                        <td className="text-center py-2.5 text-gray-700">{user.calls}</td>
-                        <td className="text-center py-2.5 text-gray-700">{user.appointments}</td>
+                        <td className="text-center py-2.5 text-gray-700 hidden sm:table-cell">{user.calls}</td>
+                        <td className="text-center py-2.5 text-gray-700 hidden sm:table-cell">{user.appointments}</td>
                       </tr>
                     );
                   })}

@@ -333,100 +333,132 @@ function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; 
 
   return (
     <div className={cn(
-      "flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition-colors group",
+      "px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-gray-50/50 transition-colors group",
       task.status === "DONE" && "opacity-60",
       isOverdue && "bg-red-50/30"
     )}>
-      {/* Status toggle */}
-      <button onClick={handleStatusToggle} disabled={updating} className="shrink-0">
-        {updating ? (
-          <Loader2 size={20} className="animate-spin text-gray-400" />
-        ) : (
-          <StatusIcon size={20} className={cn(statusConf.color, "hover:scale-110 transition-transform")} />
-        )}
-      </button>
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+        {/* Status toggle */}
+        <button onClick={handleStatusToggle} disabled={updating} className="shrink-0 mt-1 sm:mt-0">
+          {updating ? (
+            <Loader2 size={20} className="animate-spin text-gray-400" />
+          ) : (
+            <StatusIcon size={20} className={cn(statusConf.color, "hover:scale-110 transition-transform")} />
+          )}
+        </button>
 
-      {/* Type icon */}
-      <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", priorityConf.bg)}>
-        <TypeIcon size={16} className={typeConf.color} />
-      </div>
+        {/* Type icon */}
+        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", priorityConf.bg)}>
+          <TypeIcon size={16} className={typeConf.color} />
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
-        <div className="flex items-center gap-2">
-          <p className={cn("text-sm font-medium text-gray-900 truncate", task.status === "DONE" && "line-through text-gray-500")}>
+        {/* Main content */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
+          {/* Title — own line, truncated */}
+          <p className={cn(
+            "text-sm font-medium text-gray-900 truncate",
+            task.status === "DONE" && "line-through text-gray-500"
+          )}>
             {task.title}
           </p>
-          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", priorityConf.bg, priorityConf.color)}>
-            {priorityConf.label}
-          </span>
-          {task.reminderAt && (
-            <span title={"Rappel : " + formatDateTime(task.reminderAt)}>
-            <Bell size={12} className="text-amber-500" />
+
+          {/* Meta line — wraps cleanly */}
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className={cn(
+              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap",
+              priorityConf.bg,
+              priorityConf.color
+            )}>
+              {priorityConf.label}
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 mt-0.5">
-          {task.lead && (
-            <span className="text-xs text-brand-600 font-medium">{task.lead.firstName} {task.lead.lastName}</span>
-          )}
-          {task.description && (
-            <span className="text-xs text-gray-400 truncate max-w-[200px]">{task.description.replace(/<[^>]*>/g, '')}</span>
-          )}
-        </div>
-      </div>
 
-      {/* Due date */}
-      <div className="shrink-0 text-right">
-        {task.dueDate ? (
-          <div className={cn("flex items-center gap-1 text-xs", isOverdue ? "text-red-600 font-semibold" : "text-gray-500")}>
-            {isOverdue && <AlertTriangle size={12} />}
-            <Calendar size={12} />
-            {formatDateTime(task.dueDate)}
+            {task.reminderAt && (
+              <span title={"Rappel : " + formatDateTime(task.reminderAt)} className="inline-flex">
+                <Bell size={12} className="text-amber-500" />
+              </span>
+            )}
+
+            {task.lead && (
+              <span className="text-xs text-brand-600 font-medium truncate max-w-[140px]">
+                {task.lead.firstName} {task.lead.lastName}
+              </span>
+            )}
+
+            {task.description && (
+              <span className="text-xs text-gray-400 truncate max-w-[200px] hidden md:inline">
+                {task.description.replace(/<[^>]*>/g, '')}
+              </span>
+            )}
+
+            {/* Due date inline on mobile */}
+            {task.dueDate && (
+              <div className={cn(
+                "sm:hidden flex items-center gap-1 text-[10px] whitespace-nowrap",
+                isOverdue ? "text-red-600 font-semibold" : "text-gray-500"
+              )}>
+                {isOverdue && <AlertTriangle size={11} />}
+                <Calendar size={11} />
+                {formatDateTime(task.dueDate)}
+              </div>
+            )}
           </div>
-        ) : (
-          <span className="text-xs text-gray-300">Pas d'échéance</span>
-        )}
-      </div>
-
-      {/* Assigned to */}
-      <div className="shrink-0">
-        <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={task.assignedTo.name}>
-          {getInitials(task.assignedTo.name)}
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className="shrink-0">
-        <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-          <MoreHorizontal size={16} />
-        </button>
-        {showMenu && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={function() { setShowMenu(false); }} />
-            <div className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-48 animate-scale-in" style={{ right: "2rem" }}>
-              <button onClick={function() { setShowMenu(false); onEdit(); }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
-                <Pencil size={14} /> Modifier
-              </button>
-              <div className="h-px bg-gray-100 my-1" />
-              {Object.entries(STATUS_CONFIG).map(function(entry) {
-                var Icon = entry[1].icon;
-                return (
-                  <button key={entry[0]} onClick={function() { handleStatusChange(entry[0]); }}
-                    className={cn("w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-50",
-                      task.status === entry[0] ? "text-brand-600 font-medium" : "text-gray-700"
-                    )}>
-                    <Icon size={14} className={entry[1].color} /> {entry[1].label}
-                  </button>
-                );
-              })}
-              <div className="h-px bg-gray-100 my-1" />
-              <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
-                <Trash2 size={14} /> Supprimer
-              </button>
+        {/* Due date — desktop column only */}
+        <div className="hidden sm:block shrink-0 text-right">
+          {task.dueDate ? (
+            <div className={cn(
+              "flex items-center gap-1 text-xs whitespace-nowrap",
+              isOverdue ? "text-red-600 font-semibold" : "text-gray-500"
+            )}>
+              {isOverdue && <AlertTriangle size={12} />}
+              <Calendar size={12} />
+              {formatDateTime(task.dueDate)}
             </div>
-          </>
-        )}
+          ) : (
+            <span className="text-xs text-gray-300">Pas d'échéance</span>
+          )}
+        </div>
+
+        {/* Assignee avatar */}
+        <div className="shrink-0">
+          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center" title={task.assignedTo.name}>
+            {getInitials(task.assignedTo.name)}
+          </div>
+        </div>
+
+        {/* Actions menu */}
+        <div className="shrink-0 relative">
+          <button onClick={function(e) { e.stopPropagation(); setShowMenu(!showMenu); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <MoreHorizontal size={16} />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={function() { setShowMenu(false); }} />
+              <div className="absolute top-full right-0 mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-48 animate-scale-in">
+                <button onClick={function() { setShowMenu(false); onEdit(); }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50">
+                  <Pencil size={14} /> Modifier
+                </button>
+                <div className="h-px bg-gray-100 my-1" />
+                {Object.entries(STATUS_CONFIG).map(function(entry) {
+                  var Icon = entry[1].icon;
+                  return (
+                    <button key={entry[0]} onClick={function() { handleStatusChange(entry[0]); }}
+                      className={cn("w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-50",
+                        task.status === entry[0] ? "text-brand-600 font-medium" : "text-gray-700"
+                      )}>
+                      <Icon size={14} className={entry[1].color} /> {entry[1].label}
+                    </button>
+                  );
+                })}
+                <div className="h-px bg-gray-100 my-1" />
+                <button onClick={handleDelete} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50">
+                  <Trash2 size={14} /> Supprimer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

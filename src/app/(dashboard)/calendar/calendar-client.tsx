@@ -8,7 +8,7 @@ import { fr } from "date-fns/locale";
 import { getCalendarEvents, rescheduleTask, rescheduleAppointment } from "./actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Filter, Loader2, Users as UsersIcon } from "lucide-react";
+import { CalendarDays, Filter, Loader2, Users as UsersIcon, ChevronDown } from "lucide-react";
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
@@ -56,6 +56,26 @@ export function CalendarClient({ users }: { users: { id: string; name: string }[
   const [loading, setLoading] = useState(true);
   const [userFilter, setUserFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "task" | "appointment">("all");
+  const [isMobile, setIsMobile] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+
+  // Detect mobile and adjust default view + available views
+  useEffect(function() {
+    function update() {
+      var mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        // On mobile, only Day and Agenda views make sense
+        setView(function(prev) {
+          if (prev !== Views.DAY && prev !== Views.AGENDA) return Views.AGENDA;
+          return prev;
+        });
+      }
+    }
+    update();
+    window.addEventListener("resize", update);
+    return function() { window.removeEventListener("resize", update); };
+  }, []);
 
   const loadEvents = useCallback(async function() {
     setLoading(true);
@@ -119,7 +139,6 @@ export function CalendarClient({ users }: { users: { id: string; name: string }[
       } else {
         await rescheduleAppointment(id, new Date(start), new Date(end));
       }
-      // Optimistic update
       setEvents(function(prev) {
         return prev.map(function(e) {
           if (e.id === ev.id) return { ...e, start: new Date(start), end: new Date(end) };
@@ -188,59 +207,85 @@ export function CalendarClient({ users }: { users: { id: string; name: string }[
     }
   };
 
+  // Different views available based on screen size
+  var availableViews = isMobile
+    ? [Views.DAY, Views.AGENDA]
+    : [Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA];
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <CalendarDays size={24} className="text-brand-500" /> Calendrier de relance
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+            <CalendarDays size={22} className="text-brand-500 shrink-0" />
+            <span>Calendrier de relance</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Visualisez et gérez tâches et rendez-vous. Cliquer-glisser pour reprogrammer.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Type filter */}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            {[
-              { k: "all", l: "Tout" },
-              { k: "task", l: "Tâches" },
-              { k: "appointment", l: "RDV" },
-            ].map(function(t) {
-              return (
-                <button key={t.k} onClick={function() { setTypeFilter(t.k as any); }}
-                  className={cn(
-                    "px-3 py-1 rounded-md text-xs font-medium transition-colors",
-                    typeFilter === t.k ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  )}>
-                  {t.l}
-                </button>
-              );
-            })}
-          </div>
+      </div>
 
-          {/* User filter */}
-          <select value={userFilter} onChange={function(e) { setUserFilter(e.target.value); }} className="input text-xs py-1.5">
-            <option value="">Tous les commerciaux</option>
-            {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
-          </select>
+      {/* Filters bar — wraps cleanly on mobile */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {/* Type filter */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {[
+            { k: "all", l: "Tout" },
+            { k: "task", l: "Tâches" },
+            { k: "appointment", l: "RDV" },
+          ].map(function(t) {
+            return (
+              <button key={t.k} onClick={function() { setTypeFilter(t.k as any); }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap",
+                  typeFilter === t.k ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}>
+                {t.l}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* User filter — full width on mobile, inline on desktop */}
+        <select
+          value={userFilter}
+          onChange={function(e) { setUserFilter(e.target.value); }}
+          className="input text-xs py-1.5 flex-1 sm:flex-initial sm:w-auto min-w-0"
+        >
+          <option value="">Tous les commerciaux</option>
+          {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
+        </select>
+      </div>
+
+      {/* Legend — collapsible on mobile */}
+      <div className="mb-3">
+        {/* Mobile: collapsible */}
+        <button
+          onClick={function() { setShowLegend(!showLegend); }}
+          className="sm:hidden flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 px-1 mb-1"
+        >
+          <ChevronDown size={12} className={cn("transition-transform", showLegend && "rotate-180")} />
+          Légende des couleurs
+        </button>
+        <div className={cn(
+          "items-center gap-3 sm:gap-4 px-1 text-[11px] flex-wrap",
+          showLegend ? "flex" : "hidden",
+          "sm:flex"
+        )}>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-600"></span>Tâche urgente</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500"></span>Tâche haute</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500"></span>Tâche moyenne</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-400"></span>Tâche basse</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500"></span>RDV physique</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-500"></span>RDV visio</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500"></span>RDV téléphone</span>
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-3 px-1 text-[11px] flex-wrap">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-600"></span>Tâche urgente</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500"></span>Tâche haute</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500"></span>Tâche moyenne</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-400"></span>Tâche basse</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500"></span>RDV physique</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-500"></span>RDV visio</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500"></span>RDV téléphone</span>
-      </div>
-
       {/* Calendar */}
-      <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 relative">
+      <div className="flex-1 bg-white rounded-xl border border-gray-200 p-2 sm:p-4 relative">
         {loading && (
           <div className="absolute inset-0 bg-white/60 z-10 flex items-center justify-center rounded-xl">
             <Loader2 size={32} className="animate-spin text-brand-500" />
@@ -258,12 +303,12 @@ export function CalendarClient({ users }: { users: { id: string; name: string }[
           onEventDrop={handleEventDrop}
           onEventResize={handleEventResize}
           onSelectEvent={handleSelectEvent}
-          resizable
+          resizable={!isMobile}
           selectable={false}
           eventPropGetter={eventStyleGetter}
           messages={messages}
           culture="fr"
-          views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+          views={availableViews}
           step={30}
           timeslots={2}
           min={new Date(0, 0, 0, 7, 0, 0)}
@@ -274,7 +319,10 @@ export function CalendarClient({ users }: { users: { id: string; name: string }[
               return format(start, "HH:mm") + " - " + format(end, "HH:mm");
             },
           }}
-          style={{ height: "calc(100vh - 280px)", minHeight: "500px" }}
+          style={{
+            height: isMobile ? "calc(100vh - 320px)" : "calc(100vh - 280px)",
+            minHeight: isMobile ? "400px" : "500px",
+          }}
         />
       </div>
     </div>

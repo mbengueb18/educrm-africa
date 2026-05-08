@@ -11,7 +11,7 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2, LayoutGrid,
+  MousePointer, Link2, LayoutGrid, Mail,
 } from "lucide-react";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
@@ -183,7 +183,26 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-var(--header-height))]">
+    <>
+      {/* Mobile/tablet blocker — editor is desktop-only */}
+      <div className="lg:hidden fixed inset-0 z-50 bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mb-5">
+          <Mail size={40} className="text-brand-500" />
+        </div>
+        <h1 className="text-lg font-bold text-gray-900 mb-2">Éditeur réservé au desktop</h1>
+        <p className="text-sm text-gray-600 max-w-xs mb-1">
+          L'éditeur de campagne email nécessite un grand écran pour être utilisable confortablement.
+        </p>
+        <p className="text-xs text-gray-400 max-w-xs mb-6">
+          Connectez-vous depuis un ordinateur (1024px minimum) pour créer et modifier vos campagnes.
+        </p>
+        <Link href="/campaigns" className="btn-primary text-sm">
+          <ArrowLeft size={14} /> Retour aux campagnes
+        </Link>
+      </div>
+
+      {/* Desktop editor */}
+      <div className="hidden lg:flex flex-col h-[calc(100vh-var(--header-height))]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3">
@@ -662,7 +681,8 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

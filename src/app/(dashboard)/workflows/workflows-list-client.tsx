@@ -112,26 +112,26 @@ export function WorkflowsListClient({ workflows }: { workflows: Workflow[] }) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/dashboard" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex flex-wrap items-start gap-3 mb-4 sm:mb-6">
+        <Link href="/dashboard" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2 flex-wrap">
             Workflows
             <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full font-medium">Bêta</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
             Automatisez vos actions commerciales avec des workflows visuels
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary py-2 px-3 text-xs">
-          <Plus size={13} /> Nouveau workflow
+        <button onClick={() => setShowCreate(true)} className="btn-primary py-2 px-3 text-xs shrink-0">
+          <Plus size={13} /> <span className="hidden sm:inline">Nouveau workflow</span><span className="sm:hidden">Nouveau</span>
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <StatCard label="Workflows actifs" value={enabledCount} icon={Power} color="emerald" />
         <StatCard label="Total workflows" value={workflows.length} icon={Zap} color="blue" />
         <StatCard
@@ -165,12 +165,12 @@ export function WorkflowsListClient({ workflows }: { workflows: Workflow[] }) {
             const tc = TRIGGER_COLORS[wf.triggerType] || TRIGGER_COLORS.LEAD_CREATED;
             const nodeCount = wf.graph?.nodes?.length || 0;
             return (
-              <div key={wf.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 transition-colors group">
+              <div key={wf.id} className="flex items-start sm:items-center gap-3 px-3 sm:px-4 py-3 hover:bg-gray-50/50 transition-colors group">
                 {/* Toggle */}
                 <button
                   onClick={() => handleToggle(wf.id, !wf.enabled)}
                   className={cn(
-                    "w-10 h-6 rounded-full relative transition-colors shrink-0",
+                    "w-10 h-6 rounded-full relative transition-colors shrink-0 mt-1 sm:mt-0",
                     wf.enabled ? "bg-emerald-500" : "bg-gray-300"
                   )}
                   title={wf.enabled ? "Désactiver" : "Activer"}
@@ -183,31 +183,31 @@ export function WorkflowsListClient({ workflows }: { workflows: Workflow[] }) {
 
                 {/* Info */}
                 <Link href={"/workflows/" + wf.id} className="flex-1 min-w-0 cursor-pointer">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{wf.name}</p>
-                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", tc.bg, tc.color)}>
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <p className="text-sm font-semibold text-gray-900 truncate min-w-0">{wf.name}</p>
+                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 whitespace-nowrap", tc.bg, tc.color)}>
                       {TRIGGER_LABELS[wf.triggerType] || wf.triggerType}
                     </span>
                   </div>
                   {wf.description && <p className="text-xs text-gray-500 truncate">{wf.description}</p>}
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[10px] text-gray-400">{nodeCount} étape{nodeCount > 1 ? "s" : ""}</span>
+                  <div className="flex items-center gap-x-2 gap-y-0.5 mt-1 flex-wrap">
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">{nodeCount} étape{nodeCount > 1 ? "s" : ""}</span>
                     <span className="text-[10px] text-gray-400">•</span>
-                    <span className="text-[10px] text-gray-400">{wf._count.executions} exécution{wf._count.executions > 1 ? "s" : ""}</span>
-                    <span className="text-[10px] text-gray-400">•</span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">{wf._count.executions} exécution{wf._count.executions > 1 ? "s" : ""}</span>
+                    <span className="text-[10px] text-gray-400 hidden sm:inline">•</span>
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap hidden sm:inline">
                       Modifié le {new Date(wf.updatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
                     </span>
                   </div>
                 </Link>
 
-                <Link href={"/workflows/" + wf.id} className="btn-secondary py-1.5 px-3 text-xs">
+                <Link href={"/workflows/" + wf.id} className="btn-secondary py-1.5 px-3 text-xs hidden sm:inline-flex shrink-0">
                   <Settings2 size={12} /> Modifier
                 </Link>
 
                 <button
                   onClick={() => handleDelete(wf.id, wf.name)}
-                  className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                   title="Supprimer"
                 >
                   <Trash2 size={14} />
