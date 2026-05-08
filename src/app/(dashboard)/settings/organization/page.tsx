@@ -67,28 +67,30 @@ export default function OrganizationSettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><ArrowLeft size={20} /></Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Organisation</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{org.name} — {org._count.users} utilisateurs, {org._count.leads} leads, {org._count.students} étudiants</p>
+      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"><ArrowLeft size={20} /></Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Organisation</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{org.name} — {org._count.users} util., {org._count.leads} leads, {org._count.students} étud.</p>
         </div>
       </div>
 
-      {/* Section tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
-        {sections.map(function(s) {
-          var Icon = s.icon;
-          return (
-            <button key={s.key} onClick={function() { setActiveSection(s.key); }}
-              className={cn("flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
-                activeSection === s.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-              )}>
-              <Icon size={15} /> {s.label}
-              {s.count !== null && <span className="text-[10px] text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">{s.count}</span>}
-            </button>
-          );
-        })}
+      {/* Section tabs — scrollable on mobile */}
+      <div className="overflow-x-auto no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 mb-4 sm:mb-6">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          {sections.map(function(s) {
+            var Icon = s.icon;
+            return (
+              <button key={s.key} onClick={function() { setActiveSection(s.key); }}
+                className={cn("flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0",
+                  activeSection === s.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                )}>
+                <Icon size={14} className="hidden sm:block" /> {s.label}
+                {s.count !== null && <span className="text-[10px] text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">{s.count}</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {activeSection === "general" && <GeneralSection org={org} onSaved={loadOrg} />}
@@ -128,10 +130,10 @@ function GeneralSection({ org, onSaved }: { org: any; onSaved: () => void }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} /> Informations générales</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Nom de l'établissement *</label>
             <input type="text" value={name} onChange={function(e) { setName(e.target.value); }} className="input text-sm" />
@@ -177,9 +179,9 @@ function GeneralSection({ org, onSaved }: { org: any; onSaved: () => void }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2"><Phone size={16} /> Contact</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Email de contact</label>
             <input type="email" value={contactEmail} onChange={function(e) { setContactEmail(e.target.value); }} className="input text-sm" placeholder="contact@ecole.com" />
@@ -215,9 +217,9 @@ function CampusesSection({ campuses, onChanged }: { campuses: any[]; onChanged: 
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <p className="text-sm text-gray-500">{campuses.length} campus configuré{campuses.length > 1 ? "s" : ""}</p>
-        <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> Ajouter un campus</button>
+        <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> <span className="hidden sm:inline">Ajouter un campus</span><span className="sm:hidden">Ajouter</span></button>
       </div>
 
       {showAdd && <CampusForm mode="create" onClose={function(s) { setShowAdd(false); if (s) onChanged(); }} />}
@@ -228,19 +230,19 @@ function CampusesSection({ campuses, onChanged }: { campuses: any[]; onChanged: 
             return <CampusForm key={campus.id} mode="edit" campus={campus} onClose={function(s) { setEditingId(null); if (s) onChanged(); }} />;
           }
           return (
-            <div key={campus.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 group hover:border-brand-200 transition-colors">
+            <div key={campus.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex items-start sm:items-center gap-3 sm:gap-4 group hover:border-brand-200 transition-colors">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
                 <MapPin size={18} className="text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900">{campus.name}</p>
-                <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
-                  <span>{campus.city}{campus.country ? ", " + campus.country : ""}</span>
-                  {campus.phone && <span className="flex items-center gap-1"><Phone size={10} /> {campus.phone}</span>}
-                  {campus.email && <span className="flex items-center gap-1"><Mail size={10} /> {campus.email}</span>}
+                <p className="text-sm font-semibold text-gray-900 truncate">{campus.name}</p>
+                <div className="flex items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-gray-500 flex-wrap">
+                  <span className="whitespace-nowrap">{campus.city}{campus.country ? ", " + campus.country : ""}</span>
+                  {campus.phone && <span className="flex items-center gap-1 whitespace-nowrap"><Phone size={10} /> {campus.phone}</span>}
+                  {campus.email && <span className="flex items-center gap-1 truncate max-w-[180px]"><Mail size={10} className="shrink-0" /> {campus.email}</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button onClick={function() { setEditingId(campus.id); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><Pencil size={14} /></button>
                 <button onClick={async function() {
                   if (!confirm("Supprimer " + campus.name + " ?")) return;
@@ -284,8 +286,8 @@ function CampusForm({ mode, campus, onClose }: { mode: "create" | "edit"; campus
   };
 
   return (
-    <div className="bg-white rounded-xl border border-brand-200 p-4 mb-3 animate-scale-in">
-      <div className="grid grid-cols-2 gap-3 mb-3">
+    <div className="bg-white rounded-xl border border-brand-200 p-3 sm:p-4 mb-3 animate-scale-in">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div><label className="text-xs font-medium text-gray-600 mb-1 block">Nom *</label>
           <input type="text" value={name} onChange={function(e) { setName(e.target.value); }} className="input text-sm" placeholder="Campus Dakar" autoFocus /></div>
         <div><label className="text-xs font-medium text-gray-600 mb-1 block">Ville *</label>
@@ -319,9 +321,9 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <p className="text-sm text-gray-500">{active.length} filière{active.length > 1 ? "s" : ""} active{active.length > 1 ? "s" : ""}</p>
-        <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> Ajouter une filière</button>
+        <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> <span className="hidden sm:inline">Ajouter une filière</span><span className="sm:hidden">Ajouter</span></button>
       </div>
 
       {showAdd && <ProgramForm mode="create" campuses={campuses} onClose={function(s) { setShowAdd(false); if (s) onChanged(); }} />}
@@ -336,25 +338,25 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
           <div className="divide-y divide-gray-50">
             {programs.map(function(prog) {
               if (editingId === prog.id) {
-                return <div key={prog.id} className="p-4"><ProgramForm mode="edit" program={prog} campuses={campuses} onClose={function(s) { setEditingId(null); if (s) onChanged(); }} /></div>;
+                return <div key={prog.id} className="p-3 sm:p-4"><ProgramForm mode="edit" program={prog} campuses={campuses} onClose={function(s) { setEditingId(null); if (s) onChanged(); }} /></div>;
               }
               return (
-                <div key={prog.id} className={cn("flex items-center gap-4 px-5 py-3 group hover:bg-gray-50/50", !prog.isActive && "opacity-50")}>
+                <div key={prog.id} className={cn("flex items-start sm:items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 group hover:bg-gray-50/50", !prog.isActive && "opacity-50")}>
                   <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                     <GraduationCap size={16} className="text-emerald-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900">{prog.name}</p>
-                      {prog.code && <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{prog.code}</span>}
-                      <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium">{prog.level}</span>
-                      {!prog.isActive && <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full font-medium">Inactive</span>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-gray-900 truncate min-w-0">{prog.name}</p>
+                      {prog.code && <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{prog.code}</span>}
+                      <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium shrink-0">{prog.level}</span>
+                      {!prog.isActive && <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full font-medium shrink-0">Inactive</span>}
                     </div>
                     {prog.tuitionAmount && (
-                      <span className="text-xs text-gray-500 mt-0.5">{formatCFA(prog.tuitionAmount)} {prog.currency || "XOF"}</span>
+                      <span className="text-xs text-gray-500 mt-0.5 block">{formatCFA(prog.tuitionAmount)} {prog.currency || "XOF"}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button onClick={async function() {
                       try { await updateProgram(prog.id, { isActive: !prog.isActive }); toast.success(prog.isActive ? "Désactivée" : "Activée"); onChanged(); }
                       catch (err: any) { toast.error(err.message); }
@@ -399,8 +401,8 @@ function ProgramForm({ mode, program, campuses, onClose }: { mode: "create" | "e
   };
 
   return (
-    <div className={cn(mode === "create" && "bg-white rounded-xl border border-brand-200 p-4 mb-3 animate-scale-in")}>
-      <div className="grid grid-cols-2 gap-3 mb-3">
+    <div className={cn(mode === "create" && "bg-white rounded-xl border border-brand-200 p-3 sm:p-4 mb-3 animate-scale-in")}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div><label className="text-xs font-medium text-gray-600 mb-1 block">Nom *</label>
           <input type="text" value={name} onChange={function(e) { setName(e.target.value); }} className="input text-sm" placeholder="Marketing Digital" autoFocus /></div>
         <div><label className="text-xs font-medium text-gray-600 mb-1 block">Code</label>
@@ -413,7 +415,7 @@ function ProgramForm({ mode, program, campuses, onClose }: { mode: "create" | "e
           <select value={campusId} onChange={function(e) { setCampusId(e.target.value); }} className="input text-sm">
             {campuses.map(function(c) { return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; })}
           </select></div>
-        <div className="col-span-2"><label className="text-xs font-medium text-gray-600 mb-1 block">Frais de scolarité (FCFA)</label>
+        <div className="sm:col-span-2"><label className="text-xs font-medium text-gray-600 mb-1 block">Frais de scolarité (FCFA)</label>
           <input type="number" value={tuition} onChange={function(e) { setTuition(e.target.value); }} className="input text-sm" placeholder="1500000" /></div>
       </div>
       <div className="flex justify-end gap-2">
@@ -449,14 +451,14 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <p className="text-sm text-gray-500">{years.length} année{years.length > 1 ? "s" : ""} académique{years.length > 1 ? "s" : ""}</p>
         <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> Ajouter</button>
       </div>
 
       {showAdd && (
-        <div className="bg-white rounded-xl border border-brand-200 p-4 mb-3 animate-scale-in">
-          <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="bg-white rounded-xl border border-brand-200 p-3 sm:p-4 mb-3 animate-scale-in">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <div><label className="text-xs font-medium text-gray-600 mb-1 block">Label *</label>
               <input type="text" value={label} onChange={function(e) { setLabel(e.target.value); }} className="input text-sm" placeholder="2025-2026" autoFocus /></div>
             <div><label className="text-xs font-medium text-gray-600 mb-1 block">Début *</label>
@@ -464,7 +466,7 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
             <div><label className="text-xs font-medium text-gray-600 mb-1 block">Fin *</label>
               <input type="date" value={endDate} onChange={function(e) { setEndDate(e.target.value); }} className="input text-sm" /></div>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
               <input type="checkbox" checked={isCurrent} onChange={function(e) { setIsCurrent(e.target.checked); }} className="w-4 h-4 rounded border-gray-300 text-brand-600" />
               Définir comme année en cours
@@ -482,17 +484,17 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
       <div className="space-y-2">
         {years.map(function(year) {
           return (
-            <div key={year.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 group hover:border-brand-200 transition-colors">
+            <div key={year.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 group hover:border-brand-200 transition-colors">
               <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
                 year.isCurrent ? "bg-brand-50" : "bg-gray-50"
               )}>
                 <Calendar size={18} className={year.isCurrent ? "text-brand-600" : "text-gray-400"} />
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-semibold text-gray-900">{year.label}</p>
                   {year.isCurrent && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 flex items-center gap-1">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 flex items-center gap-1 whitespace-nowrap shrink-0">
                       <Star size={9} /> En cours
                     </span>
                   )}
@@ -505,8 +507,8 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
                 <button onClick={async function() {
                   try { await setCurrentAcademicYear(year.id); toast.success("Année en cours mise à jour"); onChanged(); }
                   catch (err: any) { toast.error(err.message); }
-                }} className="btn-secondary py-1.5 px-3 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Star size={12} /> Définir en cours
+                }} className="btn-secondary py-1.5 px-2 sm:px-3 text-xs shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <Star size={12} /> <span className="hidden sm:inline">Définir en cours</span>
                 </button>
               )}
             </div>
