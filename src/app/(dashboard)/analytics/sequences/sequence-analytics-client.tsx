@@ -134,16 +134,17 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Repeat size={24} className="text-brand-500" /> Performance des relances
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4 sm:mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+            <Repeat size={22} className="text-brand-500 shrink-0" />
+            <span>Performance des relances</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Suivez l'efficacité de vos séquences automatiques</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Suivez l'efficacité de vos séquences automatiques</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/settings/sequences" className="btn-secondary py-2 px-3 text-xs">
-            Configurer les séquences
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/settings/sequences" className="btn-secondary py-2 px-3 text-xs whitespace-nowrap">
+            <span className="hidden sm:inline">Configurer les séquences</span><span className="sm:hidden">Configurer</span>
           </Link>
           <select value={period} onChange={(e) => handlePeriodChange(parseInt(e.target.value))} className="input text-xs py-1.5">
             <option value="7">7 derniers jours</option>
@@ -263,22 +264,22 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
 
       {/* Cohort analysis */}
       {cohorts.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mb-6 overflow-hidden">
           <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <Calendar size={16} className="text-blue-500" /> Cohortes : à quel moment les leads répondent
+            <Calendar size={16} className="text-blue-500 shrink-0" /> Cohortes : à quel moment les leads répondent
           </h3>
           <p className="text-xs text-gray-500 mb-4">
             % cumulé de leads ayant répondu après leur création (par mois)
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+            <table className="w-full text-xs min-w-[420px] sm:min-w-0">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 font-medium text-gray-500">Cohorte</th>
+                  <th className="text-left py-2 px-2 font-medium text-gray-500 whitespace-nowrap">Cohorte</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">Total</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+0</th>
-                  <th className="text-center py-2 px-2 font-medium text-gray-500">J+1</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500 hidden sm:table-cell">J+0</th>
+                  <th className="text-center py-2 px-2 font-medium text-gray-500 hidden sm:table-cell">J+1</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+3</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+7</th>
                   <th className="text-center py-2 px-2 font-medium text-gray-500">J+14</th>
@@ -288,10 +289,10 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
               <tbody>
                 {cohorts.map((c) => (
                   <tr key={c.month} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2 px-2 font-medium text-gray-700 capitalize">{c.monthLabel}</td>
+                    <td className="py-2 px-2 font-medium text-gray-700 capitalize whitespace-nowrap">{c.monthLabel}</td>
                     <td className="text-center py-2 px-2 text-gray-500">{c.total}</td>
-                    <CohortCell value={c.d0} />
-                    <CohortCell value={c.d1} />
+                    <td className="hidden sm:table-cell"><CohortCell value={c.d0} /></td>
+                    <td className="hidden sm:table-cell"><CohortCell value={c.d1} /></td>
                     <CohortCell value={c.d3} />
                     <CohortCell value={c.d7} />
                     <CohortCell value={c.d14} />
@@ -335,13 +336,14 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
       </div>
 
       {/* Leads in sequence */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Users size={16} className="text-brand-500" /> Leads en séquence active ({filteredLeads.length})
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2 min-w-0">
+            <Users size={16} className="text-brand-500 shrink-0" />
+            <span className="truncate">Leads en séquence active ({filteredLeads.length})</span>
           </h3>
-          <button onClick={handleExport} className="btn-secondary py-1.5 px-3 text-xs">
-            <Download size={12} /> Exporter CSV
+          <button onClick={handleExport} className="btn-secondary py-1.5 px-3 text-xs shrink-0">
+            <Download size={12} /> <span className="hidden sm:inline">Exporter CSV</span><span className="sm:hidden">CSV</span>
           </button>
         </div>
 
@@ -357,7 +359,7 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
           ].map((f) => (
             <button key={f.key} onClick={() => setStepFilter(f.key)}
               className={cn(
-                "text-xs px-3 py-1 rounded-full border font-medium transition-colors",
+                "text-xs px-3 py-1 rounded-full border font-medium transition-colors whitespace-nowrap",
                 stepFilter === f.key ? "bg-brand-100 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
               )}>
               {f.label}
@@ -375,20 +377,20 @@ export function SequenceAnalyticsClient({ initialAnalytics, initialLeads, initia
             {filteredLeads.slice(0, 50).map((lead) => (
               <Link key={lead.id} href={"/pipeline?leadId=" + lead.id} className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-brand-50 rounded-lg transition-colors group">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-sm font-medium text-gray-900 truncate">{lead.name}</p>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: lead.stage.color + "20", color: lead.stage.color }}>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0" style={{ backgroundColor: lead.stage.color + "20", color: lead.stage.color }}>
                       {lead.stage.name}
                     </span>
                     {lead.hasReplied && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">A répondu ✓</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium whitespace-nowrap shrink-0">A répondu ✓</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span>{lead.daysSinceCreated} j depuis création</span>
-                    {lead.lastStep && <span>• Dernière étape : {lead.lastStep}</span>}
-                    {lead.lastStepAt && <span>• {formatRelative(lead.lastStepAt)}</span>}
-                    {lead.assignedToName && <span>• {lead.assignedToName}</span>}
+                  <div className="flex items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 flex-wrap">
+                    <span className="whitespace-nowrap">{lead.daysSinceCreated} j depuis création</span>
+                    {lead.lastStep && <span className="whitespace-nowrap">• Dernière étape : {lead.lastStep}</span>}
+                    {lead.lastStepAt && <span className="whitespace-nowrap">• {formatRelative(lead.lastStepAt)}</span>}
+                    {lead.assignedToName && <span className="whitespace-nowrap">• {lead.assignedToName}</span>}
                   </div>
                 </div>
                 <ChevronRight size={14} className="text-gray-400 group-hover:text-brand-600 shrink-0" />
