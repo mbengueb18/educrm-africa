@@ -87,15 +87,15 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Étudiants</h1>
-          <p className="text-sm text-gray-500 mt-1">Gestion des étudiants inscrits</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Étudiants</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Gestion des étudiants inscrits</p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4 sm:mb-6">
         <MiniStat label="Total" value={stats.total} color="text-gray-700" />
         <MiniStat label="Actifs" value={stats.active} color="text-emerald-600" />
         <MiniStat label="Suspendus" value={stats.suspended} color="text-amber-600" highlight={stats.suspended > 0} />
@@ -105,13 +105,13 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px] max-w-md">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Rechercher par nom, n° étudiant, email, tél..." className="input pl-9 text-sm" value={search} onChange={function(e) { setSearch(e.target.value); }} />
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 overflow-x-auto no-scrollbar max-w-full">
           {[
             { key: "", label: "Tous" },
             { key: "ACTIVE", label: "Actifs" },
@@ -120,7 +120,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
           ].map(function(f) {
             return (
               <button key={f.key} onClick={function() { setFilterStatus(f.key); }}
-                className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0",
                   filterStatus === f.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 )}>
                 {f.label}
@@ -137,7 +137,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
           )}
         </button>
 
-        <span className="text-sm text-gray-500 ml-auto">{filtered.length} étudiant{filtered.length > 1 ? "s" : ""}</span>
+        <span className="text-sm text-gray-500 whitespace-nowrap">{filtered.length} étudiant{filtered.length > 1 ? "s" : ""}</span>
       </div>
 
       {/* Filters */}
@@ -147,7 +147,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
             <h4 className="text-sm font-semibold text-gray-700">Filtres avancés</h4>
             <button onClick={function() { setFilterProgram(""); setFilterCampus(""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Filière</label>
               <select value={filterProgram} onChange={function(e) { setFilterProgram(e.target.value); }} className="input text-sm py-1.5">
@@ -167,7 +167,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
       )}
 
       {/* Student list */}
-      <div className="bg-white rounded-xl border border-gray-200">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-16 text-center">
             <GraduationCap size={40} className="text-gray-300 mx-auto mb-3" />
@@ -175,70 +175,121 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
             <p className="text-xs text-gray-300 mt-1">Les leads convertis apparaîtront ici</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-200">
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Étudiant</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">N° Étudiant</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Filière</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Campus</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Statut</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Contact</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Inscrit le</th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map(function(student) {
-                  var statusConf = STATUS_CONFIG[student.status] || STATUS_CONFIG.ACTIVE;
-                  return (
-                    <tr key={student.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={function() { setSelectedStudentId(student.id); }}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {getInitials(student.firstName + " " + student.lastName)}
+          <>
+            {/* Mobile cards (< md) */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filtered.map(function(student) {
+                var statusConf = STATUS_CONFIG[student.status] || STATUS_CONFIG.ACTIVE;
+                return (
+                  <div key={student.id}
+                    onClick={function() { setSelectedStudentId(student.id); }}
+                    className="p-3 active:bg-gray-100 cursor-pointer transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0">
+                        {getInitials(student.firstName + " " + student.lastName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {student.firstName} {student.lastName}
+                          </p>
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap shrink-0", statusConf.bg, statusConf.color)}>
+                            {statusConf.label}
+                          </span>
+                        </div>
+                        <div className="mb-1.5">
+                          <span className="inline-block text-[10px] font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                            {student.studentNumber}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-x-2 gap-y-1 text-xs flex-wrap">
+                          <span className="text-brand-600 font-medium truncate max-w-[150px]">
+                            {student.program.code || student.program.name}
+                            <span className="text-gray-400 ml-0.5">({student.program.level})</span>
+                          </span>
+                          {student.campus.city && (
+                            <span className="text-gray-500 flex items-center gap-0.5">
+                              <MapPin size={10} className="shrink-0" />
+                              {student.campus.city}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1.5">
+                          Inscrit {formatRelative(student.enrollmentDate)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-200">
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Étudiant</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">N° Étudiant</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Filière</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Campus</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Statut</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Contact</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Inscrit le</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filtered.map(function(student) {
+                    var statusConf = STATUS_CONFIG[student.status] || STATUS_CONFIG.ACTIVE;
+                    return (
+                      <tr key={student.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={function() { setSelectedStudentId(student.id); }}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {getInitials(student.firstName + " " + student.lastName)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{student.firstName} {student.lastName}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{student.firstName} {student.lastName}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{student.studentNumber}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <span className="text-xs font-medium text-brand-600">{student.program.code || student.program.name}</span>
+                            <span className="text-[10px] text-gray-400 ml-1">({student.program.level})</span>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{student.studentNumber}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="text-xs font-medium text-brand-600">{student.program.code || student.program.name}</span>
-                          <span className="text-[10px] text-gray-400 ml-1">({student.program.level})</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs text-gray-600">{student.campus.city}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", statusConf.bg, statusConf.color)}>
-                          {statusConf.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs text-gray-500">
-                          {student.email && <div className="truncate max-w-[150px]">{student.email}</div>}
-                          <div>{formatPhone(student.phone)}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs text-gray-500">{formatRelative(student.enrollmentDate)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <ChevronRight size={14} className="text-gray-300" />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-gray-600">{student.campus.city}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", statusConf.bg, statusConf.color)}>
+                            {statusConf.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-gray-500">
+                            {student.email && <div className="truncate max-w-[150px]">{student.email}</div>}
+                            <div>{formatPhone(student.phone)}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-gray-500">{formatRelative(student.enrollmentDate)}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <ChevronRight size={14} className="text-gray-300" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
