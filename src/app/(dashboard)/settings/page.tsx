@@ -1,6 +1,20 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Settings, Building2, Users, Palette, Bell, Plug, Shield, SlidersHorizontal, Database, Repeat, Mail, Zap, Globe2 } from "lucide-react";
+import { 
+  Settings, 
+  Building2, 
+  Users, 
+  Palette, 
+  Bell, Plug, 
+  Shield, 
+  SlidersHorizontal, 
+  Database, 
+  Repeat, 
+  Mail, 
+  Zap, 
+  Globe2,
+  MessageCircle
+} from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
 
@@ -13,6 +27,7 @@ const settingsMenu = [
   { label: "Intégrations", description: "API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
   { label: "Tracking Web", description: "Suivi des visiteurs, sources, parcours web", icon: Globe2, href: "/settings/web-tracking" },
   { label: "Templates email", description: "Créez vos modèles d'emails réutilisables", icon: Mail, href: "/settings/email-templates" },
+  { label: "WhatsApp", description: "Connexion à WhatsApp Cloud API", icon: MessageCircle, href: "/settings/whatsapp" },
   { label: "Workflows", description: "Automatisez vos actions commerciales", icon: Zap, href: "/workflows" },
   { label: "Relances automatiques", description: "Séquences J1/J3/J7 multi-canal pour les leads silencieux", icon: Repeat, href: "/settings/sequences" },
   { label: "Notifications", description: "Alertes, rappels, préférences", icon: Bell, href: "/settings/notifications" },

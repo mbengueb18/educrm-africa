@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn, formatPhone, getInitials } from "@/lib/utils";
@@ -16,7 +16,7 @@ import {
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
-import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";0
+import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
 
@@ -40,6 +40,7 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -48,43 +49,61 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
     window.history.replaceState({}, "", url.toString());
   };
 
+  const scrollTabsRight = () => {
+    tabsScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" });
+  };
+
   const fullName = lead.firstName + " " + lead.lastName;
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </button>
-        <div className="flex-1 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-lg">
-            {getInitials(fullName)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900">{fullName}</h1>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: (lead.stage?.color || "#888") + "20", color: lead.stage?.color || "#888" }}>
-                {lead.stage?.name}
-              </span>
-              {lead.isConverted && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Converti ✓</span>
-              )}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-              {lead.program && <span className="flex items-center gap-1"><GraduationCap size={11} /> {lead.program.name}</span>}
-              {lead.campus && <span className="flex items-center gap-1"><Building2 size={11} /> {lead.campus.name}</span>}
-              {lead.assignedTo && <span className="flex items-center gap-1"><UserIcon size={11} /> {lead.assignedTo.name}</span>}
-            </div>
-          </div>
-          <Link href="/pipeline" className="btn-secondary py-2 px-3 text-xs">
-            Retour au pipeline
-          </Link>
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-base sm:text-lg shrink-0">
+          {getInitials(fullName)}
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-base sm:text-xl font-bold text-gray-900 break-words">{fullName}</h1>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: (lead.stage?.color || "#888") + "20", color: lead.stage?.color || "#888" }}>
+              {lead.stage?.name}
+            </span>
+            {lead.isConverted && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium shrink-0">Converti ✓</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 mt-1 flex-wrap">
+            {lead.program && (
+              <span className="flex items-center gap-1 min-w-0 max-w-full">
+                <GraduationCap size={11} className="shrink-0" />
+                <span className="truncate">{lead.program.name}</span>
+              </span>
+            )}
+            {lead.campus && (
+              <span className="flex items-center gap-1 min-w-0">
+                <Building2 size={11} className="shrink-0" />
+                <span className="truncate">{lead.campus.name}</span>
+              </span>
+            )}
+            {lead.assignedTo && (
+              <span className="flex items-center gap-1 min-w-0">
+                <UserIcon size={11} className="shrink-0" />
+                <span className="truncate">{lead.assignedTo.name}</span>
+              </span>
+            )}
+          </div>
+        </div>
+        {/* "Retour au pipeline" — desktop only (back arrow does the same on mobile) */}
+        <Link href="/pipeline" className="hidden lg:inline-flex btn-secondary py-2 px-3 text-xs shrink-0">
+          Retour au pipeline
+        </Link>
       </div>
 
       {/* Quick actions bar */}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
+      <div className="flex items-center gap-2 mb-4 sm:mb-5 flex-wrap">
         <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs">
           <Phone size={13} /> Appeler
         </a>
@@ -100,14 +119,14 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
         )}
         {lead.email && (
           <button onClick={() => handleTabChange("email")} className="btn-secondary py-1.5 px-3 text-xs">
-            <Mail size={13} /> Composer email
+            <Mail size={13} /> <span className="hidden sm:inline">Composer </span>Email
           </button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-5">
-        <div className="flex gap-1 overflow-x-auto">
+      {/* Tabs — horizontal scroll with right edge fade + clickable scroll button on mobile */}
+      <div className="relative border-b border-gray-200 mb-4 sm:mb-5 -mx-3 sm:mx-0">
+        <div ref={tabsScrollRef} className="flex gap-1 overflow-x-auto no-scrollbar px-3 sm:px-0 scroll-smooth">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -116,17 +135,28 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0",
                   isActive
                     ? "border-brand-500 text-brand-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 )}
               >
-                <Icon size={14} />
+                <Icon size={14} className="shrink-0" />
                 {tab.label}
               </button>
             );
           })}
+        </div>
+        {/* Right edge: fade + clickable chevron button — mobile only */}
+        <div className="absolute top-0 right-0 bottom-px w-16 bg-gradient-to-l from-gray-50 via-gray-50/95 to-transparent sm:hidden flex items-center justify-end pr-1">
+          <button
+            type="button"
+            onClick={scrollTabsRight}
+            className="w-7 h-7 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-600 active:scale-90 transition-transform hover:bg-gray-50"
+            aria-label="Voir plus d'onglets"
+          >
+            <ChevronRight size={14} />
+          </button>
         </div>
       </div>
 
@@ -146,9 +176,9 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
 // ─── Overview Tab ───
 function OverviewTab({ lead }: { lead: any }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
       {/* Contact info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact</h3>
         <div className="space-y-3">
           <InfoRow icon={Phone} label="Téléphone" value={lead.phone ? formatPhone(lead.phone) : "—"} />
@@ -159,7 +189,7 @@ function OverviewTab({ lead }: { lead: any }) {
       </div>
 
       {/* Pipeline info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Pipeline</h3>
         <div className="space-y-3">
           <InfoRow icon={Tag} label="Étape" value={lead.stage?.name || "—"} />
@@ -171,7 +201,7 @@ function OverviewTab({ lead }: { lead: any }) {
       </div>
 
       {/* Stats */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Activité</h3>
         <div className="space-y-3">
           <StatRow icon={Mail} label="Messages" value={lead._count?.messages || 0} />
@@ -186,11 +216,11 @@ function OverviewTab({ lead }: { lead: any }) {
   );
 }
 
-// ─── Email Tab (avec éditeur visuel pleine page) ───
+// ─── Email Tab ───
 function EmailTab({ lead, onSent }: { lead: any; onSent: () => void }) {
   if (!lead.email) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
+      <div className="bg-white rounded-xl border border-gray-200 py-12 sm:py-16 text-center">
         <Mail size={40} className="text-gray-300 mx-auto mb-3" />
         <p className="text-sm text-gray-400">Ce lead n'a pas d'adresse email</p>
       </div>
@@ -198,7 +228,7 @@ function EmailTab({ lead, onSent }: { lead: any; onSent: () => void }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
       <ComposeEmail
         leadId={lead.id}
         leadName={lead.firstName + " " + lead.lastName}
@@ -214,7 +244,6 @@ function HistoryTab({ lead }: { lead: any }) {
   const activities = lead.activities || [];
   const messages = lead.messages || [];
 
-  // Merge & sort all events
   const events: any[] = [
     ...activities.map((a: any) => ({ type: "activity", ...a, sortDate: new Date(a.createdAt) })),
     ...messages.map((m: any) => ({ type: "message", ...m, sortDate: new Date(m.sentAt) })),
@@ -230,7 +259,7 @@ function HistoryTab({ lead }: { lead: any }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
       <div className="space-y-4">
         {events.map((event, idx) => {
           const date = new Date(event.sortDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -245,11 +274,11 @@ function HistoryTab({ lead }: { lead: any }) {
                   <Mail size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-gray-900">{isInbound ? "Email reçu" : "Email envoyé"} : {parsed.subject || "Sans objet"}</p>
-                    <span className="text-xs text-gray-400">{date}</span>
+                  <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+                    <p className="text-sm font-medium text-gray-900 min-w-0 break-words">{isInbound ? "Email reçu" : "Email envoyé"} : {parsed.subject || "Sans objet"}</p>
+                    <span className="text-xs text-gray-400 shrink-0">{date}</span>
                   </div>
-                  <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap">{stripHtml(parsed.body || "").substring(0, 600)}</p>
+                  <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap break-words">{stripHtml(parsed.body || "").substring(0, 600)}</p>
                 </div>
               </div>
             );
@@ -262,9 +291,9 @@ function HistoryTab({ lead }: { lead: any }) {
                 <ActivityIcon size={16} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm text-gray-700">{event.description}</p>
-                  <span className="text-xs text-gray-400">{date}</span>
+                <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+                  <p className="text-sm text-gray-700 min-w-0 break-words">{event.description}</p>
+                  <span className="text-xs text-gray-400 shrink-0">{date}</span>
                 </div>
                 {event.user && <p className="text-xs text-gray-400">Par {event.user.name}</p>}
               </div>
@@ -305,10 +334,8 @@ function TasksTab({ lead }: { lead: any }) {
   };
 
   const sortedTasks = [...tasks].sort((a: any, b: any) => {
-    // TODO/IN_PROGRESS first, then DONE
     if (a.status !== "DONE" && b.status === "DONE") return -1;
     if (a.status === "DONE" && b.status !== "DONE") return 1;
-    // Then by due date
     if (a.dueDate && b.dueDate) return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     return 0;
   });
@@ -316,10 +343,10 @@ function TasksTab({ lead }: { lead: any }) {
   return (
     <div className="space-y-4">
       {/* Action bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-gray-500">{tasks.length} tâche{tasks.length > 1 ? "s" : ""}</p>
-        <button onClick={() => setShowCreate(true)} className="btn-primary py-1.5 px-3 text-xs">
-          <Plus size={13} /> Nouvelle tâche
+        <button onClick={() => setShowCreate(true)} className="btn-primary py-1.5 px-3 text-xs shrink-0">
+          <Plus size={13} /> <span className="hidden sm:inline">Nouvelle tâche</span><span className="sm:hidden">Nouvelle</span>
         </button>
       </div>
 
@@ -352,7 +379,7 @@ function TasksTab({ lead }: { lead: any }) {
             const pc = priorityConfig[task.priority] || priorityConfig.MEDIUM;
 
             return (
-              <div key={task.id} className={cn("flex items-center gap-3 px-4 py-3 group hover:bg-gray-50/50", isOverdue && !isDone && "bg-red-50/30")}>
+              <div key={task.id} className={cn("flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 group hover:bg-gray-50/50", isOverdue && !isDone && "bg-red-50/30")}>
                 {/* Checkbox */}
                 <button
                   onClick={() => handleStatusToggle(task.id, task.status)}
@@ -366,9 +393,9 @@ function TasksTab({ lead }: { lead: any }) {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <p className={cn("text-sm font-medium", isDone && "line-through text-gray-400")}>{task.title}</p>
+                  <p className={cn("text-sm font-medium break-words", isDone && "line-through text-gray-400")}>{task.title}</p>
                   {task.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{task.description}</p>}
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {task.dueDate && (
                       <span className={cn("text-[10px] flex items-center gap-1",
                         isOverdue && !isDone ? "text-red-600 font-medium" : "text-gray-400"
@@ -384,13 +411,14 @@ function TasksTab({ lead }: { lead: any }) {
                   </div>
                 </div>
 
-                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", pc.bg, pc.color)}>
+                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 hidden sm:inline-block", pc.bg, pc.color)}>
                   {task.priority}
                 </span>
 
+                {/* Delete — always visible on mobile */}
                 <button
                   onClick={() => handleDelete(task.id)}
-                  className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0"
                   title="Supprimer"
                 >
                   <Trash2 size={14} />
@@ -439,7 +467,7 @@ function CreateTaskInline({ leadId, assignedToId, onClose }: {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-brand-200 p-4 space-y-3 animate-scale-in">
+    <div className="bg-white rounded-xl border border-brand-200 p-3 sm:p-4 space-y-3 animate-scale-in">
       <input
         autoFocus
         value={title}
@@ -455,7 +483,7 @@ function CreateTaskInline({ leadId, assignedToId, onClose }: {
         className="input text-sm"
         rows={2}
       />
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Type</label>
           <select value={type} onChange={(e) => setType(e.target.value)} className="input text-xs py-1.5">
@@ -584,16 +612,16 @@ function DocumentsTab({ lead }: { lead: any }) {
 
   return (
     <div className="space-y-4">
-      {/* Upload bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-3">
-          <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input text-xs py-1.5 w-44" disabled={uploading}>
+      {/* Upload bar — stacks on mobile */}
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input text-xs py-2 sm:py-1.5 w-full sm:w-44" disabled={uploading}>
             {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
           <label className={cn(
-            "btn-primary py-1.5 px-3 text-xs cursor-pointer flex-1 justify-center",
+            "btn-primary py-2 sm:py-1.5 px-3 text-xs cursor-pointer w-full sm:flex-1 justify-center",
             uploading && "opacity-50 cursor-not-allowed"
           )}>
             {uploading ? (
@@ -616,13 +644,13 @@ function DocumentsTab({ lead }: { lead: any }) {
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
           {documents.map((doc: any) => (
-            <div key={doc.id} className="flex items-center gap-3 px-4 py-3 group hover:bg-gray-50/50">
+            <div key={doc.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 group hover:bg-gray-50/50">
               <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
                 <FileText size={18} />
               </div>
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleView(doc.id)}>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <p className="text-sm font-medium text-gray-900 truncate min-w-0">{doc.name}</p>
                   <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", DOC_TYPE_COLORS[doc.type] || "bg-gray-100 text-gray-600")}>
                     {DOC_TYPE_LABELS[doc.type] || doc.type}
                   </span>
@@ -634,14 +662,15 @@ function DocumentsTab({ lead }: { lead: any }) {
               </div>
               <button
                 onClick={() => handleView(doc.id)}
-                className="p-2 rounded-lg hover:bg-brand-50 text-gray-400 hover:text-brand-600"
+                className="p-2 rounded-lg hover:bg-brand-50 text-gray-400 hover:text-brand-600 shrink-0"
                 title="Voir/Télécharger"
               >
                 <ExternalLink size={14} />
               </button>
+              {/* Delete — always visible on mobile */}
               <button
                 onClick={() => handleDelete(doc.id)}
-                className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0"
                 title="Supprimer"
               >
                 <Trash2 size={14} />
@@ -681,7 +710,6 @@ function AppointmentsTab({ lead }: { lead: any }) {
     }
   };
 
-  // Sort: upcoming first, then past
   const now = new Date();
   const upcoming = appointments.filter((a: any) => new Date(a.startAt) >= now)
     .sort((a: any, b: any) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
@@ -700,14 +728,13 @@ function AppointmentsTab({ lead }: { lead: any }) {
   return (
     <div className="space-y-4">
       {/* Action bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-gray-500">{appointments.length} rendez-vous</p>
-        <button onClick={() => setShowCreate(true)} className="btn-primary py-1.5 px-3 text-xs">
-          <Plus size={13} /> Nouveau RDV
+        <button onClick={() => setShowCreate(true)} className="btn-primary py-1.5 px-3 text-xs shrink-0">
+          <Plus size={13} /> <span className="hidden sm:inline">Nouveau </span>RDV
         </button>
       </div>
 
-      {/* Create form */}
       {showCreate && (
         <CreateAppointmentInline
           leadId={lead.id}
@@ -716,7 +743,6 @@ function AppointmentsTab({ lead }: { lead: any }) {
         />
       )}
 
-      {/* Upcoming */}
       {upcoming.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">À venir ({upcoming.length})</p>
@@ -728,7 +754,6 @@ function AppointmentsTab({ lead }: { lead: any }) {
         </div>
       )}
 
-      {/* Past */}
       {past.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4">Passés ({past.length})</p>
@@ -754,12 +779,11 @@ function AppointmentsTab({ lead }: { lead: any }) {
 function AppointmentRow({ appt, statusConfig, onStatusChange, onDelete }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const sc = statusConfig[appt.status] || statusConfig.SCHEDULED;
-  const isPast = new Date(appt.startAt) < new Date();
 
   const TypeIcon = appt.type === "VIDEO_CALL" ? Video : appt.type === "PHONE" ? Phone : MapPin;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 group hover:bg-gray-50/50">
+    <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 group hover:bg-gray-50/50">
       <div className={cn(
         "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
         appt.type === "VIDEO_CALL" ? "bg-purple-50 text-purple-600" :
@@ -769,11 +793,11 @@ function AppointmentRow({ appt, statusConfig, onStatusChange, onDelete }: any) {
         <TypeIcon size={16} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <p className="text-sm font-medium text-gray-900 truncate">{appt.title}</p>
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          <p className="text-sm font-medium text-gray-900 truncate min-w-0">{appt.title}</p>
           <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", sc.bg, sc.color)}>{sc.label}</span>
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 break-words">
           {new Date(appt.startAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
           {appt.location && " • " + appt.location}
         </p>
@@ -784,7 +808,7 @@ function AppointmentRow({ appt, statusConfig, onStatusChange, onDelete }: any) {
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"
@@ -831,9 +855,9 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
   onClose: (created?: boolean) => void;
 }) {
   const now = new Date();
-  const defaultStart = new Date(now.getTime() + 86400000); // +24h
+  const defaultStart = new Date(now.getTime() + 86400000);
   defaultStart.setHours(10, 0, 0, 0);
-  const defaultEnd = new Date(defaultStart.getTime() + 3600000); // +1h
+  const defaultEnd = new Date(defaultStart.getTime() + 3600000);
 
   const toLocalISO = (d: Date) => {
     const y = d.getFullYear();
@@ -887,7 +911,7 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-brand-200 p-4 space-y-3 animate-scale-in">
+    <div className="bg-white rounded-xl border border-brand-200 p-3 sm:p-4 space-y-3 animate-scale-in">
       <input
         autoFocus
         value={title}
@@ -912,11 +936,11 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
                 type="button"
                 onClick={() => setType(opt.key)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border transition-colors",
+                  "flex-1 flex items-center justify-center gap-1 sm:gap-1.5 py-2 rounded-lg text-[11px] sm:text-xs font-medium border transition-colors",
                   type === opt.key ? "bg-brand-50 text-brand-600 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
                 )}
               >
-                <Icon size={13} /> {opt.label}
+                <Icon size={13} className="shrink-0" /> {opt.label}
               </button>
             );
           })}
@@ -924,7 +948,7 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
       </div>
 
       {/* Date/time */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Début</label>
           <input type="datetime-local" value={startAt} onChange={(e) => handleStartChange(e.target.value)} className="input text-xs py-1.5" />
@@ -935,7 +959,6 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
         </div>
       </div>
 
-      {/* Location or URL */}
       {type === "IN_PERSON" && (
         <div>
           <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Lieu</label>
@@ -980,7 +1003,6 @@ function AIAssistantTab({ lead }: { lead: any }) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [extraContext, setExtraContext] = useState("");
 
-  // Charger le cache au montage
   useEffect(() => {
     fetch("/api/leads/" + lead.id + "/ai-assistant")
       .then((res) => res.json())
@@ -1047,27 +1069,25 @@ function AIAssistantTab({ lead }: { lead: any }) {
 
   return (
     <div className="space-y-4">
-      {/* Header banner */}
-      <div className="bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 rounded-xl border border-violet-200 p-4">
+      <div className="bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 rounded-xl border border-violet-200 p-3 sm:p-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-md">
             <Sparkles size={18} className="text-white" />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-gray-900">Assistant IA commercial</h3>
             <p className="text-xs text-gray-600 mt-0.5">Analysez ce lead, obtenez des recommandations et rédigez des messages personnalisés.</p>
           </div>
         </div>
       </div>
 
-      {/* Major change alert */}
       {hasMajorChange && (briefData || actionsData) && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
           <div className="flex items-start gap-2">
             <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-amber-900">Nouvelle analyse recommandée</p>
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs text-amber-700 mt-0.5 break-words">
                 Activité importante depuis la dernière analyse : {changeReasons.join(", ")}.
               </p>
             </div>
@@ -1075,7 +1095,6 @@ function AIAssistantTab({ lead }: { lead: any }) {
         </div>
       )}
 
-      {/* Mode selector */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <ModeButton active={activeMode === "brief"} icon={UserIcon} label="Brief lead" onClick={() => setActiveMode("brief")} />
         <ModeButton active={activeMode === "actions"} icon={Zap} label="Actions suggérées" onClick={() => setActiveMode("actions")} />
@@ -1083,7 +1102,6 @@ function AIAssistantTab({ lead }: { lead: any }) {
         <ModeButton active={activeMode === "draft_whatsapp"} icon={MessageCircle} label="Brouillon WhatsApp" onClick={() => setActiveMode("draft_whatsapp")} />
       </div>
 
-      {/* Content */}
       {activeMode === "brief" && (
         <BriefContent
           data={briefData}
@@ -1136,22 +1154,21 @@ function ModeButton({ active, icon: Icon, label, onClick }: any) {
     <button
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-all",
+        "flex flex-col items-center gap-1.5 px-2 sm:px-3 py-3 rounded-xl border transition-all text-center",
         active
           ? "bg-violet-50 border-violet-300 text-violet-700 shadow-sm"
           : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50"
       )}
     >
       <Icon size={16} />
-      <span className="text-xs font-medium">{label}</span>
+      <span className="text-[11px] sm:text-xs font-medium leading-tight">{label}</span>
     </button>
   );
 }
 
-// ─── Empty state with action button ───
 function EmptyAIState({ icon: Icon, title, description, buttonLabel, onAction, loading }: any) {
   return (
-    <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 py-12 px-6 text-center">
+    <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 py-10 sm:py-12 px-4 sm:px-6 text-center">
       <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-sm">
         <Icon size={26} className="text-violet-500" />
       </div>
@@ -1160,7 +1177,7 @@ function EmptyAIState({ icon: Icon, title, description, buttonLabel, onAction, l
       <button
         onClick={onAction}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-md transition-all disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white text-sm font-semibold rounded-xl shadow-md transition-all disabled:opacity-50"
       >
         {loading ? (
           <><Loader2 size={14} className="animate-spin" /> Analyse en cours...</>
@@ -1172,7 +1189,6 @@ function EmptyAIState({ icon: Icon, title, description, buttonLabel, onAction, l
   );
 }
 
-// ─── Brief content ───
 function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }: any) {
   if (loading && !data) return <AILoadingState message="L'IA analyse ce lead..." />;
   if (!data) {
@@ -1197,7 +1213,7 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider">
           Brief commercial {generatedAt && "• Généré " + formatRelativeDate(generatedAt)}
         </p>
@@ -1216,12 +1232,12 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
         <p className="text-sm text-gray-800 leading-relaxed">{data.summary}</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-2">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">Niveau d'engagement</span>
           <span className={cn("text-xs px-2 py-0.5 rounded-full font-semibold", engConf.bg, engConf.color)}>
             {engConf.label}
@@ -1231,7 +1247,7 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
       </div>
 
       {data.keyPoints && data.keyPoints.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Points clés à retenir</p>
           <ul className="space-y-1.5">
             {data.keyPoints.map((point: string, i: number) => (
@@ -1245,7 +1261,7 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
       )}
 
       {data.concerns && data.concerns.length > 0 && (
-        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-3 sm:p-4">
           <p className="text-[10px] text-amber-700 uppercase tracking-wider mb-2 font-semibold">⚠️ Points d'attention</p>
           <ul className="space-y-1.5">
             {data.concerns.map((concern: string, i: number) => (
@@ -1259,7 +1275,7 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
       )}
 
       {data.approach && (
-        <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 p-4">
+        <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 p-3 sm:p-4">
           <p className="text-[10px] text-violet-700 uppercase tracking-wider mb-1 font-semibold">💡 Approche recommandée</p>
           <p className="text-sm text-gray-800">{data.approach}</p>
         </div>
@@ -1268,7 +1284,6 @@ function BriefContent({ data, generatedAt, loading, hasMajorChange, onGenerate }
   );
 }
 
-// ─── Actions content ───
 function ActionsContent({ data, generatedAt, loading, hasMajorChange, onGenerate }: any) {
   if (loading && !data) return <AILoadingState message="L'IA génère les meilleures actions..." />;
   if (!data) {
@@ -1303,7 +1318,7 @@ function ActionsContent({ data, generatedAt, loading, hasMajorChange, onGenerate
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider">
           Actions recommandées {generatedAt && "• Généré " + formatRelativeDate(generatedAt)}
         </p>
@@ -1332,19 +1347,19 @@ function ActionsContent({ data, generatedAt, loading, hasMajorChange, onGenerate
             const Icon = TYPE_ICONS[action.type] || Zap;
             const pConf = PRIORITY_CONFIG[action.priority] || PRIORITY_CONFIG.MEDIUM;
             return (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-violet-200 transition-colors">
+              <div key={i} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 hover:border-violet-200 transition-colors">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
                     <Icon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="text-sm font-semibold text-gray-900">{action.title}</p>
+                    <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-900 break-words min-w-0">{action.title}</p>
                       <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0", pConf.bg, pConf.color)}>
                         {pConf.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 mb-1.5">{action.reason}</p>
+                    <p className="text-xs text-gray-600 mb-1.5 break-words">{action.reason}</p>
                     {action.timing && (
                       <div className="flex items-center gap-1 text-[11px] text-gray-500">
                         <Clock size={10} />
@@ -1362,13 +1377,12 @@ function ActionsContent({ data, generatedAt, loading, hasMajorChange, onGenerate
   );
 }
 
-// ─── Draft content (email or whatsapp) ───
 function DraftContent({ type, data, loading, extraContext, setExtraContext, onGenerate, onCopy, lead }: any) {
   const isEmail = type === "email";
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
         <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Contexte / instructions (facultatif)</label>
         <textarea
           value={extraContext}
@@ -1396,25 +1410,25 @@ function DraftContent({ type, data, loading, extraContext, setExtraContext, onGe
       {data && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           {isEmail && data.subject && (
-            <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+            <div className="px-3 sm:px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
               <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Objet</p>
-              <p className="text-sm font-semibold text-gray-900">{data.subject}</p>
+              <p className="text-sm font-semibold text-gray-900 break-words">{data.subject}</p>
             </div>
           )}
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">{isEmail ? "Corps de l'email" : "Message WhatsApp"}</p>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{isEmail ? data.body : data.message}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed break-words">{isEmail ? data.body : data.message}</p>
           </div>
           {data.rationale && (
-            <div className="px-4 py-2.5 bg-violet-50/50 border-t border-violet-100">
+            <div className="px-3 sm:px-4 py-2.5 bg-violet-50/50 border-t border-violet-100">
               <p className="text-[10px] text-violet-700 uppercase tracking-wider mb-0.5 font-semibold">💡 Pourquoi ce message</p>
-              <p className="text-xs text-gray-700">{data.rationale}</p>
+              <p className="text-xs text-gray-700 break-words">{data.rationale}</p>
             </div>
           )}
-          <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+          <div className="px-3 sm:px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row gap-2">
             <button
               onClick={() => onCopy(isEmail ? (data.subject + "\n\n" + data.body) : data.message)}
-              className="btn-secondary py-2 px-3 text-xs flex-1"
+              className="btn-secondary py-2 px-3 text-xs flex-1 justify-center"
             >
               <Copy size={13} /> Copier
             </button>
@@ -1435,7 +1449,6 @@ function DraftContent({ type, data, loading, extraContext, setExtraContext, onGe
   );
 }
 
-// ─── Loading state for AI ───
 function AILoadingState({ message }: { message: string }) {
   return (
     <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 py-12 text-center">
@@ -1446,7 +1459,6 @@ function AILoadingState({ message }: { message: string }) {
   );
 }
 
-// ─── Helper: relative date ───
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -1510,7 +1522,7 @@ function JourneyTab({ lead }: { lead: any }) {
 
   if (!data || data.sessions.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 py-12 text-center">
+      <div className="bg-white rounded-xl border border-gray-200 py-12 text-center px-4">
         <Globe2 size={36} className="text-gray-300 mx-auto mb-2" />
         <p className="text-sm text-gray-400">Aucune visite tracée</p>
         <p className="text-xs text-gray-400 mt-1">Le parcours web s'affichera ici dès qu'une session sera liée à ce lead.</p>
@@ -1523,47 +1535,47 @@ function JourneyTab({ lead }: { lead: any }) {
   return (
     <div className="space-y-4">
       {/* Stats banner */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Sessions</p>
-            <Globe2 size={14} className="text-blue-500" />
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">Sessions</p>
+            <Globe2 size={14} className="text-blue-500 shrink-0" />
           </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.sessionCount}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.sessionCount}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Pages vues</p>
-            <MousePointer2 size={14} className="text-violet-500" />
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">Pages vues</p>
+            <MousePointer2 size={14} className="text-violet-500 shrink-0" />
           </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.totalPageViews}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.totalPageViews}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Temps visible</p>
-            <Clock size={14} className="text-emerald-500" />
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">Temps</p>
+            <Clock size={14} className="text-emerald-500 shrink-0" />
           </div>
-          <p className="text-2xl font-bold text-gray-900">{formatDuration(stats.totalEngagedTimeMs)}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900">{formatDuration(stats.totalEngagedTimeMs)}</p>
         </div>
       </div>
 
       {/* Top pages */}
       {stats.topPages.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Pages les plus consultées</p>
           <div className="space-y-2">
             {stats.topPages.map((p: any, i: number) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="text-[10px] font-bold text-gray-400 w-6">#{i + 1}</span>
+              <div key={i} className="flex items-center gap-2 sm:gap-3">
+                <span className="text-[10px] font-bold text-gray-400 w-5 sm:w-6 shrink-0">#{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{p.title}</p>
                   <p className="text-[10px] text-gray-500 font-mono truncate">{p.path}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="text-sm font-bold text-gray-900">{p.count}</p>
                   <p className="text-[10px] text-gray-400">{p.count > 1 ? "vues" : "vue"}</p>
                 </div>
-                <div className="text-right ml-2">
+                <div className="text-right ml-1 sm:ml-2 shrink-0 hidden sm:block">
                   <p className="text-sm font-medium text-gray-700">{formatDuration(p.totalEngagedMs)}</p>
                   <p className="text-[10px] text-gray-400">visible</p>
                 </div>
@@ -1580,26 +1592,26 @@ function JourneyTab({ lead }: { lead: any }) {
           {sessions.map((s: any, idx: number) => (
             <div key={s.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Session header */}
-              <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="px-3 sm:px-4 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                     <Globe2 size={14} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-900">Session #{idx + 1}</p>
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-[10px] text-gray-500 break-words">
                       {formatDateTime(s.startedAt)}
                       {" • "}{s.pageViews.length} page{s.pageViews.length > 1 ? "s" : ""}
-                      {" • "}{formatDuration(s.engagedTimeMs)} visible
+                      {" • "}{formatDuration(s.engagedTimeMs)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {s.utmSource && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">{s.utmSource}</span>
                   )}
                   {!s.utmSource && s.referrer && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium truncate max-w-[120px]">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium truncate max-w-[80px] sm:max-w-[120px]">
                       {(() => { try { return new URL(s.referrer).hostname; } catch { return "Direct"; } })()}
                     </span>
                   )}
@@ -1612,7 +1624,7 @@ function JourneyTab({ lead }: { lead: any }) {
               {/* Page views */}
               <div className="divide-y divide-gray-50">
                 {s.pageViews.map((pv: any, pvIdx: number) => (
-                  <div key={pv.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/50">
+                  <div key={pv.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 hover:bg-gray-50/50">
                     <div className="w-6 h-6 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 text-[10px] font-bold">
                       {pvIdx + 1}
                     </div>
@@ -1644,7 +1656,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
       <Icon size={14} className="text-gray-400 mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p>
-        <p className="text-sm text-gray-900 truncate">{value}</p>
+        <p className="text-sm text-gray-900 break-words">{value}</p>
       </div>
     </div>
   );

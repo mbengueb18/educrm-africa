@@ -9,43 +9,12 @@ import { cn, formatCFA, formatDate, formatDateTime, formatRelative, formatPhone,
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import {
-  X,
-  Phone,
-  MessageCircle,
-  Mail,
-  MapPin,
-  GraduationCap,
-  Calendar,
-  User as UserIcon,
-  Building2,
-  Tag,
-  Activity,
-  FileText,
-  Send,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  ArrowRight,
-  Loader2,
-  MessageSquare,
-  Megaphone,
-  Pencil,
-  Trash2,
-  Check,
-  XCircle,
- ListTodo, 
-  Plus,
-  StickyNote,
-  Paperclip,
-  Bot,
-  Link2,
-  ExternalLink,
-  CalendarDays,
-  PhoneIncoming,
-  PhoneOutgoing,
-  Video,
-  CheckCircle2,
-  AlertTriangle,
+  X, Phone, MessageCircle, Mail, MapPin, GraduationCap, Calendar,
+  User as UserIcon, Building2, Tag, Activity, FileText, Send,
+  ChevronDown, ChevronUp, Clock, ArrowRight, Loader2, MessageSquare,
+  Megaphone, Pencil, Trash2, Check, XCircle, ListTodo, Plus,
+  StickyNote, Paperclip, Bot, Link2, ExternalLink, CalendarDays,
+  PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
@@ -188,20 +157,20 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
         {lead && !loading && (
           <>
             {/* Header */}
-            <div className="flex items-start justify-between p-5 border-b border-gray-100">
+            <div className="flex items-start justify-between p-4 sm:p-5 border-b border-gray-100">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 text-lg font-bold flex items-center justify-center shrink-0">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-brand-100 text-brand-700 text-base sm:text-lg font-bold flex items-center justify-center shrink-0">
                     {getInitials(lead.firstName + " " + lead.lastName)}
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-lg font-bold text-gray-900 truncate">
+                    <h2 className="text-base sm:text-lg font-bold text-gray-900 break-words">
                       {lead.firstName} {lead.lastName}
                     </h2>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {lead.city && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
-                          <MapPin size={11} /> {lead.city}
+                          <MapPin size={11} className="shrink-0" /> {lead.city}
                         </span>
                       )}
                       <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", getScoreBg(lead.score))}>
@@ -211,47 +180,43 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  {/* Communication group */}
-                  <div className="flex items-center gap-1.5">
-                    <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs" title="Appeler">
-                      <Phone size={13} /> Appeler
-                    </a>
-                    {lead.whatsapp && <WhatsAppButton lead={lead} />}
-                    {lead.email && (
-                      <button onClick={function() { setShowCompose(true); }} className="btn-secondary py-1.5 px-3 text-xs" title="Envoyer un email">
-                        <Mail size={13} /> Email
-                      </button>
-                    )}
-                    <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50" title="Créer une tâche">
-                      <ListTodo size={13} /> Tâche
+                {/* Action buttons — flat list with flex-wrap, dividers desktop only */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3">
+                  <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs" title="Appeler">
+                    <Phone size={13} /> Appeler
+                  </a>
+                  {lead.whatsapp && <WhatsAppButton lead={lead} />}
+                  {lead.email && (
+                    <button onClick={function() { setShowCompose(true); }} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs" title="Envoyer un email">
+                      <Mail size={13} /> Email
                     </button>
-                  </div>
+                  )}
+                  <button onClick={function() { setShowTaskForm(true); }} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs text-amber-600 border-amber-200 hover:bg-amber-50" title="Créer une tâche">
+                    <ListTodo size={13} /> Tâche
+                  </button>
 
-                  {/* Vertical divider */}
-                  <div className="w-px h-5 bg-gray-200" />
+                  {/* Divider — desktop only */}
+                  <div className="hidden sm:block w-px h-5 bg-gray-200" />
 
-                  {/* Full page */}
                   <Link
                     href={"/leads/" + lead.id}
                     onClick={onClose}
-                    className="btn-secondary py-1.5 px-3 text-xs text-brand-600 border-brand-200 hover:bg-brand-50"
+                    className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs text-brand-600 border-brand-200 hover:bg-brand-50"
                     title="Ouvrir la fiche complète"
                   >
-                    <ExternalLink size={13} /> Fiche complète
+                    <ExternalLink size={13} />
+                    <span className="hidden sm:inline">Fiche complète</span>
+                    <span className="sm:hidden">Fiche</span>
                   </Link>
 
-                  {/* Vertical divider */}
-                  <div className="w-px h-5 bg-gray-200" />
+                  <div className="hidden sm:block w-px h-5 bg-gray-200" />
 
-                  {/* Portal */}
                   <PortalButton lead={lead} />
 
-                  {/* Conversion (only if not converted) */}
                   {!lead.isConverted && (
                     <>
-                      <div className="w-px h-5 bg-gray-200" />
-                      <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50" title="Convertir en étudiant">
+                      <div className="hidden sm:block w-px h-5 bg-gray-200" />
+                      <button onClick={function() { setShowConvert(true); }} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50" title="Convertir en étudiant">
                         <GraduationCap size={13} /> Convertir
                       </button>
                     </>
@@ -275,7 +240,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
 
             {/* Compose email */}
             {showCompose && lead && lead.email && (
-              <div className="px-5 py-3 bg-blue-50/50 border-b border-blue-200 animate-scale-in">
+              <div className="px-4 sm:px-5 py-3 bg-blue-50/50 border-b border-blue-200 animate-scale-in">
                 <ComposeEmail
                   leadId={lead.id}
                   leadName={lead.firstName + " " + lead.lastName}
@@ -300,19 +265,18 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
               />
             )}
 
-
             {/* Delete confirmation */}
             {showDeleteConfirm && (
-              <div className="px-5 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Trash2 size={14} className="text-red-600" />
-                  <span className="text-sm text-red-700 font-medium">Supprimer ce lead et toutes ses données ?</span>
+              <div className="px-4 sm:px-5 py-3 bg-red-50 border-b border-red-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-start sm:items-center gap-2 min-w-0">
+                  <Trash2 size={14} className="text-red-600 shrink-0 mt-0.5 sm:mt-0" />
+                  <span className="text-xs sm:text-sm text-red-700 font-medium">Supprimer ce lead et toutes ses données ?</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={function() { setShowDeleteConfirm(false); }} className="px-3 py-1.5 text-xs text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50" disabled={deleting}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={function() { setShowDeleteConfirm(false); }} className="px-3 py-1.5 text-xs text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 flex-1 sm:flex-initial" disabled={deleting}>
                     Annuler
                   </button>
-                  <button onClick={handleDelete} disabled={deleting} className="px-3 py-1.5 text-xs text-white bg-red-600 rounded-lg hover:bg-red-700 flex items-center gap-1">
+                  <button onClick={handleDelete} disabled={deleting} className="px-3 py-1.5 text-xs text-white bg-red-600 rounded-lg hover:bg-red-700 flex items-center gap-1 flex-1 sm:flex-initial justify-center">
                     {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                     Supprimer
                   </button>
@@ -321,17 +285,17 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
             )}
 
             {/* Stage & Assignment */}
-            <div className="flex items-center gap-3 px-5 py-3 bg-gray-50/80 border-b border-gray-100">
-              <div className="flex-1">
+            <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-gray-50/80 border-b border-gray-100">
+              <div className="flex-1 min-w-0">
                 <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Étape</label>
                 <select value={lead.stageId} onChange={function(e) { handleStageChange(e.target.value); }} disabled={isPending} className="input py-1.5 text-xs mt-0.5">
                   {stages.map(function(s) { return <option key={s.id} value={s.id}>{s.name}</option>; })}
                 </select>
               </div>
-              <div className="flex-1">
-                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Assigne a</label>
+              <div className="flex-1 min-w-0">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Assigné à</label>
                 <select value={lead.assignedToId || ""} onChange={function(e) { handleAssign(e.target.value); }} disabled={isPending} className="input py-1.5 text-xs mt-0.5">
-                  <option value="">Non assigne</option>
+                  <option value="">Non assigné</option>
                   {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
                 </select>
               </div>
@@ -484,7 +448,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
   var allCustom = mappedEntries.concat(unmappedEntries);
 
   return (
-    <div className="p-5 space-y-5">
+    <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
       {/* Edit/Save toggle */}
       <div className="flex items-center justify-end gap-2">
         {editMode ? (
@@ -507,7 +471,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       <Section title="Contact">
         {editMode ? (
           <div className="space-y-3">
-            <EditRow label="Prenom" value={editData.firstName} onChange={function(v) { setEditData({ ...editData, firstName: v }); }} />
+            <EditRow label="Prénom" value={editData.firstName} onChange={function(v) { setEditData({ ...editData, firstName: v }); }} />
             <EditRow label="Nom" value={editData.lastName} onChange={function(v) { setEditData({ ...editData, lastName: v }); }} />
             <EditRow label="Téléphone" value={editData.phone} onChange={function(v) { setEditData({ ...editData, phone: v }); }} />
             <EditRow label="Email" value={editData.email} onChange={function(v) { setEditData({ ...editData, email: v }); }} type="email" />
@@ -563,12 +527,12 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
                 })}
               </select>
             </div>
-            <EditRow label="Detail source" value={editData.sourceDetail} onChange={function(v) { setEditData({ ...editData, sourceDetail: v }); }} />
+            <EditRow label="Détail source" value={editData.sourceDetail} onChange={function(v) { setEditData({ ...editData, sourceDetail: v }); }} />
           </div>
         ) : (
           <>
             <InfoRow icon={Megaphone} label="Source" value={sourceLabels[lead.source] || lead.source} />
-            {lead.sourceDetail && <InfoRow icon={Tag} label="Detail" value={lead.sourceDetail} />}
+            {lead.sourceDetail && <InfoRow icon={Tag} label="Détail" value={lead.sourceDetail} />}
             {customFields._trafficChannel && (
               <InfoRow icon={Tag} label="Canal" value={customFields._trafficChannel} />
             )}
@@ -591,14 +555,14 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       </Section>
 
       {!editMode && lead.assignedTo && (
-        <Section title="Commercial assigne">
+        <Section title="Commercial assigné">
           <div className="flex items-center gap-3 py-1">
-            <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
               {getInitials(lead.assignedTo.name)}
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">{lead.assignedTo.name}</p>
-              {lead.assignedTo.email && <p className="text-xs text-gray-500">{lead.assignedTo.email}</p>}
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{lead.assignedTo.name}</p>
+              {lead.assignedTo.email && <p className="text-xs text-gray-500 truncate">{lead.assignedTo.email}</p>}
             </div>
           </div>
         </Section>
@@ -628,7 +592,6 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
     LOW: "Basse", MEDIUM: "Moyenne", HIGH: "Haute", URGENT: "Urgente",
   };
 
-  // Build unified timeline
   var timeline: {
     id: string;
     type: "activity" | "call" | "appointment" | "task" | "message";
@@ -656,7 +619,6 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
       timeline.push({ id: "t-" + t.id, type: "task", date: new Date(t.createdAt), data: t });
     });
   }
-
   if (lead.messages) {
     lead.messages.forEach(function(m) {
       timeline.push({ id: "m-" + m.id, type: "message", date: new Date(m.sentAt), data: m });
@@ -664,6 +626,8 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
   }
 
   timeline.sort(function(a, b) { return b.date.getTime() - a.date.getTime(); });
+
+  var [filter, setFilter] = useState<"all" | "call" | "appointment" | "task" | "activity" | "message">("all");
 
   if (timeline.length === 0) {
     return (
@@ -675,13 +639,10 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
     );
   }
 
-  // Filter
-  var [filter, setFilter] = useState<"all" | "call" | "appointment" | "task" | "activity" | "message">("all");
-
   var filtered = filter === "all" ? timeline : timeline.filter(function(t) { return t.type === filter; });
 
   return (
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       {/* Filters */}
       <div className="flex gap-1.5 mb-4 flex-wrap">
         {[
@@ -695,7 +656,7 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
           if (f.count === 0 && f.key !== "all") return null;
           return (
             <button key={f.key} onClick={function() { setFilter(f.key); }}
-              className={cn("text-[10px] px-2.5 py-1 rounded-full border transition-colors font-medium",
+              className={cn("text-[10px] px-2.5 py-1 rounded-full border transition-colors font-medium whitespace-nowrap",
                 filter === f.key ? "bg-brand-100 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
               )}>
               {f.label} ({f.count})
@@ -721,11 +682,11 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     <CallIcon size={14} className={isAnswered ? "text-emerald-600" : "text-red-500"} />
                   </div>
                   <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <p className="text-sm font-medium text-gray-700">
                         {call.direction === "OUTBOUND" ? "Appel sortant" : "Appel entrant"}
                       </p>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0",
                         isAnswered ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
                       )}>
                         {callOutcomeLabels[call.outcome] || call.outcome}
@@ -734,8 +695,8 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     {call.duration && call.duration > 0 && (
                       <p className="text-xs text-gray-500 mt-1">Durée : {Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, "0")}</p>
                     )}
-                    {call.notes && <p className="text-xs text-gray-500 mt-1 italic">"{call.notes}"</p>}
-                    <div className="flex items-center gap-2 mt-1.5">
+                    {call.notes && <p className="text-xs text-gray-500 mt-1 italic break-words">"{call.notes}"</p>}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       {call.calledBy && <span className="text-[10px] text-gray-500">{call.calledBy.name}</span>}
                       <span className="text-[10px] text-gray-400">{formatRelative(call.calledAt)}</span>
                     </div>
@@ -760,9 +721,9 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     <ApptIcon size={14} className="text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-700">{appt.title}</p>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-gray-700 break-words min-w-0">{appt.title}</p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0",
                         appt.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
                         appt.status === "NO_SHOW" ? "bg-red-100 text-red-600" :
                         appt.status === "CANCELLED" ? "bg-gray-100 text-gray-500" :
@@ -771,12 +732,12 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                         {apptStatusLabels[appt.status] || appt.status}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1 break-words">
                       {formatDateTime(appt.startAt)} — {new Date(appt.endAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                     </p>
-                    {appt.location && <p className="text-xs text-gray-500 mt-0.5"><MapPin size={10} className="inline mr-1" />{appt.location}</p>}
+                    {appt.location && <p className="text-xs text-gray-500 mt-0.5 break-words"><MapPin size={10} className="inline mr-1" />{appt.location}</p>}
                     {appt.meetingUrl && <a href={appt.meetingUrl} target="_blank" className="text-xs text-blue-600 hover:underline mt-0.5 inline-block">Lien visio</a>}
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       {appt.assignedTo && <span className="text-[10px] text-gray-500">{appt.assignedTo.name}</span>}
                       <span className="text-[10px] text-gray-400">{formatRelative(appt.startAt)}</span>
                     </div>
@@ -800,9 +761,9 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     <TaskIcon size={14} className={isDone ? "text-emerald-600" : isOverdue ? "text-red-500" : "text-amber-600"} />
                   </div>
                   <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <p className={cn("text-sm font-medium", isDone ? "text-gray-400 line-through" : "text-gray-700")}>{task.title}</p>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className={cn("text-sm font-medium break-words min-w-0", isDone ? "text-gray-400 line-through" : "text-gray-700")}>{task.title}</p>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0",
                         isDone ? "bg-emerald-100 text-emerald-700" :
                         isOverdue ? "bg-red-100 text-red-600" :
                         "bg-amber-100 text-amber-700"
@@ -817,7 +778,7 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                         {isOverdue && " — En retard !"}
                       </p>
                     )}
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className="text-[10px] text-gray-500">{priorityLabels[task.priority] || task.priority}</span>
                       {task.assignedTo && <span className="text-[10px] text-gray-500">• {task.assignedTo.name}</span>}
                       <span className="text-[10px] text-gray-400">{formatRelative(task.createdAt)}</span>
@@ -847,10 +808,8 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                 parsedContent = { subject: null, body: msg.content };
               }
 
-              // Clean inbound replies: remove quoted text and signatures
               var displayBody = parsedContent.body || "";
 
-              // Detect HTML and convert to clean text for preview
               var isHtmlBody = displayBody.trim().startsWith("<") && (
                 displayBody.includes("<html") ||
                 displayBody.includes("<!DOCTYPE") ||
@@ -864,7 +823,6 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
               }
 
               if (msg.direction === "INBOUND") {
-                // Remove quoted thread (everything from "On ... wrote:" or "Le ... a écrit :")
                 displayBody = displayBody
                   .replace(/^(>+\s*.*\n?)+/gm, "")
                   .replace(/On .{1,200} wrote:[\s\S]*$/i, "")
@@ -883,9 +841,9 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                     <MsgIcon size={14} className={msgIconColor} />
                   </div>
                   <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                       <p className="text-sm font-medium text-gray-700">{channelLabel} {dirLabel}</p>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0",
                         msg.status === "DELIVERED" || msg.status === "READ" ? "bg-emerald-100 text-emerald-700" :
                         msg.status === "FAILED" ? "bg-red-100 text-red-600" :
                         "bg-gray-100 text-gray-500"
@@ -893,8 +851,8 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                         {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Reçu" : msg.status === "SENT" ? "Envoyé" : msg.status === "FAILED" ? "Échoué" : msg.status}
                       </span>
                     </div>
-                    {parsedContent.subject && <p className="text-xs font-semibold text-gray-800 mb-1.5">{parsedContent.subject}</p>}
-                    <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{displayBody}</p>
+                    {parsedContent.subject && <p className="text-xs font-semibold text-gray-800 mb-1.5 break-words">{parsedContent.subject}</p>}
+                    <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-6 break-words">{displayBody}</p>
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div className="mt-2 space-y-1">
                         {msg.attachments.map(function(att: any) {
@@ -933,8 +891,8 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
                   <Icon size={14} className="text-gray-500" />
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
-                  <p className="text-sm text-gray-700">{activity.description}</p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm text-gray-700 break-words">{activity.description}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {activity.user && <span className="text-xs text-gray-500">{activity.user.name}</span>}
                     <span className="text-xs text-gray-400">{formatRelative(activity.createdAt)}</span>
                   </div>
@@ -943,74 +901,6 @@ function HistoryTab({ lead }: { lead: LeadDetail }) {
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Messages Tab ───
-function MessagesTab({ messages, count, lead }: { messages: LeadDetail["messages"]; count: number; lead: LeadDetail }) {
-  var [composing, setComposing] = useState(false);
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-5 pt-4 pb-2">
-        {!composing ? (
-          <button onClick={function() { setComposing(true); }} className="btn-primary w-full py-2 text-xs justify-center" disabled={!lead.email}>
-            <Send size={14} /> {lead.email ? "Envoyer un email" : "Pas d'email pour ce lead"}
-          </button>
-        ) : (
-          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 animate-scale-in">
-            <ComposeEmail
-              leadId={lead.id}
-              leadName={lead.firstName + " " + lead.lastName}
-              leadEmail={lead.email}
-              compact
-              onSent={function() { setComposing(false); }}
-              onClose={function() { setComposing(false); }}
-            />
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-5 space-y-3">
-        {messages.length === 0 && !composing ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <MessageSquare size={32} className="text-gray-300 mb-3" />
-            <p className="text-sm text-gray-400">Aucun message echange</p>
-            <p className="text-xs text-gray-400 mt-1">Envoyez le premier email a ce lead</p>
-          </div>
-        ) : (
-          messages.map(function(msg) {
-            var channelIcons: Record<string, typeof Phone> = { WHATSAPP: MessageCircle, SMS: MessageSquare, EMAIL: Mail, PHONE_CALL: Phone };
-            var channelColors: Record<string, string> = { WHATSAPP: "text-emerald-500", SMS: "text-blue-500", EMAIL: "text-brand-500", PHONE_CALL: "text-purple-500" };
-            var Icon = channelIcons[msg.channel] || MessageSquare;
-            var isOutbound = msg.direction === "OUTBOUND";
-            var parsedContent = { subject: null as string | null, body: msg.content };
-            try { var parsed = JSON.parse(msg.content); parsedContent = { subject: parsed.subject, body: parsed.body }; } catch {}
-
-            return (
-              <div key={msg.id} className={cn("flex gap-3", isOutbound && "flex-row-reverse")}>
-                <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", isOutbound ? "bg-brand-100" : "bg-gray-100")}>
-                  <Icon size={14} className={channelColors[msg.channel] || "text-gray-500"} />
-                </div>
-                <div className={cn("max-w-[80%] rounded-xl px-3.5 py-2.5", isOutbound ? "bg-brand-50 text-brand-900" : "bg-gray-100 text-gray-800")}>
-                  {parsedContent.subject && <p className="text-xs font-semibold mb-1">{parsedContent.subject}</p>}
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{parsedContent.body}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] text-gray-400">{formatRelative(msg.sentAt)}</span>
-                    <span className={cn("text-[10px] font-medium",
-                      msg.status === "DELIVERED" || msg.status === "READ" ? "text-emerald-500" :
-                      msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
-                    )}>
-                      {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Reçu" : msg.status === "SENT" ? "Envoyé" : msg.status === "FAILED" ? "Échoué" : msg.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
       </div>
     </div>
   );
@@ -1028,10 +918,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function InfoRow({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <Icon size={14} className="text-gray-400 shrink-0" />
-      <span className="text-xs text-gray-500 w-28 shrink-0">{label}</span>
-      <span className="text-sm text-gray-900 truncate">{value}</span>
+    <div className="flex items-start gap-2 sm:gap-3 py-1.5">
+      <Icon size={14} className="text-gray-400 shrink-0 mt-0.5" />
+      <span className="text-xs text-gray-500 w-20 sm:w-28 shrink-0 mt-0.5">{label}</span>
+      <span className="text-sm text-gray-900 break-words min-w-0 flex-1">{value}</span>
     </div>
   );
 }
@@ -1104,7 +994,6 @@ function WhatsAppButton({ lead }: { lead: LeadDetail }) {
     window.open(url, "_blank");
     setOpen(false);
 
-    // Log in CRM
     if (text) {
       try {
         await logWhatsAppMessage(lead.id, text);
@@ -1118,7 +1007,7 @@ function WhatsAppButton({ lead }: { lead: LeadDetail }) {
   return (
     <div className="relative">
       <button onClick={function() { setOpen(!open); }}
-        className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 flex items-center gap-1">
+        className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 flex items-center gap-1">
         <MessageCircle size={13} /> WhatsApp
         {open ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
       </button>
@@ -1126,10 +1015,10 @@ function WhatsAppButton({ lead }: { lead: LeadDetail }) {
       {open && (
         <>
           <div className="fixed inset-0 z-50" onClick={function() { setOpen(false); }} />
-          <div className="absolute top-full left-0 mt-1 w-72 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
+          <div className="absolute top-full left-0 mt-1 w-[calc(100vw-2rem)] sm:w-72 max-w-xs bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
             <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">
               <p className="text-xs font-semibold text-emerald-700">Envoyer un message WhatsApp</p>
-              <p className="text-[10px] text-emerald-600">{lead.whatsapp}</p>
+              <p className="text-[10px] text-emerald-600 truncate">{lead.whatsapp}</p>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {templates.map(function(tpl) {
@@ -1181,14 +1070,14 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
   };
 
   return (
-    <div className="p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <StickyNote size={16} className="text-amber-500" />
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <StickyNote size={16} className="text-amber-500 shrink-0" />
           <h3 className="text-sm font-semibold text-gray-700">Notes internes</h3>
         </div>
         {!editing && currentNotes && (
-          <button onClick={function() { setEditing(true); }} className="btn-secondary py-1 px-2.5 text-xs">
+          <button onClick={function() { setEditing(true); }} className="btn-secondary py-1 px-2.5 text-xs shrink-0">
             <Pencil size={12} /> Modifier
           </button>
         )}
@@ -1200,7 +1089,7 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
             value={notes}
             onChange={function(e) { setNotes(e.target.value); }}
             placeholder="Ajoutez des notes internes sur ce lead (visibles uniquement par votre équipe)...&#10;&#10;Exemples :&#10;• Parents divorcés, contact préférentiel : mère&#10;• Intéressé par la filière Marketing, budget limité&#10;• Doit rappeler après les examens du bac"
-            className="input text-sm w-full min-h-[300px] resize-y font-normal"
+            className="input text-sm w-full min-h-[250px] sm:min-h-[300px] resize-y font-normal"
             autoFocus
           />
           <div className="flex items-center justify-end gap-2 mt-3">
@@ -1217,14 +1106,14 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
         </>
       ) : (
         <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-4">
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{currentNotes || "Aucune note"}</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{currentNotes || "Aucune note"}</p>
         </div>
       )}
     </div>
   );
 }
 
-  function QuickTaskForm({ leadId, leadName, users, onClose }: {
+function QuickTaskForm({ leadId, leadName, users, onClose }: {
   leadId: string;
   leadName: string;
   users: { id: string; name: string }[];
@@ -1273,12 +1162,12 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
   };
 
   return (
-    <div className="px-5 py-3 bg-amber-50/50 border-b border-amber-200">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
-          <ListTodo size={13} /> Nouvelle tâche pour {leadName}
+    <div className="px-4 sm:px-5 py-3 bg-amber-50/50 border-b border-amber-200">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-xs font-semibold text-amber-800 flex items-center gap-1.5 min-w-0">
+          <ListTodo size={13} className="shrink-0" /> <span className="truncate">Nouvelle tâche pour {leadName}</span>
         </span>
-        <button onClick={function() { onClose(); }} className="text-gray-400 hover:text-gray-600">
+        <button onClick={function() { onClose(); }} className="text-gray-400 hover:text-gray-600 shrink-0">
           <X size={14} />
         </button>
       </div>
@@ -1288,7 +1177,7 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
         {quickTitles.map(function(qt) {
           return (
             <button key={qt.label} onClick={function() { setTitle(qt.value); setType(qt.type); }}
-              className={cn("text-[10px] px-2 py-1 rounded-full border transition-colors",
+              className={cn("text-[10px] px-2 py-1 rounded-full border transition-colors whitespace-nowrap",
                 title === qt.value ? "bg-amber-200 text-amber-800 border-amber-300" : "bg-white text-gray-600 border-gray-200 hover:border-amber-300"
               )}>
               {qt.label}
@@ -1310,7 +1199,7 @@ function NotesTab({ lead, onUpdate }: { lead: LeadDetail; onUpdate: (lead: LeadD
           {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
         </select>
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
         <input type="datetime-local" value={dueDate} onChange={function(e) { setDueDate(e.target.value); }} className="input text-xs py-1.5" placeholder="Échéance" />
         <select value={reminderMinutes} onChange={function(e) { setReminderMinutes(e.target.value); }} className="input text-xs py-1.5" disabled={!dueDate}>
           <option value="">Pas de rappel</option>
@@ -1394,7 +1283,7 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
           if (!generated) handleGenerate();
         }}
         className={cn(
-          "btn-secondary py-1.5 px-3 text-xs",
+          "btn-secondary py-1.5 px-2.5 sm:px-3 text-xs",
           isPortalAvailable
             ? "text-violet-600 border-violet-200 hover:bg-violet-50"
             : "text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
@@ -1407,7 +1296,7 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
       {open && (
         <>
           <div className="fixed inset-0 z-50" onClick={function() { setOpen(false); }} />
-          <div className="absolute top-full right-0 mt-1 w-80 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
+          <div className="absolute top-full right-0 mt-1 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
             <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
               <p className="text-xs font-semibold text-violet-700">Espace candidat</p>
               <p className="text-[10px] text-violet-600">Lien personnel sécurisé pour le candidat</p>
@@ -1427,7 +1316,7 @@ function PortalButton({ lead }: { lead: LeadDetail }) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={handleCopy} className="btn-secondary py-2 text-xs">
+                    <button onClick={handleCopy} className="btn-secondary py-2 text-xs justify-center">
                       <Link2 size={12} /> Copier
                     </button>
                     <a href={generated.fullUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary py-2 text-xs justify-center">
