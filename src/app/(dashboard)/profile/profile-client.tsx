@@ -129,32 +129,33 @@ export function ProfileClient({ user }: ProfileClientProps) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Mon profil</h1>
-        <p className="text-sm text-gray-500 mt-1">Gérez vos informations personnelles</p>
+      {/* Header */}
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Mon profil</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">Gérez vos informations personnelles</p>
       </div>
 
       {/* Profile banner */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-        <div className="h-28 bg-gradient-to-r from-brand-500 to-brand-700 relative">
-          <div className="absolute -bottom-10 left-6">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+        <div className="h-24 sm:h-28 bg-gradient-to-r from-brand-500 to-brand-700 relative">
+          <div className="absolute -bottom-10 left-4 sm:left-6">
             <div className="w-20 h-20 rounded-2xl bg-white shadow-lg flex items-center justify-center text-2xl font-bold text-brand-700 border-4 border-white">
               {getInitials(user.name)}
             </div>
           </div>
         </div>
-        <div className="pt-14 px-6 pb-4">
-          <h2 className="text-xl font-bold text-gray-900">{user.name}</h2>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
+        <div className="pt-12 sm:pt-14 px-4 sm:px-6 pb-4">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 break-words">{user.name}</h2>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 shrink-0">
               {ROLE_LABELS[user.role] || user.role}
             </span>
-            <span className="text-xs text-gray-500">{user.organization.name}</span>
+            <span className="text-xs text-gray-500 break-words min-w-0">{user.organization.name}</span>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-t border-gray-100 px-6">
+        {/* Tabs — horizontal scroll fallback on tight screens */}
+        <div className="flex border-t border-gray-100 px-3 sm:px-6 overflow-x-auto no-scrollbar">
           {[
             { key: "info" as const, label: "Informations", icon: User },
             { key: "security" as const, label: "Sécurité", icon: Key },
@@ -163,10 +164,11 @@ export function ProfileClient({ user }: ProfileClientProps) {
             var Icon = tab.icon;
             return (
               <button key={tab.key} onClick={function() { setActiveTab(tab.key); }}
-                className={cn("flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative",
+                className={cn(
+                  "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors relative shrink-0 whitespace-nowrap",
                   activeTab === tab.key ? "text-brand-600" : "text-gray-500 hover:text-gray-700"
                 )}>
-                <Icon size={15} /> {tab.label}
+                <Icon size={14} className="shrink-0" /> {tab.label}
                 {activeTab === tab.key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 rounded-full" />}
               </button>
             );
@@ -176,21 +178,26 @@ export function ProfileClient({ user }: ProfileClientProps) {
 
       {/* Tab content */}
       {activeTab === "info" && (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="text-base font-bold text-gray-900">Informations personnelles</h3>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+          <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 min-w-0 flex-1">Informations personnelles</h3>
             {editMode ? (
-              <div className="flex items-center gap-2">
-                <button onClick={handleCancel} className="btn-secondary py-1.5 px-3 text-xs" disabled={saving}><X size={13} /> Annuler</button>
-                <button onClick={handleSave} className="btn-primary py-1.5 px-3 text-xs" disabled={saving}>
-                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Sauvegarder
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={handleCancel} className="btn-secondary py-1.5 px-2 sm:px-3 text-xs" disabled={saving}>
+                  <X size={13} /> <span className="hidden sm:inline">Annuler</span>
+                </button>
+                <button onClick={handleSave} className="btn-primary py-1.5 px-2 sm:px-3 text-xs" disabled={saving}>
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                  <span className="hidden sm:inline">Sauvegarder</span><span className="sm:hidden">OK</span>
                 </button>
               </div>
             ) : (
-              <button onClick={function() { setEditMode(true); }} className="btn-secondary py-1.5 px-3 text-xs"><Pencil size={13} /> Modifier</button>
+              <button onClick={function() { setEditMode(true); }} className="btn-secondary py-1.5 px-2 sm:px-3 text-xs shrink-0">
+                <Pencil size={13} /> Modifier
+              </button>
             )}
           </div>
-          <div className="p-6 space-y-3">
+          <div className="p-4 sm:p-6 space-y-3">
             {editMode ? (
               <>
                 <EditField icon={User} label="Nom complet" value={name} onChange={setName} />
@@ -215,19 +222,19 @@ export function ProfileClient({ user }: ProfileClientProps) {
 
       {activeTab === "security" && (
         <>
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><Key size={16} /> Mot de passe</h3>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2"><Key size={16} className="shrink-0" /> Mot de passe</h3>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {!showPasswordForm ? (
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-700">Modifier votre mot de passe</p>
                     <p className="text-xs text-gray-400 mt-0.5">Utilisez un mot de passe fort et unique</p>
                   </div>
-                  <button onClick={function() { setShowPasswordForm(true); }} className="btn-secondary py-2 text-xs">
-                    <Key size={13} /> Changer le mot de passe
+                  <button onClick={function() { setShowPasswordForm(true); }} className="btn-secondary py-2 text-xs shrink-0 self-start sm:self-auto">
+                    <Key size={13} /> <span className="sm:hidden">Changer</span><span className="hidden sm:inline">Changer le mot de passe</span>
                   </button>
                 </div>
               ) : (
@@ -268,10 +275,10 @@ export function ProfileClient({ user }: ProfileClientProps) {
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-2">
                     <button onClick={function() { setShowPasswordForm(false); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }}
-                      className="btn-secondary py-2 text-xs">Annuler</button>
+                      className="btn-secondary py-2 px-3 text-xs">Annuler</button>
                     <button onClick={handleChangePassword}
                       disabled={changingPwd || !currentPassword || newPassword.length < 6 || newPassword !== confirmPassword}
-                      className="btn-primary py-2 text-xs">
+                      className="btn-primary py-2 px-3 text-xs">
                       {changingPwd ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Confirmer
                     </button>
                   </div>
@@ -280,17 +287,17 @@ export function ProfileClient({ user }: ProfileClientProps) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><LogOut size={16} /> Session</h3>
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2"><LogOut size={16} className="shrink-0" /> Session</h3>
             </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-700">Déconnexion</p>
                   <p className="text-xs text-gray-400 mt-0.5">Fermer votre session sur cet appareil</p>
                 </div>
-                <button onClick={handleLogout} className="btn-secondary py-2 text-xs text-red-600 border-red-200 hover:bg-red-50">
+                <button onClick={handleLogout} className="btn-secondary py-2 text-xs text-red-600 border-red-200 hover:bg-red-50 shrink-0 self-start sm:self-auto">
                   <LogOut size={13} /> Se déconnecter
                 </button>
               </div>
@@ -300,18 +307,18 @@ export function ProfileClient({ user }: ProfileClientProps) {
       )}
 
       {activeTab === "integrations" && (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><Calendar size={16} /> Intégrations</h3>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2"><Calendar size={16} className="shrink-0" /> Intégrations</h3>
           </div>
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-8 h-8" />
-                <div>
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <img src="https://www.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png" alt="Google Calendar" className="w-8 h-8 shrink-0" />
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-700">Google Calendar</p>
                   {googleConnected ? (
-                    <p className="text-xs text-emerald-600">Connecté — {googleEmail}</p>
+                    <p className="text-xs text-emerald-600 break-all">Connecté — {googleEmail}</p>
                   ) : (
                     <p className="text-xs text-gray-400">Synchronisez vos rendez-vous et générez des liens Meet</p>
                   )}
@@ -319,12 +326,12 @@ export function ProfileClient({ user }: ProfileClientProps) {
               </div>
               {googleConnected ? (
                 <button onClick={handleDisconnectGoogle} disabled={disconnecting}
-                  className="btn-secondary py-2 text-xs text-red-600 border-red-200 hover:bg-red-50">
+                  className="btn-secondary py-2 text-xs text-red-600 border-red-200 hover:bg-red-50 shrink-0 self-start sm:self-auto">
                   {disconnecting ? <Loader2 size={13} className="animate-spin" /> : null}
                   Déconnecter
                 </button>
               ) : (
-                <a href="/api/integrations/google/connect?returnTo=/profile" className="btn-primary py-2 text-xs">
+                <a href="/api/integrations/google/connect?returnTo=/profile" className="btn-primary py-2 text-xs shrink-0 self-start sm:self-auto">
                   Connecter
                 </a>
               )}
@@ -339,10 +346,10 @@ export function ProfileClient({ user }: ProfileClientProps) {
 // ─── Reusable components ───
 function InfoField({ icon: Icon, label, value, muted }: { icon: typeof User; label: string; value: string; muted?: boolean }) {
   return (
-    <div className="flex items-center gap-3 py-2">
-      <Icon size={16} className="text-gray-400 shrink-0" />
-      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
-      <span className={cn("text-sm", muted ? "text-gray-400" : "text-gray-900")}>{value}</span>
+    <div className="flex items-start sm:items-center gap-2 sm:gap-3 py-2">
+      <Icon size={16} className="text-gray-400 shrink-0 mt-0.5 sm:mt-0" />
+      <span className="text-xs text-gray-500 w-24 sm:w-32 shrink-0">{label}</span>
+      <span className={cn("text-sm min-w-0 flex-1 break-words", muted ? "text-gray-400" : "text-gray-900")}>{value}</span>
     </div>
   );
 }
@@ -351,11 +358,11 @@ function EditField({ icon: Icon, label, value, onChange, placeholder }: {
   icon: typeof User; label: string; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 py-1">
-      <Icon size={16} className="text-gray-400 shrink-0" />
-      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
+    <div className="flex items-start sm:items-center gap-2 sm:gap-3 py-1">
+      <Icon size={16} className="text-gray-400 shrink-0 mt-2.5 sm:mt-0" />
+      <span className="text-xs text-gray-500 w-24 sm:w-32 shrink-0 mt-2.5 sm:mt-0">{label}</span>
       <input type="text" value={value} onChange={function(e) { onChange(e.target.value); }}
-        className="input text-sm flex-1" placeholder={placeholder || label} />
+        className="input text-sm flex-1 min-w-0" placeholder={placeholder || label} />
     </div>
   );
 }
@@ -364,11 +371,11 @@ function ReadOnlyField({ icon: Icon, label, value, hint }: {
   icon: typeof User; label: string; value: string; hint?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 py-1">
-      <Icon size={16} className="text-gray-400 shrink-0" />
-      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
-      <div className="flex-1">
-        <span className="text-sm text-gray-400">{value}</span>
+    <div className="flex items-start sm:items-center gap-2 sm:gap-3 py-1">
+      <Icon size={16} className="text-gray-400 shrink-0 mt-0.5 sm:mt-0" />
+      <span className="text-xs text-gray-500 w-24 sm:w-32 shrink-0">{label}</span>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm text-gray-400 break-words">{value}</span>
         {hint && <p className="text-[10px] text-gray-300 mt-0.5">{hint}</p>}
       </div>
     </div>

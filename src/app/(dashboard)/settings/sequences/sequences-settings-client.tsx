@@ -133,33 +133,33 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Relances automatiques</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Personnalisez les messages, délais et canaux de relance</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Relances automatiques</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Personnalisez les messages, délais et canaux de relance</p>
         </div>
-        <button onClick={handleReset} className="btn-secondary py-1.5 px-3 text-xs text-gray-500" disabled={isPending}>
-          <RotateCcw size={12} /> Réinitialiser
+        <button onClick={handleReset} className="btn-secondary py-1.5 px-3 text-xs text-gray-500 shrink-0" disabled={isPending}>
+          <RotateCcw size={12} /> <span className="hidden sm:inline">Réinitialiser</span><span className="sm:hidden">Reset</span>
         </button>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {/* Activation */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", enabled ? "bg-emerald-50" : "bg-gray-100")}>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", enabled ? "bg-emerald-50" : "bg-gray-100")}>
                 <Power size={20} className={enabled ? "text-emerald-600" : "text-gray-400"} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900">Activer les relances automatiques</p>
                 <p className="text-xs text-gray-500">Le système enverra automatiquement les relances aux leads silencieux</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
               <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="sr-only peer" />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
             </label>
@@ -167,9 +167,9 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
         </div>
 
         {/* Pause conditions */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Pause size={16} className="text-brand-500" /> Conditions d'arrêt automatique
+            <Pause size={16} className="text-brand-500 shrink-0" /> Conditions d'arrêt automatique
           </h3>
           <div className="space-y-3">
             <ToggleRow icon={Reply} title="Pause si le lead répond" desc="La séquence s'arrête dès qu'un email entrant est reçu" checked={pauseOnReply} onChange={setPauseOnReply} />
@@ -178,10 +178,13 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
         </div>
 
         {/* Steps */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 gap-2">
             <h3 className="text-sm font-semibold text-gray-900">Séquence de relance personnalisée</h3>
-            <span className="text-[10px] text-gray-400">Variables : {"{prenom}"} {"{nom}"} {"{email}"} {"{ecole}"}</span>
+            {/* Variables hint — desktop only (already shown in footer note) */}
+            <span className="hidden md:inline text-[10px] text-gray-400 shrink-0">
+              Variables : {"{prenom}"} {"{nom}"} {"{email}"} {"{ecole}"}
+            </span>
           </div>
 
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -206,19 +209,15 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                               dragSnapshot.isDragging && "shadow-xl ring-2 ring-brand-300 rotate-1 z-10"
                             )}
                           >
-                            <div className="flex items-center gap-3 p-3">
-                              {/* Drag handle */}
+                            {/* ─── DESKTOP: single row layout ─── */}
+                            <div className="hidden sm:flex items-center gap-3 p-3">
                               <div {...dragProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 shrink-0" title="Glisser pour réorganiser">
                                 <GripVertical size={16} />
                               </div>
-
-                              {/* Toggle enabled */}
                               <label className="relative inline-flex items-center cursor-pointer shrink-0">
                                 <input type="checkbox" checked={step.enabled} onChange={(e) => updateStep(step.id, { enabled: e.target.checked })} className="sr-only peer" />
                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
                               </label>
-
-                              {/* Day input */}
                               <div className="flex items-center gap-1 shrink-0">
                                 <span className="text-xs text-gray-500">J+</span>
                                 <input
@@ -231,8 +230,6 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                                   disabled={!step.enabled}
                                 />
                               </div>
-
-                              {/* Channel icon + label */}
                               <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", colorClass)}>
                                 <Icon size={14} />
                               </div>
@@ -240,28 +237,76 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                                 <p className="text-sm font-medium text-gray-900 truncate">{step.label}</p>
                                 <p className="text-[10px] text-gray-500">{CHANNEL_LABELS[step.channel]}</p>
                               </div>
-
-                              {/* Expand button */}
                               {isEditable && (
                                 <button
                                   onClick={() => setExpandedStep(isExpanded ? null : step.id)}
-                                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+                                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"
                                   title="Modifier"
                                 >
                                   {isExpanded ? <ChevronUp size={14} /> : <Edit3 size={14} />}
                                 </button>
                               )}
-
-                              {/* Delete button (only for custom steps) */}
                               {step.id.startsWith("custom_") && (
                                 <button
                                   onClick={() => removeStep(step.id)}
-                                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
                                   title="Supprimer"
                                 >
                                   <Trash2 size={14} />
                                 </button>
                               )}
+                            </div>
+
+                            {/* ─── MOBILE: 2-rows layout ─── */}
+                            <div className="sm:hidden p-3">
+                              {/* Row 1: drag + toggle + icon + label + actions */}
+                              <div className="flex items-center gap-2">
+                                <div {...dragProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-gray-300 shrink-0" title="Glisser pour réorganiser">
+                                  <GripVertical size={14} />
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                  <input type="checkbox" checked={step.enabled} onChange={(e) => updateStep(step.id, { enabled: e.target.checked })} className="sr-only peer" />
+                                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div>
+                                </label>
+                                <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", colorClass)}>
+                                  <Icon size={13} />
+                                </div>
+                                <p className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0">{step.label}</p>
+                                {isEditable && (
+                                  <button
+                                    onClick={() => setExpandedStep(isExpanded ? null : step.id)}
+                                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"
+                                    title="Modifier"
+                                  >
+                                    {isExpanded ? <ChevronUp size={14} /> : <Edit3 size={14} />}
+                                  </button>
+                                )}
+                                {step.id.startsWith("custom_") && (
+                                  <button
+                                    onClick={() => removeStep(step.id)}
+                                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Row 2: J+ input + sub-label (indented under toggle) */}
+                              <div className="flex items-center gap-2 mt-2 pl-[44px] text-[11px] text-gray-500">
+                                <span className="shrink-0">J+</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={365}
+                                  value={step.daysAfter}
+                                  onChange={(e) => updateStep(step.id, { daysAfter: parseInt(e.target.value) || 0 })}
+                                  className="w-12 px-2 py-0.5 text-xs border border-gray-200 rounded text-center shrink-0"
+                                  disabled={!step.enabled}
+                                />
+                                <span className="text-gray-300 shrink-0">•</span>
+                                <span className="truncate">{CHANNEL_LABELS[step.channel]}</span>
+                              </div>
                             </div>
 
                             {/* Expanded edit zone */}
@@ -355,10 +400,10 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
                 <Mail size={12} className="text-blue-500" /> Email
               </button>
               <button onClick={() => addStep("WHATSAPP_TASK")} className="btn-secondary py-1.5 px-3 text-xs">
-                <MessageCircle size={12} className="text-emerald-500" /> Tâche WhatsApp
+                <MessageCircle size={12} className="text-emerald-500" /> <span className="hidden sm:inline">Tâche </span>WhatsApp
               </button>
               <button onClick={() => addStep("CALL_TASK")} className="btn-secondary py-1.5 px-3 text-xs">
-                <Phone size={12} className="text-purple-500" /> Tâche d'appel
+                <Phone size={12} className="text-purple-500" /> <span className="hidden sm:inline">Tâche d'</span>Appel
               </button>
             </div>
           </div>
@@ -369,14 +414,14 @@ export function SequencesSettingsClient({ config }: { config: Config }) {
         </div>
 
         {/* Save */}
-        <div className="flex justify-end gap-2">
-          <button onClick={handleSave} disabled={isPending} className="btn-primary py-2 px-4 text-sm">
+        <div className="flex justify-stretch sm:justify-end gap-2">
+          <button onClick={handleSave} disabled={isPending} className="btn-primary py-2 px-4 text-sm flex-1 sm:flex-initial">
             {isPending ? <><Loader2 size={14} className="animate-spin" /> Sauvegarde...</> : <><Check size={14} /> Sauvegarder</>}
           </button>
         </div>
 
         {/* Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
           <p className="text-xs text-blue-700">
             <strong>💡 Comment ça marche :</strong> Chaque jour à 9h, le système vérifie tous vos leads. Pour chaque lead silencieux, il exécute la prochaine étape activée selon son délai. Vous pouvez désactiver une étape sans perdre sa configuration.
           </p>
@@ -390,15 +435,15 @@ function ToggleRow({ icon: Icon, title, desc, checked, onChange }: {
   icon: any; title: string; desc: string; checked: boolean; onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <Icon size={16} className="text-gray-500 shrink-0" />
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-gray-900">{title}</p>
           <p className="text-xs text-gray-500">{desc}</p>
         </div>
       </div>
-      <label className="relative inline-flex items-center cursor-pointer">
+      <label className="relative inline-flex items-center cursor-pointer shrink-0">
         <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
       </label>

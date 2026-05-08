@@ -52,6 +52,7 @@ model Organization {
   visitors  Visitor[]
   sessions  Session[]
   pageViews PageView[]
+  whatsappIntegration   WhatsAppIntegration?
 
   @@map("organizations")
 }
@@ -1242,4 +1243,32 @@ model PageView {
   @@index([organizationId, viewedAt])
   @@index([path])
   @@map("page_views")
+}
+
+model WhatsAppIntegration {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  
+  // Credentials Meta (chiffrés idéalement, mais en clair pour MVP)
+  phoneNumberId          String   // ID du numéro côté Meta
+  whatsappBusinessAccountId String  // WABA ID
+  accessToken            String   @db.Text  // Permanent token
+  verifyToken            String   // Pour la vérification webhook (l'école choisit une chaîne)
+  appSecret              String   @db.Text  // App Secret pour vérifier signatures webhook
+  
+  // Métadonnées
+  displayPhoneNumber     String?  // Le numéro lisible (+221 XX XXX XX XX)
+  verifiedName           String?  // Nom vérifié Meta (ex: "BEM Dakar Business")
+  
+  // État
+  isActive               Boolean  @default(true)
+  lastSyncedAt           DateTime?
+  
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("whatsapp_integrations")
 }

@@ -66,26 +66,26 @@ export default function CustomFieldsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Champs personnalisés</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Champs personnalisés</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
             Configurez les champs supplémentaires captés depuis les formulaires de votre site
           </p>
         </div>
-        <button onClick={() => setShowAddForm(true)} className="btn-primary text-sm">
-          <Plus size={16} /> Ajouter un champ
+        <button onClick={() => setShowAddForm(true)} className="btn-primary text-sm shrink-0">
+          <Plus size={16} /> <span className="hidden sm:inline">Ajouter un champ</span><span className="sm:hidden">Ajouter</span>
         </button>
       </div>
 
       {/* Unmapped fields alert */}
       {unmapped.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={16} className="text-amber-600" />
+            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
             <span className="text-sm font-semibold text-amber-800">
               {unmapped.length} champ{unmapped.length > 1 ? "s" : ""} non mappé{unmapped.length > 1 ? "s" : ""} détecté{unmapped.length > 1 ? "s" : ""}
             </span>
@@ -99,14 +99,13 @@ export default function CustomFieldsPage() {
                 key={u.field}
                 onClick={() => {
                   setShowAddForm(true);
-                  // Pre-fill will happen via the form
                 }}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-amber-200 text-sm hover:border-amber-400 transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-amber-200 text-xs hover:border-amber-400 transition-colors max-w-full"
               >
-                <Tag size={12} className="text-amber-500" />
-                <span className="font-medium text-gray-700">{u.field}</span>
-                <span className="text-xs text-gray-400">({u.count}x)</span>
-                <span className="text-xs text-gray-400 truncate max-w-[120px]">ex: {u.sampleValue}</span>
+                <Tag size={12} className="text-amber-500 shrink-0" />
+                <span className="font-medium text-gray-700 truncate">{u.field}</span>
+                <span className="text-[10px] text-gray-400 shrink-0">({u.count}x)</span>
+                <span className="text-[10px] text-gray-400 truncate hidden sm:inline">ex: {u.sampleValue}</span>
               </button>
             ))}
           </div>
@@ -126,7 +125,8 @@ export default function CustomFieldsPage() {
       {/* Fields list */}
       {fields.length > 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          {/* Desktop table header */}
+          <div className="hidden md:block px-4 py-3 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-[1fr_180px_120px_80px_80px_40px] gap-3 text-xs font-medium text-gray-500">
               <span>Champ</span>
               <span>Champs formulaire mappés</span>
@@ -136,52 +136,104 @@ export default function CustomFieldsPage() {
               <span></span>
             </div>
           </div>
+
           <div className="divide-y divide-gray-100">
             {fields.map((field) => (
-              <div key={field.id} className="grid grid-cols-[1fr_180px_120px_80px_80px_40px] gap-3 items-center px-4 py-3 hover:bg-gray-50/50">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{field.label}</p>
-                  <p className="text-xs text-gray-400 font-mono">{field.key}</p>
+              <div key={field.id}>
+                {/* Mobile card */}
+                <div className="md:hidden p-3 hover:bg-gray-50/50">
+                  <div className="flex items-start gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <p className="text-sm font-medium text-gray-900 truncate min-w-0">{field.label}</p>
+                        <span className="badge badge-gray text-[10px] shrink-0">{field.type}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-mono truncate">{field.key}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDelete(field.id, field.label)}
+                      className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {field.mappedFormFields.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {field.mappedFormFields.map((mf) => (
+                        <span key={mf} className="badge badge-blue text-[10px]">{mf}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => handleToggle(field.id, "showInCard", !field.showInCard)}
+                      className="flex items-center gap-1.5 text-xs"
+                    >
+                      <span className={`p-1 rounded ${field.showInCard ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}>
+                        {field.showInCard ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </span>
+                      <span className={field.showInCard ? "text-gray-700" : "text-gray-400"}>Carte</span>
+                    </button>
+                    <button
+                      onClick={() => handleToggle(field.id, "showInList", !field.showInList)}
+                      className="flex items-center gap-1.5 text-xs"
+                    >
+                      <span className={`p-1 rounded ${field.showInList ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}>
+                        {field.showInList ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </span>
+                      <span className={field.showInList ? "text-gray-700" : "text-gray-400"}>Liste</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {field.mappedFormFields.map((mf) => (
-                    <span key={mf} className="badge badge-blue text-[10px]">{mf}</span>
-                  ))}
-                </div>
-                <span className="badge badge-gray text-[10px] w-fit">{field.type}</span>
-                <div className="text-center">
+
+                {/* Desktop row */}
+                <div className="hidden md:grid grid-cols-[1fr_180px_120px_80px_80px_40px] gap-3 items-center px-4 py-3 hover:bg-gray-50/50">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{field.label}</p>
+                    <p className="text-xs text-gray-400 font-mono">{field.key}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {field.mappedFormFields.map((mf) => (
+                      <span key={mf} className="badge badge-blue text-[10px]">{mf}</span>
+                    ))}
+                  </div>
+                  <span className="badge badge-gray text-[10px] w-fit">{field.type}</span>
+                  <div className="text-center">
+                    <button
+                      onClick={() => handleToggle(field.id, "showInCard", !field.showInCard)}
+                      className={`p-1.5 rounded ${field.showInCard ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}
+                    >
+                      {field.showInCard ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                  </div>
+                  <div className="text-center">
+                    <button
+                      onClick={() => handleToggle(field.id, "showInList", !field.showInList)}
+                      className={`p-1.5 rounded ${field.showInList ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}
+                    >
+                      {field.showInList ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                  </div>
                   <button
-                    onClick={() => handleToggle(field.id, "showInCard", !field.showInCard)}
-                    className={`p-1.5 rounded ${field.showInCard ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}
+                    onClick={() => handleDelete(field.id, field.label)}
+                    className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
                   >
-                    {field.showInCard ? <Eye size={14} /> : <EyeOff size={14} />}
+                    <Trash2 size={14} />
                   </button>
                 </div>
-                <div className="text-center">
-                  <button
-                    onClick={() => handleToggle(field.id, "showInList", !field.showInList)}
-                    className={`p-1.5 rounded ${field.showInList ? "text-brand-600 bg-brand-50" : "text-gray-300"}`}
-                  >
-                    {field.showInList ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </button>
-                </div>
-                <button
-                  onClick={() => handleDelete(field.id, field.label)}
-                  className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
-                >
-                  <Trash2 size={14} />
-                </button>
               </div>
             ))}
           </div>
         </div>
       ) : !showAddForm ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
-            <Settings2 size={32} className="text-gray-400" />
+        <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-16 text-center">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4">
+            <Settings2 size={28} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucun champ personnalisé</h3>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto mb-6">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Aucun champ personnalisé</h3>
+          <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto mb-6">
             Les champs personnalisés vous permettent de capturer des données spécifiques à votre école depuis les formulaires web (niveau d&apos;études, série du Bac, nationalité, etc.)
           </p>
           <button onClick={() => setShowAddForm(true)} className="btn-primary">
@@ -191,12 +243,12 @@ export default function CustomFieldsPage() {
       ) : null}
 
       {/* How it works */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mt-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 mt-4 sm:mt-6">
         <h3 className="font-semibold text-gray-900 mb-4">Comment ça fonctionne</h3>
-        <div className="space-y-3 text-sm text-gray-600">
+        <div className="space-y-3 text-xs sm:text-sm text-gray-600">
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">1</div>
-            <p>Un formulaire sur votre site contient un champ non reconnu (ex: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">niveau_actuel</code>)</p>
+            <p>Un formulaire sur votre site contient un champ non reconnu (ex: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs break-all">niveau_actuel</code>)</p>
           </div>
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">2</div>
@@ -204,7 +256,7 @@ export default function CustomFieldsPage() {
           </div>
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">3</div>
-            <p>Vous configurez ici le mapping : <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">niveau_actuel</code> → &quot;Niveau d&apos;études actuel&quot;</p>
+            <p>Vous configurez ici le mapping : <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs break-all">niveau_actuel</code> → &quot;Niveau d&apos;études actuel&quot;</p>
           </div>
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">4</div>
@@ -255,7 +307,6 @@ function AddFieldForm({
   const fillFromUnmapped = (field: string, sample: string) => {
     setMappedFields((prev) => prev ? `${prev}, ${field}` : field);
     if (!label) {
-      // Turn "niveau_actuel" into "Niveau actuel"
       const nice = field.replace(/[_-]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
       setLabel(nice);
       setKey(toKey(nice));
@@ -280,7 +331,7 @@ function AddFieldForm({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-brand-200 p-6 mb-6 animate-scale-in">
+    <div className="bg-white rounded-xl border border-brand-200 p-4 sm:p-6 mb-4 sm:mb-6 animate-scale-in">
       <h3 className="font-semibold text-gray-900 mb-4">Nouveau champ personnalisé</h3>
 
       {/* Suggestions from unmapped */}
@@ -302,7 +353,7 @@ function AddFieldForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Label (affiché dans le CRM) *
@@ -364,7 +415,7 @@ function AddFieldForm({
         </div>
       )}
 
-      <div className="flex items-center gap-6 mt-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 mt-4">
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
           <input type="checkbox" checked={showInCard} onChange={(e) => setShowInCard(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-brand-600" />
           Afficher sur les cartes Kanban
@@ -375,11 +426,11 @@ function AddFieldForm({
         </label>
       </div>
 
-      <div className="flex justify-end gap-3 mt-5">
-        <button onClick={onCancel} className="btn-secondary" disabled={isPending}>Annuler</button>
-        <button onClick={handleSubmit} className="btn-primary" disabled={isPending}>
+      <div className="flex justify-end gap-2 sm:gap-3 mt-5">
+        <button onClick={onCancel} className="btn-secondary text-sm" disabled={isPending}>Annuler</button>
+        <button onClick={handleSubmit} className="btn-primary text-sm" disabled={isPending}>
           {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-          Ajouter le champ
+          <span className="hidden sm:inline">Ajouter le champ</span><span className="sm:hidden">Ajouter</span>
         </button>
       </div>
     </div>

@@ -70,22 +70,22 @@ export default function PipelineSettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><ArrowLeft size={20} /></Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Pipeline</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Personnalisez les étapes de votre processus de recrutement</p>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"><ArrowLeft size={20} /></Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Pipeline</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Personnalisez les étapes de votre processus de recrutement</p>
         </div>
-        <button onClick={function() { setShowAddForm(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> Ajouter une étape</button>
+        <button onClick={function() { setShowAddForm(true); }} className="btn-primary py-2 text-xs shrink-0"><Plus size={14} /> <span className="hidden sm:inline">Ajouter une étape</span><span className="sm:hidden">Ajouter</span></button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 size={32} className="animate-spin text-brand-500" /></div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="flex items-center gap-4 px-6 py-2.5 bg-gray-50 border-b border-gray-100 text-[10px] text-gray-500">
-            <span className="flex items-center gap-1"><Star size={10} className="text-amber-500" /> Par défaut = étape des nouveaux leads</span>
-            <span className="flex items-center gap-1"><XCircle size={10} className="text-red-500" /> Perdu = leads abandonnés</span>
+          <div className="flex items-start gap-2 sm:items-center sm:gap-4 px-3 sm:px-6 py-2 sm:py-2.5 bg-gray-50 border-b border-gray-100 text-[10px] text-gray-500 flex-wrap">
+            <span className="flex items-center gap-1"><Star size={10} className="text-amber-500 shrink-0" /> Par défaut = étape des nouveaux leads</span>
+            <span className="flex items-center gap-1"><XCircle size={10} className="text-red-500 shrink-0" /> Perdu = leads abandonnés</span>
           </div>
           <div className="divide-y divide-gray-50">
             {stages.map(function(stage, index) {
@@ -98,14 +98,14 @@ export default function PipelineSettingsPage() {
             })}
           </div>
           {showAddForm && (
-            <div className="px-6 py-4 bg-brand-50/30 border-t border-brand-100">
-              <div className="flex items-center gap-3">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-brand-50/30 border-t border-brand-100">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <ColorPicker value={newColor} onChange={setNewColor} />
                 <input type="text" value={newName} onChange={function(e) { setNewName(e.target.value); }}
-                  className="input text-sm flex-1" placeholder="Nom de la nouvelle étape..." autoFocus
+                  className="input text-sm flex-1 min-w-[140px]" placeholder="Nom de la nouvelle étape..." autoFocus
                   onKeyDown={function(e) { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") { setShowAddForm(false); setNewName(""); } }} />
                 <button onClick={handleAdd} disabled={addingSaving || !newName.trim()} className="btn-primary py-2 text-xs">
-                  {addingSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Ajouter
+                  {addingSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} <span className="hidden sm:inline">Ajouter</span>
                 </button>
                 <button onClick={function() { setShowAddForm(false); setNewName(""); }} className="btn-secondary py-2 text-xs"><X size={13} /></button>
               </div>
@@ -158,40 +158,66 @@ function StageRow({ stage, index, total, isEditing, onEdit, onCancelEdit, onSave
 
   if (isEditing) {
     return (
-      <div className="flex items-center gap-3 px-6 py-3 bg-brand-50/20">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 bg-brand-50/20 flex-wrap">
         <ColorPicker value={editColor} onChange={setEditColor} />
         <input type="text" value={editName} onChange={function(e) { setEditName(e.target.value); }}
-          className="input text-sm flex-1" autoFocus
+          className="input text-sm flex-1 min-w-[140px]" autoFocus
           onKeyDown={function(e) { if (e.key === "Enter") handleSave(); if (e.key === "Escape") onCancelEdit(); }} />
         <button onClick={handleSave} disabled={saving || !editName.trim()} className="btn-primary py-1.5 px-3 text-xs">
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Sauvegarder</button>
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} <span className="hidden sm:inline">Sauvegarder</span></button>
         <button onClick={onCancelEdit} className="btn-secondary py-1.5 px-3 text-xs"><X size={12} /></button>
       </div>
     );
   }
 
   return (
-    <div className={cn("flex items-center gap-4 px-6 py-3 group hover:bg-gray-50/50 transition-colors", showDeleteConfirm && "bg-red-50/30")}>
-      <div className="flex flex-col gap-0.5 shrink-0">
+    <div className={cn("flex items-start sm:items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 group hover:bg-gray-50/50 transition-colors", showDeleteConfirm && "bg-red-50/30")}>
+      {/* Up/Down arrows */}
+      <div className="flex flex-col gap-0.5 shrink-0 mt-0.5 sm:mt-0">
         <button onClick={function() { onMove(index, -1); }} disabled={index === 0} className={cn("p-0.5 rounded hover:bg-gray-200", index === 0 && "opacity-30 cursor-not-allowed")}><ArrowUp size={12} className="text-gray-400" /></button>
         <button onClick={function() { onMove(index, 1); }} disabled={index === total - 1} className={cn("p-0.5 rounded hover:bg-gray-200", index === total - 1 && "opacity-30 cursor-not-allowed")}><ArrowDown size={12} className="text-gray-400" /></button>
       </div>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: stage.color }} />
-        <span className="text-sm font-medium text-gray-900">{stage.name}</span>
-        {stage.isDefault && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 flex items-center gap-1"><Star size={9} /> Par défaut</span>}
-        {stage.isLost && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 flex items-center gap-1"><XCircle size={9} /> Perdu</span>}
+
+      {/* Content + mobile actions */}
+      <div className="flex-1 min-w-0">
+        {/* Title row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{ backgroundColor: stage.color }} />
+          <span className="text-sm font-medium text-gray-900 truncate min-w-0">{stage.name}</span>
+          {stage.isDefault && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 flex items-center gap-1 whitespace-nowrap shrink-0"><Star size={9} /> Par défaut</span>}
+          {stage.isLost && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-500 flex items-center gap-1 whitespace-nowrap shrink-0"><XCircle size={9} /> Perdu</span>}
+          <span className="text-xs text-gray-400 ml-auto shrink-0 whitespace-nowrap">{stage._count.leads} lead{stage._count.leads > 1 ? "s" : ""}</span>
+        </div>
+
+        {/* Mobile only: actions row */}
+        {!showDeleteConfirm && (
+          <div className="flex sm:hidden items-center gap-1 mt-2">
+            {!stage.isDefault && <button onClick={handleSetDefault} className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-500" title="Par défaut"><Star size={14} /></button>}
+            <button onClick={handleToggleLost} className={cn("p-1.5 rounded-lg", stage.isLost ? "bg-red-50 text-red-500" : "hover:bg-red-50 text-gray-400 hover:text-red-500")} title={stage.isLost ? "Restaurer" : "Perdu"}><XCircle size={14} /></button>
+            <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Modifier"><Pencil size={14} /></button>
+            <button onClick={function() { setShowDeleteConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Supprimer"><Trash2 size={14} /></button>
+          </div>
+        )}
+        {showDeleteConfirm && (
+          <div className="flex sm:hidden items-center gap-2 mt-2 flex-wrap">
+            <span className="text-xs text-red-600 font-medium">Supprimer ?</span>
+            <button onClick={handleDelete} disabled={deleting} className="px-2.5 py-1 text-xs text-white bg-red-600 rounded-lg hover:bg-red-700 flex items-center gap-1">
+              {deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Oui</button>
+            <button onClick={function() { setShowDeleteConfirm(false); }} className="px-2.5 py-1 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg">Non</button>
+          </div>
+        )}
       </div>
-      <span className="text-xs text-gray-400 shrink-0">{stage._count.leads} lead{stage._count.leads > 1 ? "s" : ""}</span>
+
+      {/* Desktop only: actions inline (hover-reveal) */}
       {!showDeleteConfirm ? (
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           {!stage.isDefault && <button onClick={handleSetDefault} className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-500" title="Par défaut"><Star size={14} /></button>}
           <button onClick={handleToggleLost} className={cn("p-1.5 rounded-lg", stage.isLost ? "bg-red-50 text-red-500" : "hover:bg-red-50 text-gray-400 hover:text-red-500")} title={stage.isLost ? "Restaurer" : "Perdu"}><XCircle size={14} /></button>
           <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Modifier"><Pencil size={14} /></button>
           <button onClick={function() { setShowDeleteConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Supprimer"><Trash2 size={14} /></button>
         </div>
       ) : (
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <span className="text-xs text-red-600 font-medium">Supprimer ?</span>
           <button onClick={handleDelete} disabled={deleting} className="px-2.5 py-1 text-xs text-white bg-red-600 rounded-lg hover:bg-red-700 flex items-center gap-1">
             {deleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Oui</button>
@@ -210,7 +236,10 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
   var handleOpen = function() {
     if (btnRef.current) {
       var rect = btnRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 8, left: rect.left });
+      var dropdownWidth = 164; // 140 width + 12 padding x2
+      var maxLeft = window.innerWidth - dropdownWidth - 12;
+      var left = Math.min(rect.left, maxLeft);
+      setPos({ top: rect.bottom + 8, left: Math.max(12, left) });
     }
     setShow(!show);
   };

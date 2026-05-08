@@ -59,10 +59,10 @@ export default function OrganizationSettingsPage() {
   }
 
   var sections = [
-    { key: "general" as const, label: "Informations", icon: Building2, count: null },
-    { key: "campuses" as const, label: "Campus", icon: MapPin, count: org._count.campuses },
-    { key: "programs" as const, label: "Filières", icon: GraduationCap, count: org._count.programs },
-    { key: "years" as const, label: "Années académiques", icon: Calendar, count: org.academicYears.length },
+    { key: "general" as const, label: "Informations", shortLabel: "Infos", icon: Building2, count: null },
+    { key: "campuses" as const, label: "Campus", shortLabel: "Campus", icon: MapPin, count: org._count.campuses },
+    { key: "programs" as const, label: "Filières", shortLabel: "Filières", icon: GraduationCap, count: org._count.programs },
+    { key: "years" as const, label: "Années académiques", shortLabel: "Années", icon: Calendar, count: org.academicYears.length },
   ];
 
   return (
@@ -85,7 +85,9 @@ export default function OrganizationSettingsPage() {
                 className={cn("flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0",
                   activeSection === s.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 )}>
-                <Icon size={14} className="hidden sm:block" /> {s.label}
+                <Icon size={14} className="hidden sm:block" />
+                <span className="hidden sm:inline">{s.label}</span>
+                <span className="sm:hidden">{s.shortLabel}</span>
                 {s.count !== null && <span className="text-[10px] text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">{s.count}</span>}
               </button>
             );

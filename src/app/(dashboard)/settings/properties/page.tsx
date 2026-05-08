@@ -119,48 +119,52 @@ export default function PropertiesPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Propriétés</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Propriétés</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
             {data.fields.length} champs collectés sur {data.totalLeads} leads
           </p>
         </div>
-        <Link href="/settings/custom-fields" className="btn-secondary text-sm">
-          <SlidersHorizontal size={15} />
+        <Link
+          href="/settings/custom-fields"
+          className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 shrink-0 whitespace-nowrap"
+        >
+          <SlidersHorizontal size={14} className="shrink-0" />
           Champs personnalisés
         </Link>
       </div>
 
       {/* Unmapped alert */}
       {unmappedCount > 0 && !activeGroup && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-amber-600" />
-            <span className="text-sm text-amber-800">
-              <span className="font-semibold">{unmappedCount} champ{unmappedCount > 1 ? "s" : ""} non mappé{unmappedCount > 1 ? "s" : ""}</span> — captés depuis vos formulaires mais pas encore configurés
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 sm:px-4 py-3 mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-start sm:items-center gap-2 flex-1 min-w-0">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <span className="text-xs sm:text-sm text-amber-800">
+              <span className="font-semibold">{unmappedCount} champ{unmappedCount > 1 ? "s" : ""} non mappé{unmappedCount > 1 ? "s" : ""}</span>
+              <span className="hidden sm:inline"> — captés depuis vos formulaires mais pas encore configurés</span>
             </span>
           </div>
-          <button onClick={() => setActiveGroup("unmapped")} className="text-sm font-medium text-amber-700 hover:text-amber-900">
+          <button onClick={() => setActiveGroup("unmapped")} className="text-xs sm:text-sm font-medium text-amber-700 hover:text-amber-900 shrink-0">
             Voir →
           </button>
         </div>
       )}
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-5">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 mb-4 sm:mb-5">
         <button
           onClick={() => setActiveGroup(null)}
           className={cn(
-            "rounded-xl px-3 py-3 text-center transition-all border",
+            "rounded-xl px-2 sm:px-3 py-2.5 sm:py-3 text-center transition-all border",
             !activeGroup ? "bg-white border-brand-200 shadow-sm" : "bg-white border-gray-100 hover:border-gray-200"
           )}
         >
-          <p className="text-lg font-bold text-gray-900">{data.fields.length}</p>
-          <p className="text-[11px] text-gray-500">Tous</p>
+          <p className="text-base sm:text-lg font-bold text-gray-900">{data.fields.length}</p>
+          <p className="text-[10px] sm:text-[11px] text-gray-500">Tous</p>
         </button>
         {data.groups.map((g) => {
           const meta = GROUP_META[g.key] || GROUP_META.custom;
@@ -169,20 +173,20 @@ export default function PropertiesPage() {
               key={g.key}
               onClick={() => setActiveGroup(activeGroup === g.key ? null : g.key)}
               className={cn(
-                "rounded-xl px-3 py-3 text-center transition-all border",
+                "rounded-xl px-2 sm:px-3 py-2.5 sm:py-3 text-center transition-all border",
                 activeGroup === g.key ? "bg-white border-brand-200 shadow-sm" : "bg-white border-gray-100 hover:border-gray-200"
               )}
             >
-              <p className={cn("text-lg font-bold", meta.color)}>{g.count}</p>
-              <p className="text-[11px] text-gray-500">{g.label}</p>
+              <p className={cn("text-base sm:text-lg font-bold", meta.color)}>{g.count}</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-500 truncate">{g.label}</p>
             </button>
           );
         })}
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-2 sm:gap-3 mb-4">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -192,11 +196,13 @@ export default function PropertiesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <span className="text-sm text-gray-500">{filteredFields.length} champ{filteredFields.length > 1 ? "s" : ""}</span>
+        <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap shrink-0">
+          {filteredFields.length} champ{filteredFields.length > 1 ? "s" : ""}
+        </span>
       </div>
 
       {/* Grouped fields */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {groupOrder.filter((g) => groupedFields[g]?.length > 0).map((groupKey) => {
           const fields = groupedFields[groupKey];
           const meta = GROUP_META[groupKey] || GROUP_META.custom;
@@ -206,26 +212,26 @@ export default function PropertiesPage() {
           return (
             <div key={groupKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Group header */}
-              <div className="flex items-center gap-3 px-5 py-3 bg-gray-50/80 border-b border-gray-100">
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", meta.bg)}>
+              <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 bg-gray-50/80 border-b border-gray-100">
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", meta.bg)}>
                   <GroupIcon size={16} className={meta.color} />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900">{groupLabel}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 truncate">{groupLabel}</h3>
                   <p className="text-[11px] text-gray-500">{fields.length} champ{fields.length > 1 ? "s" : ""}</p>
                 </div>
                 {groupKey === "unmapped" && (
-                  <span className="badge bg-amber-100 text-amber-700 text-[10px]">Action requise</span>
+                  <span className="badge bg-amber-100 text-amber-700 text-[10px] shrink-0">Action requise</span>
                 )}
                 {groupKey === "custom" && (
-                  <Link href="/settings/custom-fields" className="text-xs text-brand-600 font-medium hover:text-brand-700">
+                  <Link href="/settings/custom-fields" className="text-xs text-brand-600 font-medium hover:text-brand-700 shrink-0">
                     Gérer →
                   </Link>
                 )}
               </div>
 
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_140px_80px_100px_60px_60px_40px] gap-2 px-5 py-2 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100">
+              {/* Table header — desktop only */}
+              <div className="hidden sm:grid grid-cols-[1fr_140px_80px_100px_60px_60px_40px] gap-2 px-5 py-2 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100">
                 <span>Champ</span>
                 <span>Mapping formulaire</span>
                 <span>Type</span>
@@ -241,113 +247,231 @@ export default function PropertiesPage() {
                   <div
                     key={field.key}
                     className={cn(
-                      "grid grid-cols-[1fr_140px_80px_100px_60px_60px_40px] gap-2 items-center px-5 py-2.5 hover:bg-gray-50/50 transition-colors",
+                      "transition-colors",
                       field.source === "unmapped" && "bg-amber-50/30"
                     )}
                   >
-                    {/* Name + key */}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900 truncate">{field.label}</p>
-                        {field.source === "system" && (
-                          <Lock size={11} className="text-gray-300 shrink-0" />
-                        )}
-                        {field.source === "unmapped" && (
-                          <AlertTriangle size={11} className="text-amber-500 shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-400 font-mono truncate">{field.key}</p>
-                    </div>
-
-                    {/* Mapped form fields */}
-                    <div className="flex flex-wrap gap-1 overflow-hidden">
-                      {field.mappedFormFields.slice(0, 2).map((mf) => (
-                        <span key={mf} className="badge badge-blue text-[9px] px-1.5 py-0">{mf}</span>
-                      ))}
-                      {field.mappedFormFields.length > 2 && (
-                        <span className="text-[10px] text-gray-400">+{field.mappedFormFields.length - 2}</span>
-                      )}
-                    </div>
-
-                    {/* Type */}
-                    <span className="badge badge-gray text-[10px] w-fit">{field.type}</span>
-
-                    {/* Fill rate */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all",
-                            field.fillRate >= 70 ? "bg-emerald-500" :
-                            field.fillRate >= 40 ? "bg-amber-400" :
-                            field.fillRate >= 10 ? "bg-orange-400" : "bg-gray-300"
+                    {/* ─── DESKTOP: grid row ─── */}
+                    <div className="hidden sm:grid grid-cols-[1fr_140px_80px_100px_60px_60px_40px] gap-2 items-center px-5 py-2.5 hover:bg-gray-50/50">
+                      {/* Name + key */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900 truncate">{field.label}</p>
+                          {field.source === "system" && (
+                            <Lock size={11} className="text-gray-300 shrink-0" />
                           )}
-                          style={{ width: `${field.fillRate}%` }}
-                        />
+                          {field.source === "unmapped" && (
+                            <AlertTriangle size={11} className="text-amber-500 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-400 font-mono truncate">{field.key}</p>
                       </div>
-                      <span className={cn(
-                        "text-[11px] font-medium min-w-[32px] text-right",
-                        field.fillRate >= 70 ? "text-emerald-600" :
-                        field.fillRate >= 40 ? "text-amber-600" :
-                        field.fillRate >= 10 ? "text-orange-600" : "text-gray-400"
-                      )}>
-                        {field.fillRate}%
-                      </span>
+
+                      {/* Mapped form fields */}
+                      <div className="flex flex-wrap gap-1 overflow-hidden">
+                        {field.mappedFormFields.slice(0, 2).map((mf) => (
+                          <span key={mf} className="badge badge-blue text-[9px] px-1.5 py-0">{mf}</span>
+                        ))}
+                        {field.mappedFormFields.length > 2 && (
+                          <span className="text-[10px] text-gray-400">+{field.mappedFormFields.length - 2}</span>
+                        )}
+                      </div>
+
+                      {/* Type */}
+                      <span className="badge badge-gray text-[10px] w-fit">{field.type}</span>
+
+                      {/* Fill rate */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              field.fillRate >= 70 ? "bg-emerald-500" :
+                              field.fillRate >= 40 ? "bg-amber-400" :
+                              field.fillRate >= 10 ? "bg-orange-400" : "bg-gray-300"
+                            )}
+                            style={{ width: `${field.fillRate}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "text-[11px] font-medium min-w-[32px] text-right",
+                          field.fillRate >= 70 ? "text-emerald-600" :
+                          field.fillRate >= 40 ? "text-amber-600" :
+                          field.fillRate >= 10 ? "text-orange-600" : "text-gray-400"
+                        )}>
+                          {field.fillRate}%
+                        </span>
+                      </div>
+
+                      {/* Show in card */}
+                      <div className="text-center">
+                        {field.source === "custom" ? (
+                          <button
+                            onClick={() => handleToggle(field, "showInCard")}
+                            className={cn("p-1 rounded", field.showInCard ? "text-brand-600 bg-brand-50" : "text-gray-300 hover:text-gray-400")}
+                          >
+                            {field.showInCard ? <Eye size={13} /> : <EyeOff size={13} />}
+                          </button>
+                        ) : field.showInCard ? (
+                          <Eye size={13} className="text-gray-300 mx-auto" />
+                        ) : (
+                          <EyeOff size={13} className="text-gray-200 mx-auto" />
+                        )}
+                      </div>
+
+                      {/* Show in list */}
+                      <div className="text-center">
+                        {field.source === "custom" ? (
+                          <button
+                            onClick={() => handleToggle(field, "showInList")}
+                            className={cn("p-1 rounded", field.showInList ? "text-brand-600 bg-brand-50" : "text-gray-300 hover:text-gray-400")}
+                          >
+                            {field.showInList ? <Eye size={13} /> : <EyeOff size={13} />}
+                          </button>
+                        ) : field.showInList ? (
+                          <Eye size={13} className="text-gray-300 mx-auto" />
+                        ) : (
+                          <EyeOff size={13} className="text-gray-200 mx-auto" />
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div>
+                        {field.source === "unmapped" && (
+                          <button
+                            onClick={() => handleQuickMap(field)}
+                            disabled={isPending}
+                            className="p-1 rounded hover:bg-emerald-50 text-emerald-500 hover:text-emerald-600"
+                            title="Configurer rapidement"
+                          >
+                            <Zap size={13} />
+                          </button>
+                        )}
+                        {field.source === "custom" && (
+                          <button
+                            onClick={() => handleDelete(field)}
+                            disabled={isPending}
+                            className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Show in card */}
-                    <div className="text-center">
+                    {/* ─── MOBILE: card row ─── */}
+                    <div className="sm:hidden p-3 hover:bg-gray-50/50">
+                      {/* Top: name + actions */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-medium text-gray-900">{field.label}</p>
+                            {field.source === "system" && (
+                              <Lock size={11} className="text-gray-300 shrink-0" />
+                            )}
+                            {field.source === "unmapped" && (
+                              <AlertTriangle size={11} className="text-amber-500 shrink-0" />
+                            )}
+                            <span className="badge badge-gray text-[9px] px-1.5 py-0 shrink-0">{field.type}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 font-mono truncate mt-0.5">{field.key}</p>
+                        </div>
+                        <div className="shrink-0">
+                          {field.source === "unmapped" && (
+                            <button
+                              onClick={() => handleQuickMap(field)}
+                              disabled={isPending}
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 active:bg-emerald-100"
+                              title="Configurer rapidement"
+                            >
+                              <Zap size={14} />
+                            </button>
+                          )}
+                          {field.source === "custom" && (
+                            <button
+                              onClick={() => handleDelete(field)}
+                              disabled={isPending}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Mapped form fields */}
+                      {field.mappedFormFields.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {field.mappedFormFields.slice(0, 3).map((mf) => (
+                            <span key={mf} className="badge badge-blue text-[9px] px-1.5 py-0">{mf}</span>
+                          ))}
+                          {field.mappedFormFields.length > 3 && (
+                            <span className="text-[10px] text-gray-400 self-center">+{field.mappedFormFields.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Fill rate */}
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wider shrink-0">Remplissage</span>
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              field.fillRate >= 70 ? "bg-emerald-500" :
+                              field.fillRate >= 40 ? "bg-amber-400" :
+                              field.fillRate >= 10 ? "bg-orange-400" : "bg-gray-300"
+                            )}
+                            style={{ width: `${field.fillRate}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "text-[11px] font-medium min-w-[32px] text-right shrink-0",
+                          field.fillRate >= 70 ? "text-emerald-600" :
+                          field.fillRate >= 40 ? "text-amber-600" :
+                          field.fillRate >= 10 ? "text-orange-600" : "text-gray-400"
+                        )}>
+                          {field.fillRate}%
+                        </span>
+                      </div>
+
+                      {/* Visibility — toggles for custom, read-only chips for others */}
                       {field.source === "custom" ? (
-                        <button
-                          onClick={() => handleToggle(field, "showInCard")}
-                          className={cn("p-1 rounded", field.showInCard ? "text-brand-600 bg-brand-50" : "text-gray-300 hover:text-gray-400")}
-                        >
-                          {field.showInCard ? <Eye size={13} /> : <EyeOff size={13} />}
-                        </button>
-                      ) : field.showInCard ? (
-                        <Eye size={13} className="text-gray-300 mx-auto" />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleToggle(field, "showInCard")}
+                            className={cn(
+                              "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-[11px] font-medium transition-colors",
+                              field.showInCard ? "bg-brand-50 text-brand-600 border-brand-200" : "bg-gray-50 text-gray-400 border-gray-200"
+                            )}
+                          >
+                            {field.showInCard ? <Eye size={12} /> : <EyeOff size={12} />}
+                            Carte
+                          </button>
+                          <button
+                            onClick={() => handleToggle(field, "showInList")}
+                            className={cn(
+                              "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-[11px] font-medium transition-colors",
+                              field.showInList ? "bg-brand-50 text-brand-600 border-brand-200" : "bg-gray-50 text-gray-400 border-gray-200"
+                            )}
+                          >
+                            {field.showInList ? <Eye size={12} /> : <EyeOff size={12} />}
+                            Liste
+                          </button>
+                        </div>
                       ) : (
-                        <EyeOff size={13} className="text-gray-200 mx-auto" />
-                      )}
-                    </div>
-
-                    {/* Show in list */}
-                    <div className="text-center">
-                      {field.source === "custom" ? (
-                        <button
-                          onClick={() => handleToggle(field, "showInList")}
-                          className={cn("p-1 rounded", field.showInList ? "text-brand-600 bg-brand-50" : "text-gray-300 hover:text-gray-400")}
-                        >
-                          {field.showInList ? <Eye size={13} /> : <EyeOff size={13} />}
-                        </button>
-                      ) : field.showInList ? (
-                        <Eye size={13} className="text-gray-300 mx-auto" />
-                      ) : (
-                        <EyeOff size={13} className="text-gray-200 mx-auto" />
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div>
-                      {field.source === "unmapped" && (
-                        <button
-                          onClick={() => handleQuickMap(field)}
-                          disabled={isPending}
-                          className="p-1 rounded hover:bg-emerald-50 text-emerald-500 hover:text-emerald-600"
-                          title="Configurer rapidement"
-                        >
-                          <Zap size={13} />
-                        </button>
-                      )}
-                      {field.source === "custom" && (
-                        <button
-                          onClick={() => handleDelete(field)}
-                          disabled={isPending}
-                          className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                          <span className="flex items-center gap-1">
+                            {field.showInCard ? <Eye size={11} /> : <EyeOff size={11} className="text-gray-300" />}
+                            Carte
+                          </span>
+                          <span className="flex items-center gap-1">
+                            {field.showInList ? <Eye size={11} /> : <EyeOff size={11} className="text-gray-300" />}
+                            Liste
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -360,7 +484,7 @@ export default function PropertiesPage() {
 
       {/* Empty state */}
       {filteredFields.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-16 text-center">
           <Database size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500">Aucun champ trouvé</p>
         </div>

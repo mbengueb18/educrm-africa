@@ -147,21 +147,23 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+      {/* Header — 2 rows on mobile (title + buttons), 1 row on desktop */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Templates email</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Créez et gérez vos templates d'emails réutilisables</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Templates email</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Créez et gérez vos templates d'emails réutilisables</p>
         </div>
-        <button onClick={() => setShowStarter(true)} className="btn-secondary py-2 px-3 text-xs">
-          <Mail size={13} /> Bibliothèque
-        </button>
-        <button onClick={() => setCreating(true)} className="btn-primary py-2 px-3 text-xs">
-          <Plus size={13} /> Nouveau template
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button onClick={() => setShowStarter(true)} className="btn-secondary py-2 px-3 text-xs flex-1 sm:flex-initial">
+            <Mail size={13} /> Bibliothèque
+          </button>
+          <button onClick={() => setCreating(true)} className="btn-primary py-2 px-3 text-xs flex-1 sm:flex-initial">
+            <Plus size={13} /> <span className="sm:hidden">Nouveau</span><span className="hidden sm:inline">Nouveau template</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -172,7 +174,7 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 py-12 sm:py-16 px-4 text-center">
           <Mail size={40} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-400 mb-3">Aucun template</p>
           <button onClick={() => setShowStarter(true)} className="btn-primary py-2 px-4 text-sm">
@@ -180,7 +182,7 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filtered.map((t) => (
             <div key={t.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-card-hover transition-shadow group">
               <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-br from-brand-50 to-violet-50">
@@ -192,10 +194,10 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
                 <button onClick={() => setEditing(t)} className="btn-secondary py-1.5 px-2 text-xs flex-1">
                   <Edit3 size={12} /> Modifier
                 </button>
-                <button onClick={() => handleDuplicate(t.id)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title="Dupliquer">
+                <button onClick={() => handleDuplicate(t.id)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0" title="Dupliquer">
                   <Copy size={14} />
                 </button>
-                <button onClick={() => handleDelete(t.id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Supprimer">
+                <button onClick={() => handleDelete(t.id)} className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0" title="Supprimer">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -257,22 +259,41 @@ function TemplateEditorModal({ template, onClose }: { template: Template | null;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+
+      {/* Mobile/tablet blocker — editor is desktop-only */}
+      <div className="lg:hidden relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-5">
+          <Mail size={40} className="text-brand-500" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Éditeur réservé au desktop</h2>
+        <p className="text-sm text-gray-600 mb-1">
+          L'éditeur de template email nécessite un grand écran pour manipuler les blocs et les styles confortablement.
+        </p>
+        <p className="text-xs text-gray-400 mb-6">
+          Connectez-vous depuis un ordinateur (1024px minimum) pour créer et modifier vos templates.
+        </p>
+        <button onClick={onClose} className="btn-primary text-sm">
+          <ArrowLeft size={14} /> Retour aux templates
+        </button>
+      </div>
+
+      {/* Desktop editor */}
+      <div className="hidden lg:flex relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">{isEdit ? "Modifier le template" : "Nouveau template"}</h2>
-            <p className="text-xs text-gray-500">Utilisez les variables {"{{prenom}}"}, {"{{nom}}"}, {"{{email}}"}</p>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">{isEdit ? "Modifier le template" : "Nouveau template"}</h2>
+            <p className="text-[10px] sm:text-xs text-gray-500 truncate">Variables disponibles : {"{{prenom}}"}, {"{{nom}}"}, {"{{email}}"}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
             <X size={18} />
           </button>
         </div>
 
         {/* Form fields */}
-        <div className="px-6 py-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-12 gap-3">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-12 gap-3">
           <div className="md:col-span-5">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nom du template</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input text-sm" placeholder="Ex: Bienvenue nouveau lead" />
@@ -286,8 +307,8 @@ function TemplateEditorModal({ template, onClose }: { template: Template | null;
           <div className="md:col-span-3">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Couleur principale</label>
             <div className="flex items-center gap-2">
-              <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="w-9 h-9 rounded border border-gray-200 cursor-pointer" />
-              <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="input text-xs font-mono flex-1" />
+              <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="w-9 h-9 rounded border border-gray-200 cursor-pointer shrink-0" />
+              <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="input text-xs font-mono flex-1 min-w-0" />
             </div>
           </div>
           <div className="md:col-span-12">
@@ -297,14 +318,14 @@ function TemplateEditorModal({ template, onClose }: { template: Template | null;
         </div>
 
         {/* Editor */}
-        <div className="flex-1 overflow-auto p-4 bg-gray-50">
+        <div className="flex-1 overflow-auto p-2 sm:p-4 bg-gray-50">
           <EmailEditor initialBlocks={blocks} brandColor={brandColor} onChange={(newBlocks, newHtml) => { setBlocks(newBlocks); setHtml(newHtml); }} />
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-200 bg-white flex justify-end gap-2">
-          <button onClick={onClose} className="btn-secondary py-2 px-4 text-sm">Annuler</button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary py-2 px-4 text-sm">
+        <div className="px-4 sm:px-6 py-3 border-t border-gray-200 bg-white flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary py-2 px-3 sm:px-4 text-sm">Annuler</button>
+          <button onClick={handleSave} disabled={saving} className="btn-primary py-2 px-3 sm:px-4 text-sm">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             {isEdit ? "Enregistrer" : "Créer"}
           </button>
@@ -321,22 +342,22 @@ function StarterLibraryModal({ starters, onSelect, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Bibliothèque de templates</h2>
-            <p className="text-xs text-gray-500">Démarrez rapidement avec un template prêt à l'emploi</p>
+      <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">Bibliothèque de templates</h2>
+            <p className="text-[10px] sm:text-xs text-gray-500 truncate">Démarrez rapidement avec un template prêt à l'emploi</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
             <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto p-3 sm:p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {starters.map((s, i) => (
-              <button key={i} onClick={() => onSelect(s)} className="text-left bg-white border border-gray-200 rounded-xl p-4 hover:border-brand-300 hover:shadow-card-hover transition-all">
+              <button key={i} onClick={() => onSelect(s)} className="text-left bg-white border border-gray-200 rounded-xl p-3 sm:p-4 hover:border-brand-300 hover:shadow-card-hover transition-all">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{CATEGORY_LABELS[s.category] || s.category}</p>
                 <p className="text-sm font-semibold text-gray-900 mb-1">{s.name}</p>
                 <p className="text-xs text-gray-500 truncate">{s.subject}</p>

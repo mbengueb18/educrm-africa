@@ -59,13 +59,13 @@ export default function UsersSettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><ArrowLeft size={20} /></Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Équipe</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Gérez les utilisateurs et les rôles</p>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <Link href="/settings" className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"><ArrowLeft size={20} /></Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Équipe</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Gérez les utilisateurs et les rôles</p>
         </div>
-        <button onClick={function() { setShowCreateModal(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> Nouvel utilisateur</button>
+        <button onClick={function() { setShowCreateModal(true); }} className="btn-primary py-2 text-xs shrink-0"><Plus size={14} /> <span className="hidden sm:inline">Nouvel utilisateur</span><span className="sm:hidden">Nouveau</span></button>
       </div>
 
       {stats && (
@@ -87,18 +87,18 @@ export default function UsersSettingsPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Rechercher..." className="input pl-9 text-sm" value={search} onChange={function(e) { setSearch(e.target.value); }} />
         </div>
         <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
           {[{ key: "active", label: "Actifs" }, { key: "inactive", label: "Inactifs" }, { key: "", label: "Tous" }].map(function(f) {
             return <button key={f.key} onClick={function() { setFilterActive(f.key); }}
-              className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors", filterActive === f.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500")}>{f.label}</button>;
+              className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap", filterActive === f.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500")}>{f.label}</button>;
           })}
         </div>
-        <select value={filterRole} onChange={function(e) { setFilterRole(e.target.value); }} className="input text-xs py-2 w-40">
+        <select value={filterRole} onChange={function(e) { setFilterRole(e.target.value); }} className="input text-xs py-2 flex-1 sm:flex-initial sm:w-40 min-w-0">
           <option value="">Tous les rôles</option>
           {Object.entries(ROLE_CONFIG).map(function(e) { return <option key={e[0]} value={e[0]}>{e[1].label}</option>; })}
         </select>
@@ -115,23 +115,28 @@ export default function UsersSettingsPage() {
               {filtered.map(function(user) {
                 var roleConf = ROLE_CONFIG[user.role] || ROLE_CONFIG.VIEWER;
                 return (
-                  <div key={user.id} className={cn("flex items-center gap-4 px-5 py-4 hover:bg-gray-50/50 transition-colors group", !user.isActive && "opacity-50")}>
+                  <div key={user.id} className={cn("flex items-start sm:items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 hover:bg-gray-50/50 transition-colors group", !user.isActive && "opacity-50")}>
                     <div className={cn("w-10 h-10 rounded-xl text-sm font-bold flex items-center justify-center shrink-0",
                       user.isActive ? "bg-brand-100 text-brand-700" : "bg-gray-200 text-gray-500"
                     )}>{getInitials(user.name)}</div>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={function() { setEditingUser(user); }}>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", roleConf.bg, roleConf.color)}>{roleConf.label}</span>
-                        {!user.isActive && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-500">Inactif</span>}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900 truncate min-w-0">{user.name}</p>
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0", roleConf.bg, roleConf.color)}>{roleConf.label}</span>
+                        {!user.isActive && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 whitespace-nowrap shrink-0">Inactif</span>}
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-xs text-gray-500 flex items-center gap-1"><Mail size={10} /> {user.email}</span>
-                        {user.campus && <span className="text-xs text-gray-400 flex items-center gap-1"><Building2 size={10} /> {user.campus.city}</span>}
+                      <div className="flex items-center gap-x-3 gap-y-0.5 mt-0.5 flex-wrap">
+                        <span className="text-xs text-gray-500 flex items-center gap-1 truncate max-w-[200px]"><Mail size={10} className="shrink-0" /> {user.email}</span>
+                        {user.campus && <span className="text-xs text-gray-400 flex items-center gap-1 whitespace-nowrap"><Building2 size={10} /> {user.campus.city}</span>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 sm:hidden">
+                        <span className="text-[10px] text-gray-400">{user._count.assignedLeads} lead{user._count.assignedLeads > 1 ? "s" : ""}</span>
+                        {user.lastLoginAt && <span className="text-[10px] text-gray-400">• {formatRelative(user.lastLoginAt)}</span>}
+                        {!user.lastLoginAt && <span className="text-[10px] text-gray-300">• Jamais connecté</span>}
                       </div>
                     </div>
-                    <div className="text-center shrink-0"><div className="text-sm font-bold text-gray-700">{user._count.assignedLeads}</div><div className="text-[9px] text-gray-400 uppercase">Leads</div></div>
-                    <div className="shrink-0 text-right min-w-[80px]">
+                    <div className="text-center shrink-0 hidden sm:block"><div className="text-sm font-bold text-gray-700">{user._count.assignedLeads}</div><div className="text-[9px] text-gray-400 uppercase">Leads</div></div>
+                    <div className="shrink-0 text-right min-w-[80px] hidden sm:block">
                       {user.lastLoginAt ? <span className="text-xs text-gray-400">{formatRelative(user.lastLoginAt)}</span> : <span className="text-xs text-gray-300">Jamais</span>}
                     </div>
                     <button onClick={function() { setEditingUser(user); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0"><Pencil size={14} /></button>
@@ -189,14 +194,14 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <div className="fixed inset-0 bg-black/50" onClick={function() { onClose(); }} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-2xl z-10">
-          <h2 className="text-lg font-bold text-gray-900">{mode === "create" ? "Nouvel utilisateur" : "Modifier"}</h2>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-2xl z-10">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900">{mode === "create" ? "Nouvel utilisateur" : "Modifier"}</h2>
           <button onClick={function() { onClose(); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <div><label className="text-xs font-medium text-gray-600 mb-1 block">Nom *</label>
             <input type="text" value={name} onChange={function(e) { setName(e.target.value); }} className="input text-sm" placeholder="Fatou Diop" autoFocus /></div>
           <div><label className="text-xs font-medium text-gray-600 mb-1 block">Email *</label>
@@ -244,8 +249,8 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
                 ) : (
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <label className="text-xs font-medium text-amber-700 mb-1 block">Nouveau mot de passe</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={newPwd} onChange={function(e) { setNewPwd(e.target.value); }} className="input text-sm flex-1" placeholder="Min. 6" />
+                    <div className="flex gap-2 flex-wrap">
+                      <input type="text" value={newPwd} onChange={function(e) { setNewPwd(e.target.value); }} className="input text-sm flex-1 min-w-[120px]" placeholder="Min. 6" />
                       <button onClick={handleResetPwd} disabled={resetting || newPwd.length < 6} className="btn-primary py-2 text-xs">
                         {resetting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} OK</button>
                       <button onClick={function() { setShowResetPwd(false); setNewPwd(""); }} className="btn-secondary py-2 text-xs"><X size={12} /></button>
@@ -257,7 +262,7 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
             </>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50 sticky bottom-0 rounded-b-2xl">
+        <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 sticky bottom-0 rounded-b-2xl">
           <button onClick={function() { onClose(); }} className="btn-secondary py-2 text-sm">Annuler</button>
           <button onClick={handleSubmit} disabled={saving || !name.trim() || !email.trim()} className="btn-primary py-2 text-sm">
             {saving ? <Loader2 size={14} className="animate-spin" /> : mode === "create" ? <Plus size={14} /> : <Check size={14} />}
