@@ -313,43 +313,75 @@ function RecipientsTab({ recipients }: { recipients: Recipient[] }) {
         onChange={function(e) { setSearch(e.target.value); }}
       />
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-200">
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Email</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Statut</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Envoye</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Delivre</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvert</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Clique</th>
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvertures</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filtered.map(function(recipient) {
-              var st = RECIPIENT_STATUS[recipient.status] || RECIPIENT_STATUS.PENDING;
-              var StIcon = st.icon;
-              return (
-                <tr key={recipient.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-gray-700">{recipient.email}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium", st.color)}>
-                      <StIcon size={10} />
-                      {st.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.sentAt ? formatDateTime(recipient.sentAt) : "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.deliveredAt ? formatDateTime(recipient.deliveredAt) : "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.openedAt ? formatDateTime(recipient.openedAt) : "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.clickedAt ? formatDateTime(recipient.clickedAt) : "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">{recipient.openCount > 0 ? recipient.openCount + "x" : "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Mobile cards (< md) */}
+      <div className="md:hidden bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+        {filtered.map(function(recipient) {
+          var st = RECIPIENT_STATUS[recipient.status] || RECIPIENT_STATUS.PENDING;
+          var StIcon = st.icon;
+          return (
+            <div key={recipient.id} className="p-3">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <p className="text-sm font-medium text-gray-700 truncate flex-1 min-w-0">{recipient.email}</p>
+                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 whitespace-nowrap", st.color)}>
+                  <StIcon size={10} />
+                  {st.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-x-3 gap-y-1 text-[10px] text-gray-500 flex-wrap">
+                {recipient.sentAt && <span>Envoyé : {formatDateTime(recipient.sentAt)}</span>}
+                {recipient.openedAt && <span className="text-blue-600">Ouvert : {formatDateTime(recipient.openedAt)}</span>}
+                {recipient.clickedAt && <span className="text-purple-600">Cliqué : {formatDateTime(recipient.clickedAt)}</span>}
+                {recipient.openCount > 1 && <span className="text-gray-700 font-medium">{recipient.openCount} ouvertures</span>}
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="py-12 text-center">
+            <p className="text-sm text-gray-400">Aucun destinataire</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop table (>= md) */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-200">
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Email</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Statut</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Envoye</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Delivre</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvert</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Clique</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvertures</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filtered.map(function(recipient) {
+                var st = RECIPIENT_STATUS[recipient.status] || RECIPIENT_STATUS.PENDING;
+                var StIcon = st.icon;
+                return (
+                  <tr key={recipient.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-2.5 font-medium text-gray-700">{recipient.email}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium", st.color)}>
+                        <StIcon size={10} />
+                        {st.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.sentAt ? formatDateTime(recipient.sentAt) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.deliveredAt ? formatDateTime(recipient.deliveredAt) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.openedAt ? formatDateTime(recipient.openedAt) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.clickedAt ? formatDateTime(recipient.clickedAt) : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">{recipient.openCount > 0 ? recipient.openCount + "x" : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {filtered.length === 0 && (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-400">Aucun destinataire</p>
