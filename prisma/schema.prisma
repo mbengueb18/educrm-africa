@@ -530,6 +530,13 @@ model Message {
   deliveredAt DateTime?
   readAt      DateTime?
 
+  // ─── NEW: WhatsApp tracking ───
+  whatsappContactName  String?     // Nom WhatsApp du contact (ex: "Aminata D.")
+  whatsappMediaType    String?     // "image" | "audio" | "document" | "video" | null
+  whatsappMediaId      String?     // ID Meta du média (à télécharger plus tard)
+  whatsappMediaUrl     String?     // URL Supabase Storage si déjà téléchargé
+  // ─── /NEW ───
+
   organizationId String
   createdAt      DateTime @default(now())
 
@@ -545,6 +552,7 @@ model Message {
   @@index([studentId])
   @@index([channel])
   @@index([sentAt])
+  @@index([externalId])  // NEW: anti-doublon webhook
   @@map("messages")
 }
 
