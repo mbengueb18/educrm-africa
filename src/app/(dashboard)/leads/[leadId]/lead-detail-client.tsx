@@ -19,6 +19,7 @@ import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
+import { WhatsAppButton } from "@/components/lead/whatsapp-button";
 
 interface LeadDetailClientProps {
   lead: any;
@@ -107,15 +108,12 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
         <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs">
           <Phone size={13} /> Appeler
         </a>
-        {lead.whatsapp && (
-          <a
-            href={"https://wa.me/" + lead.whatsapp.replace(/\D/g, "")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-          >
-            <MessageCircle size={13} /> WhatsApp
-          </a>
+        {(lead.whatsapp || lead.phone) && (
+          <WhatsAppButton
+            leadId={lead.id}
+            leadName={lead.firstName + " " + lead.lastName}
+            leadPhone={lead.whatsapp || lead.phone}
+          />
         )}
         {lead.email && (
           <button onClick={() => handleTabChange("email")} className="btn-secondary py-1.5 px-3 text-xs">

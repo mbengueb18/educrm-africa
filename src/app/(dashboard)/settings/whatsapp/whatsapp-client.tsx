@@ -275,6 +275,51 @@ export function WhatsAppSettingsClient({ integration, webhookUrl }: Props) {
         </div>
       )}
 
+      {/* Toggle Pause/Réactiver */}
+      {isConnected && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                {integration.isActive ? (
+                  <CheckCircle2 size={14} className="text-emerald-500" />
+                ) : (
+                  <AlertCircle size={14} className="text-amber-500" />
+                )}
+                {integration.isActive ? "Intégration active" : "Intégration en pause"}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {integration.isActive
+                  ? "Les messages WhatsApp sont envoyés via Cloud API."
+                  : "Les boutons WhatsApp basculent automatiquement sur wa.me."}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    const { toggleWhatsAppIntegration } = await import("./actions");
+                    await toggleWhatsAppIntegration(!integration.isActive);
+                    toast.success(integration.isActive ? "Cloud API mis en pause" : "Cloud API réactivé");
+                    router.refresh();
+                  } catch (e: any) {
+                    toast.error(e.message || "Erreur");
+                  }
+                });
+              }}
+              disabled={pending}
+              className={`btn-secondary py-1.5 px-3 text-xs shrink-0 ${
+                integration.isActive
+                  ? "text-amber-600 border-amber-200 hover:bg-amber-50"
+                  : "text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+              }`}
+            >
+              {integration.isActive ? "Mettre en pause" : "Réactiver"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Disconnect */}
       {isConnected && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">

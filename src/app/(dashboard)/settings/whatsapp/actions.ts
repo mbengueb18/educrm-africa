@@ -141,3 +141,20 @@ export async function disconnectWhatsApp() {
   revalidatePath("/settings/whatsapp");
   return { success: true };
 }
+
+// ─── Toggle isActive (pause/réactivation sans suppression) ───
+export async function toggleWhatsAppIntegration(active: boolean) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée");
+  }
+
+  await prisma.whatsAppIntegration.update({
+    where: { organizationId: session.user.organizationId },
+    data: { isActive: active },
+  });
+
+  revalidatePath("/settings/whatsapp");
+  return { success: true };
+}
