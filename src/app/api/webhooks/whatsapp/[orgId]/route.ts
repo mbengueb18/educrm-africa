@@ -37,8 +37,30 @@ export async function GET(
     return new NextResponse("Not Found", { status: 404 });
   }
 
+  // ─── DEBUG : logs ultra détaillés ───
+  console.log(`[WA Webhook GET] orgId from URL: "${orgId}" (length: ${orgId.length})`);
+  console.log(`[WA Webhook GET] mode: "${mode}"`);
+  console.log(`[WA Webhook GET] token received: "${token}" (length: ${token?.length})`);
+  console.log(`[WA Webhook GET] token in DB:    "${integration.verifyToken}" (length: ${integration.verifyToken.length})`);
+  console.log(`[WA Webhook GET] tokens match: ${integration.verifyToken === token}`);
+  console.log(`[WA Webhook GET] challenge: "${challenge}"`);
+  // ─── /DEBUG ───
+
   if (integration.verifyToken !== token) {
-    console.error(`[WA Webhook] Invalid verify token for org ${orgId}`);
+    console.error(`[WA Webhook GET] Invalid verify token for org ${orgId}`);
+    console.error(`[WA Webhook GET] Diff char-by-char:`);
+    const inDb = integration.verifyToken;
+    const received = token || "";
+    const maxLen = Math.max(inDb.length, received.length);
+    for (let i = 0; i < maxLen; i++) {
+      const a = inDb[i] || "(missing)";
+      const b = received[i] || "(missing)";
+      const codeA = inDb.charCodeAt(i);
+      const codeB = received.charCodeAt(i);
+      if (a !== b) {
+        console.error(`  pos ${i}: DB="${a}" (${codeA}) vs RX="${b}" (${codeB}) ← MISMATCH`);
+      }
+    }
     return new NextResponse("Forbidden", { status: 403 });
   }
 
