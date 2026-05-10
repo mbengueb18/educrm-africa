@@ -23,7 +23,19 @@ export default async function WhatsAppSettingsPage() {
     },
   });
 
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp/${session.user.organizationId}`;
+  // Détermine l'URL de base selon l'environnement
+  function getBaseUrl(): string {
+    // 1. Variable explicite (prod)
+    if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+    
+    // 2. URL Vercel auto (preview/staging)
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+    
+    // 3. Fallback localhost
+    return "http://localhost:3000";
+  }
+
+  const webhookUrl = `${getBaseUrl()}/api/webhooks/whatsapp/${session.user.organizationId}`;
 
   return (
     <WhatsAppSettingsClient
