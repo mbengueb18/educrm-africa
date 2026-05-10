@@ -145,6 +145,8 @@ export async function createOrphanLead(
       firstName: true,
       lastName: true,
       assignedToId: true,
+      phone: true,
+      whatsapp: true,
     },
   });
 
