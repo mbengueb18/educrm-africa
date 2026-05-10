@@ -3,6 +3,11 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   var { pathname } = request.nextUrl;
+  var hostname = request.headers.get("host") || "";
+
+  // ─── DEBUG : log toutes les requêtes interceptées ───
+  console.log(`[Middleware] ${request.method} ${hostname}${pathname}`);
+  // ─── /DEBUG ───
 
   // Never intercept static files
   if (
@@ -12,8 +17,6 @@ export function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
-  
-  var hostname = request.headers.get("host") || "";
 
   // ─── MARKETING SITE (talibcrm.com) ───
   var isMarketingSite = hostname === "talibcrm.com" || hostname === "www.talibcrm.com";
