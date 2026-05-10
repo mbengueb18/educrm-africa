@@ -26,47 +26,23 @@ export async function GET(
     return new NextResponse("Bad Request", { status: 400 });
   }
 
-  // Récupère l'intégration de l'org
   const integration = await prisma.whatsAppIntegration.findUnique({
     where: { organizationId: orgId },
     select: { verifyToken: true },
   });
 
   if (!integration) {
-    console.error(`[WA Webhook] Org ${orgId} not found`);
+    console.error(`[WA Webhook GET] Org ${orgId} not found`);
     return new NextResponse("Not Found", { status: 404 });
   }
 
-  // ─── DEBUG : logs ultra détaillés ───
-  console.log(`[WA Webhook GET] orgId from URL: "${orgId}" (length: ${orgId.length})`);
-  console.log(`[WA Webhook GET] mode: "${mode}"`);
-  console.log(`[WA Webhook GET] token received: "${token}" (length: ${token?.length})`);
-  console.log(`[WA Webhook GET] token in DB:    "${integration.verifyToken}" (length: ${integration.verifyToken.length})`);
-  console.log(`[WA Webhook GET] tokens match: ${integration.verifyToken === token}`);
-  console.log(`[WA Webhook GET] challenge: "${challenge}"`);
-  // ─── /DEBUG ───
-
   if (integration.verifyToken !== token) {
     console.error(`[WA Webhook GET] Invalid verify token for org ${orgId}`);
-    console.error(`[WA Webhook GET] Diff char-by-char:`);
-    const inDb = integration.verifyToken;
-    const received = token || "";
-    const maxLen = Math.max(inDb.length, received.length);
-    for (let i = 0; i < maxLen; i++) {
-      const a = inDb[i] || "(missing)";
-      const b = received[i] || "(missing)";
-      const codeA = inDb.charCodeAt(i);
-      const codeB = received.charCodeAt(i);
-      if (a !== b) {
-        console.error(`  pos ${i}: DB="${a}" (${codeA}) vs RX="${b}" (${codeB}) ← MISMATCH`);
-      }
-    }
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  console.log(`[WA Webhook] Verification OK for org ${orgId}`);
+  console.log(`[WA Webhook GET] Verification OK for org ${orgId}`);
 
-  // Renvoie le challenge en clair pour valider l'abonnement
   return new NextResponse(challenge, {
     status: 200,
     headers: { "Content-Type": "text/plain" },

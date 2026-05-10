@@ -5,10 +5,6 @@ export function middleware(request: NextRequest) {
   var { pathname } = request.nextUrl;
   var hostname = request.headers.get("host") || "";
 
-  // ─── DEBUG : log toutes les requêtes interceptées ───
-  console.log(`[Middleware] ${request.method} ${hostname}${pathname}`);
-  // ─── /DEBUG ───
-
   // Never intercept static files
   if (
     pathname.startsWith("/_next") ||
