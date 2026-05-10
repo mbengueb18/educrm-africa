@@ -11,7 +11,7 @@ import {
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
-  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2,
+  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
@@ -263,24 +263,78 @@ function HistoryTab({ lead }: { lead: any }) {
           const date = new Date(event.sortDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
           if (event.type === "message") {
-            let parsed: any = { subject: "", body: event.content };
-            try { parsed = JSON.parse(event.content); } catch {}
-            const isInbound = event.direction === "INBOUND";
-            return (
-              <div key={idx} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0">
-                <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", isInbound ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600")}>
-                  <Mail size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
-                    <p className="text-sm font-medium text-gray-900 min-w-0 break-words">{isInbound ? "Email reçu" : "Email envoyé"} : {parsed.subject || "Sans objet"}</p>
-                    <span className="text-xs text-gray-400 shrink-0">{date}</span>
-                  </div>
-                  <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap break-words">{stripHtml(parsed.body || "").substring(0, 600)}</p>
-                </div>
-              </div>
-            );
+        const isInbound = event.direction === "INBOUND";
+        const channel = event.channel;
+        const isWhatsApp = channel === "WHATSAPP";
+        const isSMS = channel === "SMS";
+        const isEmail = channel === "EMAIL";
+        const isChatbot = channel === "CHATBOT";
+
+        // Parsing différent selon le canal
+        let parsed: any = { subject: "", body: event.content };
+        if (isEmail) {
+          // Email = JSON {subject, body}
+          try { parsed = JSON.parse(event.content); } catch {}
+        } else {
+          // WhatsApp / SMS / Chatbot = texte brut
+          parsed = { subject: "", body: event.content };
+        }
+
+        // Icône et couleurs par canal
+        const MsgIcon = isWhatsApp ? MessageCircle : isSMS ? MessageSquare : Mail;
+        const channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : isChatbot ? "Chatbot" : channel;
+        const dirLabel = isInbound ? "reçu" : "envoyé";
+
+        const iconBg = isWhatsApp
+          ? (isInbound ? "bg-emerald-50 text-emerald-600" : "bg-emerald-50 text-emerald-600")
+          : isSMS
+          ? "bg-purple-50 text-purple-600"
+          : (isInbound ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600");
+
+        // Nettoyage HTML pour les emails
+        let displayBody = parsed.body || "";
+        if (isEmail) {
+          const isHtmlBody = displayBody.trim().startsWith("<") && (
+            displayBody.includes("<html") ||
+            displayBody.includes("<!DOCTYPE") ||
+            displayBody.includes("<div") ||
+            displayBody.includes("<table") ||
+            displayBody.includes("<body") ||
+            displayBody.includes("<p")
+          );
+          if (isHtmlBody) {
+            displayBody = stripHtml(displayBody);
           }
+          // Cleanup quoted replies pour emails inbound
+          if (isInbound) {
+            displayBody = displayBody
+              .replace(/^(>+\s*.*\n?)+/gm, "")
+              .replace(/On .{1,200} wrote:[\s\S]*$/i, "")
+              .replace(/Le .{1,200} a [eé]crit\s*:[\s\S]*$/i, "")
+              .trim();
+          }
+        }
+        if (!displayBody.trim()) {
+          displayBody = "(Message vide)";
+        }
+
+        return (
+          <div key={idx} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0">
+            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", iconBg)}>
+              <MsgIcon size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+                <p className="text-sm font-medium text-gray-900 min-w-0 break-words">
+                  {channelLabel} {dirLabel}{isEmail && parsed.subject ? " : " + parsed.subject : ""}
+                </p>
+                <span className="text-xs text-gray-400 shrink-0">{date}</span>
+              </div>
+              <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap break-words">{displayBody.substring(0, 600)}</p>
+            </div>
+          </div>
+        );
+      }
 
           // Activity
           return (
