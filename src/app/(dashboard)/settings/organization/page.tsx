@@ -97,7 +97,7 @@ export default function OrganizationSettingsPage() {
 
       {activeSection === "general" && <GeneralSection org={org} onSaved={loadOrg} />}
       {activeSection === "campuses" && <CampusesSection campuses={org.campuses} onChanged={loadOrg} />}
-      {activeSection === "programs" && <ProgramsSection programs={org.programs} campuses={org.campuses} onChanged={loadOrg} />}
+      {activeSection === "programs" && <ProgramsSection programs={org.programs} campuses={org.campuses} pipelines={org.pipelines || []} onChanged={loadOrg} />}
       {activeSection === "years" && <AcademicYearsSection years={org.academicYears} onChanged={loadOrg} />}
     </div>
   );
@@ -314,7 +314,12 @@ function CampusForm({ mode, campus, onClose }: { mode: "create" | "edit"; campus
 }
 
 // ─── Programs Section ───
-function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; campuses: any[]; onChanged: () => void }) {
+function ProgramsSection({ programs, campuses, pipelines, onChanged }: { 
+  programs: any[]; 
+  campuses: any[];
+  pipelines: any[]; 
+  onChanged: () => void 
+}) {
   var [showAdd, setShowAdd] = useState(false);
   var [editingId, setEditingId] = useState<string | null>(null);
 
@@ -328,7 +333,7 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
         <button onClick={function() { setShowAdd(true); }} className="btn-primary py-2 text-xs"><Plus size={14} /> <span className="hidden sm:inline">Ajouter une filière</span><span className="sm:hidden">Ajouter</span></button>
       </div>
 
-      {showAdd && <ProgramForm mode="create" campuses={campuses} onClose={function(s) { setShowAdd(false); if (s) onChanged(); }} />}
+      {showAdd && <ProgramForm mode="create" campuses={campuses} pipelines={pipelines} onClose={function(s) { setShowAdd(false); if (s) onChanged(); }} />}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {programs.length === 0 ? (
@@ -340,7 +345,7 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
           <div className="divide-y divide-gray-50">
             {programs.map(function(prog) {
               if (editingId === prog.id) {
-                return <div key={prog.id} className="p-3 sm:p-4"><ProgramForm mode="edit" program={prog} campuses={campuses} onClose={function(s) { setEditingId(null); if (s) onChanged(); }} /></div>;
+                return <div key={prog.id} className="p-3 sm:p-4"><ProgramForm mode="edit" program={prog} campuses={campuses} pipelines={pipelines} onClose={function(s) { setEditingId(null); if (s) onChanged(); }} /></div>;
               }
               return (
                 <div key={prog.id} className={cn("flex items-start sm:items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 group hover:bg-gray-50/50", !prog.isActive && "opacity-50")}>
@@ -352,8 +357,22 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
                       <p className="text-sm font-medium text-gray-900 truncate min-w-0">{prog.name}</p>
                       {prog.code && <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{prog.code}</span>}
                       <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full font-medium shrink-0">{prog.level}</span>
+                      
+                      {/* Badge FI/FC */}
+                      {prog.formationType && (
+                        <span className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
+                          prog.formationType === "INITIAL" && "text-blue-700 bg-blue-50",
+                          prog.formationType === "CONTINUE" && "text-purple-700 bg-purple-50",
+                          prog.formationType === "BOTH" && "text-amber-700 bg-amber-50"
+                        )}>
+                          {prog.formationType === "INITIAL" ? "FI" : prog.formationType === "CONTINUE" ? "FC" : "FI+FC"}
+                        </span>
+                      )}
+                      
                       {!prog.isActive && <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full font-medium shrink-0">Inactive</span>}
                     </div>
+
                     {prog.tuitionAmount && (
                       <span className="text-xs text-gray-500 mt-0.5 block">{formatCFA(prog.tuitionAmount)} {prog.currency || "XOF"}</span>
                     )}
@@ -382,21 +401,58 @@ function ProgramsSection({ programs, campuses, onChanged }: { programs: any[]; c
   );
 }
 
-function ProgramForm({ mode, program, campuses, onClose }: { mode: "create" | "edit"; program?: any; campuses: any[]; onClose: (saved?: boolean) => void }) {
+function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "create" | "edit"; program?: any; campuses: any[]; pipelines: any[]; onClose: (saved?: boolean) => void }) {
   var [name, setName] = useState(program?.name || "");
   var [code, setCode] = useState(program?.code || "");
   var [level, setLevel] = useState(program?.level || "LICENCE");
   var [tuition, setTuition] = useState(program?.tuitionAmount ? String(program.tuitionAmount) : "");
+  var [formationType, setFormationType] = useState<"INITIAL" | "CONTINUE" | "BOTH">(program?.formationType || "INITIAL");
   var [campusId, setCampusId] = useState(program?.campusId || (campuses.length > 0 ? campuses[0].id : ""));
+  var [pipelineId, setPipelineId] = useState(function() {
+    if (program?.pipelineId) return program.pipelineId;
+    // 1. Cherche un pipeline avec le bon formationType
+    var matching = pipelines.find(function(p) { return p.formationType === (program?.formationType || "INITIAL"); });
+    if (matching) return matching.id;
+    // 2. Sinon, le pipeline par défaut
+    var defaultPipeline = pipelines.find(function(p) { return p.isDefault; });
+    if (defaultPipeline) return defaultPipeline.id;
+    // 3. Sinon, le premier
+    return pipelines[0]?.id || "";
+  });
   var [saving, setSaving] = useState(false);
+// Met à jour le pipeline auto quand on change le type de formation
+  var handleFormationTypeChange = function(newType: "INITIAL" | "CONTINUE") {
+    setFormationType(newType);
+    var matching = pipelines.find(function(p) { return p.formationType === newType; });
+    if (matching) {
+      setPipelineId(matching.id);
+    }
+  };
 
   var handleSave = async function() {
     if (!name.trim()) { toast.error("Le nom est requis"); return; }
     if (!campusId) { toast.error("Le campus est requis"); return; }
     setSaving(true);
     try {
-      if (mode === "create") { await createProgram({ name, code, level, tuitionAmount: tuition ? parseInt(tuition) : undefined, campusId }); toast.success("Filière créée"); }
-      else if (program) { await updateProgram(program.id, { name, code, level, tuitionAmount: tuition ? parseInt(tuition) : undefined }); toast.success("Filière mise à jour"); }
+      if (mode === "create") { 
+        await createProgram({ 
+          name, code, level, 
+          tuitionAmount: tuition ? parseInt(tuition) : undefined, 
+          campusId,
+          formationType,
+          pipelineId: pipelineId || undefined,
+        }); 
+        toast.success("Filière créée"); 
+      }
+      else if (program) { 
+        await updateProgram(program.id, { 
+          name, code, level, 
+          tuitionAmount: tuition ? parseInt(tuition) : undefined,
+          formationType,
+          pipelineId: pipelineId || undefined,
+        }); 
+        toast.success("Filière mise à jour"); 
+      }
       onClose(true);
     } catch (err: any) { toast.error(err.message || "Erreur"); }
     setSaving(false);
@@ -417,8 +473,40 @@ function ProgramForm({ mode, program, campuses, onClose }: { mode: "create" | "e
           <select value={campusId} onChange={function(e) { setCampusId(e.target.value); }} className="input text-sm">
             {campuses.map(function(c) { return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; })}
           </select></div>
+
+          {/* NOUVEAU — Type de formation */}
+        <div>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Type de formation *</label>
+          <select 
+            value={formationType} 
+            onChange={function(e) { handleFormationTypeChange(e.target.value as "INITIAL" | "CONTINUE"); }}
+            className="input text-sm"
+          >
+            <option value="INITIAL">Formation Initiale (FI)</option>
+            <option value="CONTINUE">Formation Continue (FC)</option>
+          </select>
+        </div>
+
+                {/* NOUVEAU — Pipeline associé */}
+        <div>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Pipeline associé *</label>
+          <select 
+            value={pipelineId} 
+            onChange={function(e) { setPipelineId(e.target.value); }}
+            className="input text-sm"
+          >
+            {pipelines.length === 0 && <option value="">Aucun pipeline</option>}
+            {pipelines.map(function(p) { 
+              var typeLabel = p.formationType === "INITIAL" ? " (FI)" : p.formationType === "CONTINUE" ? " (FC)" : "";
+              var defaultLabel = p.isDefault ? " ★" : "";
+              return <option key={p.id} value={p.id}>{p.name}{typeLabel}{defaultLabel}</option>; 
+            })}
+          </select>
+        </div>
+
         <div className="sm:col-span-2"><label className="text-xs font-medium text-gray-600 mb-1 block">Frais de scolarité (FCFA)</label>
-          <input type="number" value={tuition} onChange={function(e) { setTuition(e.target.value); }} className="input text-sm" placeholder="1500000" /></div>
+          <input type="number" value={tuition} onChange={function(e) { setTuition(e.target.value); }} className="input text-sm" placeholder="1500000" />
+        </div>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={function() { onClose(); }} className="btn-secondary py-1.5 px-3 text-xs">Annuler</button>

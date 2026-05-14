@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/api-keys";
+import { getLeadRouting } from "@/lib/pipeline-routing";
 import { z } from "zod";
 
 function corsResponse(data: any, status: number) {
@@ -354,17 +355,6 @@ export async function POST(request: NextRequest) {
 
     var allCustomFields = { ...customFields, ...trafficCustom };
 
-    // ─── Find default pipeline stage ───
-    var defaultStage = await prisma.pipelineStage.findFirst({
-      where: { organizationId, isDefault: true },
-    });
-    if (!defaultStage) {
-      return corsResponse(
-        { error: "Configuration pipeline manquante", code: "CONFIG_ERROR" },
-        500
-      );
-    }
-
     // ─── Match program ───
     var programId: string | null = null;
     if (fields.programCode) {
@@ -393,6 +383,15 @@ export async function POST(request: NextRequest) {
         },
       });
       campusId = campus?.id || null;
+    }
+
+    // ─── Pipeline routing automatique (après matching program) ───
+    var routing = await getLeadRouting(organizationId, programId);
+    if (!routing.stageId) {
+      return corsResponse(
+        { error: "Configuration pipeline manquante", code: "CONFIG_ERROR" },
+        500
+      );
     }
 
     // ─── Duplicate check ───
@@ -441,7 +440,8 @@ export async function POST(request: NextRequest) {
         city: fields.city || null,
         source: fields.source as any,
         sourceDetail: fields.sourceDetail || null,
-        stageId: defaultStage.id,
+        stageId: routing.stageId,
+        pipelineId: routing.pipelineId,
         programId,
         campusId,
         organizationId,
@@ -449,7 +449,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-// ─── Link visitor to this lead (retroactive linking) ───
+    // ─── Link visitor to this lead (retroactive linking) ───
     if (rawData._visitorId) {
       try {
         await prisma.visitor.updateMany({

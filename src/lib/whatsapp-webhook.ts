@@ -102,13 +102,11 @@ export async function createOrphanLead(
   fromPhoneNumber: string,
   whatsappContactName: string | null
 ) {
-  // Trouve la 1ère étape du pipeline (Nouveau)
-  const firstStage = await prisma.pipelineStage.findFirst({
-    where: { organizationId },
-    orderBy: { order: "asc" },
-  });
+  // Routing automatique vers le bon pipeline (lead sans filière → pipeline FI par défaut)
+  const { getLeadRouting } = await import("@/lib/pipeline-routing");
+  const routing = await getLeadRouting(organizationId, null);
 
-  if (!firstStage) {
+  if (!routing.stageId) {
     throw new Error("Aucune étape de pipeline configurée pour cette org");
   }
 
@@ -132,7 +130,8 @@ export async function createOrphanLead(
       phone: formattedPhone,
       whatsapp: formattedPhone,
       source: "WHATSAPP",
-      stageId: firstStage.id,
+      stageId: routing.stageId,
+      pipelineId: routing.pipelineId,    // NOUVEAU
       score: 0,
       customFields: {
         _orphan: true,

@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { getPipelineData, getPipelineStats } from "./actions";
+import { getPipelineData, getPipelineStats, getOrgPipelines } from "./actions";
 import { PipelineClient } from "./pipeline-client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -9,12 +9,19 @@ export const metadata: Metadata = {
   title: "Pipeline",
 };
 
-export default async function PipelinePage() {
+interface PageProps {
+  searchParams: Promise<{ pipeline?: string }>;
+}
+
+export default async function PipelinePage({ searchParams }: PageProps) {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [pipelineData, stats, programs, campuses, fieldProps] = await Promise.all([
-    getPipelineData(),
+  const params = await searchParams;
+  const pipelineIdFromUrl = params.pipeline;
+
+  const [pipelineData, stats, programs, campuses, fieldProps, pipelines] = await Promise.all([
+    getPipelineData(pipelineIdFromUrl),
     getPipelineStats(),
     prisma.program.findMany({
       where: { organizationId: session.user.organizationId, isActive: true },
@@ -27,6 +34,7 @@ export default async function PipelinePage() {
       orderBy: { name: "asc" },
     }),
     getAllFieldProperties(),
+    getOrgPipelines(),
   ]);
 
   return (
@@ -39,6 +47,8 @@ export default async function PipelinePage() {
       campuses={campuses}
       crmFields={fieldProps.fields}
       currentUserId={session.user.id}
+      pipelines={pipelines}
+      currentPipelineId={pipelineData.currentPipelineId}
     />
   );
 }

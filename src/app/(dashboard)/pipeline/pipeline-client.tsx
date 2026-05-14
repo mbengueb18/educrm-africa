@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
   Upload, Download, Copy, Check, Loader2, X, AlertTriangle,
-  MoreHorizontal,
+  MoreHorizontal,  GitBranch, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
@@ -32,6 +32,8 @@ interface PipelineClientProps {
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string; city: string }[];
   crmFields?: any[];
+  pipelines: any[];                   
+  currentPipelineId?: string;         
 }
 
 export function PipelineClient({
@@ -43,6 +45,8 @@ export function PipelineClient({
   programs,
   campuses,
   crmFields,
+  pipelines,
+  currentPipelineId,
 }: PipelineClientProps) {
   var [modalOpen, setModalOpen] = useState(false);
   var [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -99,6 +103,35 @@ export function PipelineClient({
 
   var router = useRouter();
 
+  // Persistance du pipeline sélectionné
+  useEffect(function() {
+    if (!currentPipelineId) return;
+    try {
+      localStorage.setItem("talibcrm:lastPipelineId", currentPipelineId);
+    } catch {}
+  }, [currentPipelineId]);
+
+  // Au montage, si l'URL n'a pas de pipeline et qu'on a un pipeline mémorisé
+  // qui est différent du courant, on redirige
+  useEffect(function() {
+    if (typeof window === "undefined") return;
+    try {
+      var saved = localStorage.getItem("talibcrm:lastPipelineId");
+      if (saved && saved !== currentPipelineId && !window.location.search.includes("pipeline=")) {
+        // Vérifier que le pipeline saved existe encore
+        var stillExists = pipelines.find(function(p: any) { return p.id === saved; });
+        if (stillExists) {
+          router.replace("/pipeline?pipeline=" + saved);
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  var handlePipelineChange = function(newPipelineId: string) {
+    router.push("/pipeline?pipeline=" + newPipelineId);
+  };
+
   var handleModalClose = useCallback(function(created?: boolean) {
     setModalOpen(false);
     if (created) {
@@ -139,13 +172,45 @@ export function PipelineClient({
       {/* Header */}
       <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Pipeline de recrutement
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Gérez vos prospects de la prise de contact jusqu&apos;a l&apos;inscription
-          </p>
+  <div className="flex items-center gap-2 flex-wrap">
+    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+      Pipeline de recrutement
+    </h1>
+    
+      {/* Dropdown pipelines - visible uniquement si plusieurs */}
+      {pipelines.length > 1 && (
+        <div className="relative inline-block">
+          <select
+            value={currentPipelineId || ""}
+            onChange={function(e) { handlePipelineChange(e.target.value); }}
+            className="appearance-none pl-3 pr-8 py-1 text-xs font-medium rounded-lg border border-gray-200 bg-white hover:border-gray-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+          >
+            {pipelines.map(function(p: any) {
+              var typeLabel = p.formationType === "INITIAL" ? " (FI)" : p.formationType === "CONTINUE" ? " (FC)" : "";
+              var defaultLabel = p.isDefault ? " ★" : "";
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}{typeLabel}{defaultLabel}
+                </option>
+              );
+            })}
+          </select>
+          <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         </div>
+      )}
+      
+      {/* Indicateur pipeline si UN SEUL (pour rappel visuel) */}
+      {pipelines.length === 1 && pipelines[0]?.name && (
+        <span className="text-[11px] text-gray-400 font-medium">
+          <GitBranch size={11} className="inline mr-1" />
+          {pipelines[0].name}
+        </span>
+      )}
+    </div>
+    <p className="text-sm text-gray-500 mt-1">
+      Gérez vos prospects de la prise de contact jusqu&apos;a l&apos;inscription
+    </p>
+  </div>
 
         <div className="flex items-center gap-2 flex-wrap">
 

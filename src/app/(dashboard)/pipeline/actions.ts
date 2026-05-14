@@ -4,21 +4,86 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getLeadRouting } from "@/lib/pipeline-routing";
+
+// ─── Get all pipelines of the organization ───
+export async function getOrgPipelines() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const pipelines = await prisma.pipeline.findMany({
+    where: { 
+      organizationId: session.user.organizationId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      name: true,
+      formationType: true,
+      isDefault: true,
+      color: true,
+      order: true,
+    },
+    orderBy: [{ isDefault: "desc" }, { order: "asc" }, { createdAt: "asc" }],
+  });
+
+  return pipelines;
+}
 
 // ─── Get pipeline data ───
-export async function getPipelineData() {
+export async function getPipelineData(pipelineId?: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
   const { organizationId } = session.user;
 
+  // Déterminer le pipeline cible : celui passé, sinon le défaut, sinon le premier
+  let targetPipelineId = pipelineId;
+  // Si un pipelineId est fourni, vérifier qu'il est actif
+  if (pipelineId) {
+    const requested = await prisma.pipeline.findFirst({
+      where: { id: pipelineId, organizationId, isActive: true },
+      select: { id: true },
+    });
+    if (!requested) {
+      // Pipeline inactif ou inexistant → fallback sur le défaut
+      targetPipelineId = undefined;
+    }
+  }
+  if (!targetPipelineId) {
+    const defaultPipeline = await prisma.pipeline.findFirst({
+      where: { organizationId, isDefault: true, isActive: true  },
+      select: { id: true },
+    });
+    if (defaultPipeline) {
+      targetPipelineId = defaultPipeline.id;
+    } else {
+      // Fallback : premier pipeline de l'org
+      const firstPipeline = await prisma.pipeline.findFirst({
+        where: { organizationId, isActive: true },
+        orderBy: { order: "asc" },
+        select: { id: true },
+      });
+      targetPipelineId = firstPipeline?.id;
+    }
+  }
+
+  // Si toujours pas de pipeline (cas edge), on récupère sans filtre
+  const stageFilter = targetPipelineId 
+    ? { organizationId, pipelineId: targetPipelineId }
+    : { organizationId };
+
+  const leadFilter = targetPipelineId
+    ? { organizationId, isConverted: false, pipelineId: targetPipelineId }
+    : { organizationId, isConverted: false };
+
   const [stages, leads, users] = await Promise.all([
     prisma.pipelineStage.findMany({
-      where: { organizationId },
+      where: stageFilter,
       orderBy: { order: "asc" },
     }),
     prisma.lead.findMany({
-      where: { organizationId, isConverted: false },
+      where: leadFilter,
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true } },
         program: { select: { id: true, name: true, code: true } },
@@ -73,9 +138,8 @@ export async function getPipelineData() {
     return { ...lead, lastContactAt, daysSinceContact };
   });
 
-  return { stages, leads: enrichedLeads, users };
+  return { stages, leads: enrichedLeads, users, currentPipelineId: targetPipelineId };
 }
-
 // ─── Move lead to stage ───
 export async function moveLeadToStage(leadId: string, stageId: string) {
   const session = await auth();
@@ -185,21 +249,21 @@ export async function createLead(formData: FormData) {
     assignedToId: formData.get("assignedToId") || undefined,
   });
 
-  const defaultStage = await prisma.pipelineStage.findFirst({
-    where: { organizationId, isDefault: true },
-  });
+  // Routing automatique vers le bon pipeline selon la filière
+const routing = await getLeadRouting(organizationId, data.programId || null);
 
-  if (!defaultStage) throw new Error("Aucune étape par défaut configurée");
+if (!routing.stageId) throw new Error("Aucune étape par défaut configurée");
 
-  const lead = await prisma.lead.create({
-    data: {
-      ...data,
-      email: data.email || null,
-      whatsapp: data.whatsapp || data.phone,
-      stageId: defaultStage.id,
-      organizationId,
-    },
-  });
+const lead = await prisma.lead.create({
+  data: {
+    ...data,
+    email: data.email || null,
+    whatsapp: data.whatsapp || data.phone,
+    stageId: routing.stageId,
+    pipelineId: routing.pipelineId,
+    organizationId,
+  },
+});
 
   await prisma.activity.create({
     data: {
@@ -392,11 +456,6 @@ export async function importLeadsFromCSV(rows: {
 
   var { organizationId } = session.user;
 
-  var defaultStage = await prisma.pipelineStage.findFirst({
-    where: { organizationId, isDefault: true },
-  });
-  if (!defaultStage) throw new Error("Aucune étape par défaut");
-
   var programs = await prisma.program.findMany({
     where: { organizationId },
     select: { id: true, code: true, name: true },
@@ -461,26 +520,35 @@ export async function importLeadsFromCSV(rows: {
     }
 
     try {
-      await prisma.lead.create({
-        data: {
-          firstName: row.firstName.trim(),
-          lastName: row.lastName.trim(),
-          phone: row.phone?.trim() || "N/A",
-          email: row.email?.trim() || null,
-          whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
-          city: row.city?.trim() || null,
-          source: source as any,
-          sourceDetail: row.sourceDetail?.trim() || "Import CSV",
-          stageId: defaultStage.id,
-          programId,
-          organizationId,
-        },
-      });
-      created++;
-    } catch (err: any) {
-      errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
-      skipped++;
-    }
+  // Routing automatique pipeline + stage selon programId
+  var routing = await getLeadRouting(organizationId, programId);
+  if (!routing.stageId) {
+    errors.push("Ligne " + (i + 2) + ": Aucune étape configurée");
+    skipped++;
+    continue;
+  }
+
+  await prisma.lead.create({
+    data: {
+      firstName: row.firstName.trim(),
+      lastName: row.lastName.trim(),
+      phone: row.phone?.trim() || "N/A",
+      email: row.email?.trim() || null,
+      whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
+      city: row.city?.trim() || null,
+      source: source as any,
+      sourceDetail: row.sourceDetail?.trim() || "Import CSV",
+      stageId: routing.stageId,
+      pipelineId: routing.pipelineId,
+      programId,
+      organizationId,
+    },
+  });
+  created++;
+} catch (err: any) {
+  errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
+  skipped++;
+}
   }
 
   revalidatePath("/pipeline");

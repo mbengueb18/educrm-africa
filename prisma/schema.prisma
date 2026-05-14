@@ -31,6 +31,7 @@ model Organization {
   leads            Lead[]
   students         Student[]
   pipelineStages   PipelineStage[]
+  pipelines        Pipeline[]
   academicYears    AcademicYear[]
   programs         Program[]
   messageTemplates MessageTemplate[]
@@ -58,9 +59,10 @@ model Organization {
 }
 
 enum Plan {
-  STARTER // 1 campus, 500 contacts
-  GROWTH // 3 campus, 2000 contacts
-  ENTERPRISE // Unlimited
+  FREE       // Pas de pipeline custom, fonctionnalités limitées
+  STARTER    // 1 pipeline, 1 campus, 500 contacts
+  PRO        // 5 pipelines, 5 campus, 5000 contacts
+  ENTERPRISE // Illimité
 }
 
 // ─── CAMPUS & PROGRAMS ───
@@ -86,30 +88,41 @@ model Campus {
   @@map("campuses")
 }
 
-model Program {
-  id             String       @id @default(cuid())
-  name           String // e.g. "BTS Comptabilité", "Licence Marketing"
-  code           String? // e.g. "BTS-COMPTA"
-  level          ProgramLevel
-  durationMonths Int // 12, 24, 36...
-  tuitionAmount  Float // Annual tuition in FCFA
-  currency       String       @default("XOF")
-  isActive       Boolean      @default(true)
-  campusId       String
-  organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
 
-  campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  leads        Lead[]
-  students     Student[]
-  subjects     Subject[]
-
-  @@index([organizationId])
-  @@index([campusId])
-  @@map("programs")
+enum FormationType {
+  INITIAL    // Formation Initiale (FI) - étudiants après bac
+  CONTINUE   // Formation Continue (FC) - professionnels
+  BOTH       // Les deux
 }
+
+  model Program {
+    id             String       @id @default(cuid())
+    name           String // e.g. "BTS Comptabilité", "Licence Marketing"
+    code           String? // e.g. "BTS-COMPTA"
+    level          ProgramLevel
+    durationMonths Int // 12, 24, 36...
+    tuitionAmount  Float // Annual tuition in FCFA
+    currency       String       @default("XOF")
+    isActive       Boolean      @default(true)
+    campusId       String
+    organizationId String
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+    formationType  FormationType  @default(INITIAL)
+    pipelineId     String?
+
+    campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
+    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    pipeline     Pipeline?    @relation(fields: [pipelineId], references: [id])
+    leads        Lead[]
+    students     Student[]
+    subjects     Subject[]
+
+    @@index([organizationId])
+    @@index([campusId])
+    @@index([pipelineId])
+    @@map("programs")
+  }
 
 enum ProgramLevel {
   BTS
@@ -185,6 +198,29 @@ enum UserRole {
 
 // ─── RECRUITMENT PIPELINE ───
 
+model Pipeline {
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  formationType   FormationType? // INITIAL / CONTINUE / null (cas 1 pipeline)
+  isDefault       Boolean        @default(false)
+  isActive        Boolean        @default(true)
+  order           Int            @default(0)
+  color           String?
+  organizationId  String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages          PipelineStage[]
+  leads           Lead[]
+  programs        Program[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("pipelines")
+}
+
 model PipelineStage {
   id             String   @id @default(cuid())
   name           String // e.g. "Nouveau lead", "Contacté", "Dossier reçu"
@@ -194,13 +230,16 @@ model PipelineStage {
   isWon          Boolean  @default(false) // "Inscrit" stage
   isLost         Boolean  @default(false) // "Perdu" stage
   organizationId String
+  pipelineId     String?
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline?    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   leads        Lead[]
 
   @@unique([organizationId, order])
   @@index([organizationId])
+  @@index([pipelineId])
   @@map("pipeline_stages")
 }
 
@@ -218,6 +257,7 @@ model Lead {
 
   // Pipeline
   stageId      String
+  pipelineId   String?
   score        Int        @default(0) // 0-100 lead score
   source       LeadSource
   sourceDetail String? // e.g. "Salon Dakar 2026", "Facebook Ad #123"
@@ -240,6 +280,7 @@ model Lead {
   updatedAt      DateTime @updatedAt
 
   stage        PipelineStage @relation(fields: [stageId], references: [id])
+  pipeline     Pipeline?     @relation(fields: [pipelineId], references: [id])
   assignedTo   User?         @relation("AssignedLeads", fields: [assignedToId], references: [id])
   program      Program?      @relation(fields: [programId], references: [id])
   campus       Campus?       @relation(fields: [campusId], references: [id])
@@ -259,6 +300,7 @@ model Lead {
   visitors  Visitor[]
 
   @@index([organizationId])
+  @@index([pipelineId])
   @@index([stageId])
   @@index([assignedToId])
   @@index([organizationId, createdAt])

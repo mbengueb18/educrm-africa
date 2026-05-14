@@ -11,7 +11,7 @@ import {
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
-  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare,
+  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight, 
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
@@ -20,6 +20,18 @@ import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(
 import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
+import { formatCFA } from "@/lib/utils";
+
+const activityIcons: Record<string, any> = {
+  LEAD_CREATED: Tag,
+  LEAD_STAGE_CHANGED: ArrowRight,
+  LEAD_ASSIGNED: UserIcon,
+  MESSAGE_SENT: Send,
+  MESSAGE_RECEIVED: MessageSquare,
+  CALL_LOGGED: Phone,
+  NOTE_ADDED: FileText,
+  DOCUMENT_UPLOADED: FileText,
+};
 
 interface LeadDetailClientProps {
   lead: any;
@@ -184,7 +196,34 @@ function OverviewTab({ lead }: { lead: any }) {
           <InfoRow icon={Mail} label="Email" value={lead.email || "—"} />
           <InfoRow icon={MapPin} label="Ville" value={lead.city || "—"} />
         </div>
+
       </div>
+
+      {/* NOUVEAU — Formation souhaitée */}
+      {lead.program && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Formation souhaitée</h3>
+          <div className="space-y-3">
+            <InfoRow icon={GraduationCap} label="Filière" value={lead.program.name} />
+            {lead.program.code && <InfoRow icon={Tag} label="Code" value={lead.program.code} />}
+            <InfoRow icon={Tag} label="Niveau" value={lead.program.level} />
+            {lead.program.formationType && (
+              <InfoRow 
+                icon={Briefcase} 
+                label="Type" 
+                value={
+                  lead.program.formationType === "INITIAL" ? "Formation Initiale (FI)" :
+                  lead.program.formationType === "CONTINUE" ? "Formation Continue (FC)" :
+                  "FI + FC"
+                }
+              />
+            )}
+            {lead.program.tuitionAmount && (
+              <InfoRow icon={Tag} label="Frais" value={formatCFA(lead.program.tuitionAmount)} />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pipeline info */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
@@ -263,56 +302,59 @@ function HistoryTab({ lead }: { lead: any }) {
           const date = new Date(event.sortDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
           if (event.type === "message") {
-        const isInbound = event.direction === "INBOUND";
-        const channel = event.channel;
-        const isWhatsApp = channel === "WHATSAPP";
-        const isSMS = channel === "SMS";
-        const isEmail = channel === "EMAIL";
-        const isChatbot = channel === "CHATBOT";
+        const msg = event;
+        const isWhatsApp = msg.channel === "WHATSAPP";
+        const isSMS = msg.channel === "SMS";
+        const isEmail = msg.channel === "EMAIL";
+        const isChatbot = msg.channel === "CHATBOT";
+        const isInbound = msg.direction === "INBOUND";
 
-        // Parsing différent selon le canal
-        let parsed: any = { subject: "", body: event.content };
-        if (isEmail) {
-          // Email = JSON {subject, body}
-          try { parsed = JSON.parse(event.content); } catch {}
-        } else {
-          // WhatsApp / SMS / Chatbot = texte brut
-          parsed = { subject: "", body: event.content };
-        }
+        const MsgIcon = isWhatsApp ? MessageCircle : isSMS ? MessageSquare : isChatbot ? Bot : Mail;
 
-        // Icône et couleurs par canal
-        const MsgIcon = isWhatsApp ? MessageCircle : isSMS ? MessageSquare : Mail;
-        const channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : isChatbot ? "Chatbot" : channel;
+        const msgIconBg = isWhatsApp
+          ? "bg-emerald-50 text-emerald-600"
+          : isEmail
+          ? "bg-blue-50 text-blue-600"
+          : isChatbot
+          ? "bg-violet-50 text-violet-600"
+          : "bg-purple-50 text-purple-600";
+
+        const channelLabel = isWhatsApp ? "WhatsApp" : isSMS ? "SMS" : isEmail ? "Email" : isChatbot ? "Chatbot" : msg.channel;
         const dirLabel = isInbound ? "reçu" : "envoyé";
 
-        const iconBg = isWhatsApp
-          ? (isInbound ? "bg-emerald-50 text-emerald-600" : "bg-emerald-50 text-emerald-600")
-          : isSMS
-          ? "bg-purple-50 text-purple-600"
-          : (isInbound ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600");
+        // Parsing : email = JSON, autres = texte brut
+        let parsedContent = { subject: null as string | null, body: "" };
+        try {
+          const parsed = JSON.parse(msg.content);
+          parsedContent = { subject: parsed.subject || null, body: parsed.body || "" };
+        } catch {
+          parsedContent = { subject: null, body: msg.content };
+        }
 
-        // Nettoyage HTML pour les emails
-        let displayBody = parsed.body || "";
-        if (isEmail) {
-          const isHtmlBody = displayBody.trim().startsWith("<") && (
-            displayBody.includes("<html") ||
-            displayBody.includes("<!DOCTYPE") ||
-            displayBody.includes("<div") ||
-            displayBody.includes("<table") ||
-            displayBody.includes("<body") ||
-            displayBody.includes("<p")
-          );
-          if (isHtmlBody) {
-            displayBody = stripHtml(displayBody);
-          }
-          // Cleanup quoted replies pour emails inbound
-          if (isInbound) {
-            displayBody = displayBody
-              .replace(/^(>+\s*.*\n?)+/gm, "")
-              .replace(/On .{1,200} wrote:[\s\S]*$/i, "")
-              .replace(/Le .{1,200} a [eé]crit\s*:[\s\S]*$/i, "")
-              .trim();
-          }
+        let displayBody = parsedContent.body || "";
+
+        // Strip HTML pour les emails
+        const isHtmlBody = displayBody.trim().startsWith("<") && (
+          displayBody.includes("<html") ||
+          displayBody.includes("<!DOCTYPE") ||
+          displayBody.includes("<div") ||
+          displayBody.includes("<table") ||
+          displayBody.includes("<body") ||
+          displayBody.includes("<p")
+        );
+        if (isHtmlBody) {
+          displayBody = stripHtml(displayBody);
+        }
+
+        // Cleanup quoted replies pour les inbounds
+        if (isInbound) {
+          displayBody = displayBody
+            .replace(/^(>+\s*.*\n?)+/gm, "")
+            .replace(/On .{1,200} wrote:[\s\S]*$/i, "")
+            .replace(/Le .{1,200} a [eé]crit\s*:[\s\S]*$/i, "")
+            .replace(/-{2,}.*Original Message.*-{2,}[\s\S]*$/i, "")
+            .replace(/_{3,}[\s\S]*$/m, "")
+            .trim();
         }
         if (!displayBody.trim()) {
           displayBody = "(Message vide)";
@@ -320,37 +362,65 @@ function HistoryTab({ lead }: { lead: any }) {
 
         return (
           <div key={idx} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0">
-            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", iconBg)}>
+            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", msgIconBg)}>
               <MsgIcon size={16} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
-                <p className="text-sm font-medium text-gray-900 min-w-0 break-words">
-                  {channelLabel} {dirLabel}{isEmail && parsed.subject ? " : " + parsed.subject : ""}
-                </p>
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <p className="text-sm font-medium text-gray-700">
+                    {channelLabel} {dirLabel}
+                  </p>
+                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0",
+                    msg.status === "DELIVERED" || msg.status === "READ" ? "bg-emerald-100 text-emerald-700" :
+                    msg.status === "FAILED" ? "bg-red-100 text-red-600" :
+                    "bg-gray-100 text-gray-500"
+                  )}>
+                    {msg.status === "READ" ? "Lu" : msg.status === "DELIVERED" ? "Reçu" : msg.status === "SENT" ? "Envoyé" : msg.status === "FAILED" ? "Échoué" : msg.status}
+                  </span>
+                </div>
                 <span className="text-xs text-gray-400 shrink-0">{date}</span>
               </div>
-              <p className="text-xs text-gray-600 line-clamp-6 whitespace-pre-wrap break-words">{displayBody.substring(0, 600)}</p>
+              {parsedContent.subject && (
+                <p className="text-xs font-semibold text-gray-800 mb-1 break-words">{parsedContent.subject}</p>
+              )}
+              <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed line-clamp-6 break-words">{displayBody}</p>
             </div>
           </div>
         );
       }
 
           // Activity
-          return (
-            <div key={idx} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0">
-              <div className="w-9 h-9 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center shrink-0">
-                <ActivityIcon size={16} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
-                  <p className="text-sm text-gray-700 min-w-0 break-words">{event.description}</p>
-                  <span className="text-xs text-gray-400 shrink-0">{date}</span>
-                </div>
-                {event.user && <p className="text-xs text-gray-400">Par {event.user.name}</p>}
-              </div>
+      const ActIcon = activityIcons[event.type] || ActivityIcon;
+      
+      // Couleurs spécifiques selon le type d'activité
+      let actBg = "bg-gray-50 text-gray-500";
+      if (event.type === "MESSAGE_SENT") {
+        actBg = "bg-blue-50 text-blue-600";
+      } else if (event.type === "MESSAGE_RECEIVED") {
+        actBg = "bg-emerald-50 text-emerald-600";
+      } else if (event.type === "CALL_LOGGED") {
+        actBg = "bg-violet-50 text-violet-600";
+      } else if (event.type === "LEAD_STAGE_CHANGED") {
+        actBg = "bg-amber-50 text-amber-600";
+      } else if (event.type === "DOCUMENT_UPLOADED") {
+        actBg = "bg-orange-50 text-orange-600";
+      }
+      
+      return (
+        <div key={idx} className="flex gap-3 pb-4 border-b border-gray-100 last:border-0">
+          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", actBg)}>
+            <ActIcon size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+              <p className="text-sm text-gray-700 min-w-0 break-words">{event.description}</p>
+              <span className="text-xs text-gray-400 shrink-0">{date}</span>
             </div>
-          );
+            {event.user && <p className="text-xs text-gray-400">Par {event.user.name}</p>}
+          </div>
+        </div>
+      );
         })}
       </div>
     </div>

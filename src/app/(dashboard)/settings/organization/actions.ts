@@ -17,12 +17,28 @@ export async function getOrganization() {
         orderBy: { name: "asc" },
       },
       programs: {
-        select: { id: true, name: true, code: true, level: true, isActive: true, tuitionAmount: true, currency: true },
+        select: { 
+          id: true, 
+          name: true, 
+          code: true, 
+          level: true, 
+          isActive: true, 
+          tuitionAmount: true, 
+          currency: true,
+          formationType: true,
+          pipelineId: true,
+        },
         orderBy: { name: "asc" },
       },
       academicYears: {
         select: { id: true, label: true, isCurrent: true, startDate: true, endDate: true },
         orderBy: { startDate: "desc" },
+      },
+      pipelines: {
+        select: { 
+          id: true, name: true, formationType: true, isDefault: true 
+        },
+        orderBy: [{ isDefault: "desc" }, { order: "asc" }],
       },
       _count: {
         select: { users: true, leads: true, students: true, campuses: true, programs: true },
@@ -131,32 +147,52 @@ export async function deleteCampus(campusId: string) {
 
 // ─── Program CRUD ───
 export async function createProgram(data: {
-  name: string; code?: string; level: string; tuitionAmount?: number; currency?: string; campusId?: string; durationMonths?: number;
+  name: string; 
+  code?: string; 
+  level: string; 
+  tuitionAmount?: number; 
+  currency?: string; 
+  campusId?: string; 
+  durationMonths?: number;
+  formationType?: "INITIAL" | "CONTINUE" | "BOTH";
+   pipelineId?: string;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
 
   await prisma.program.create({
-    data: {
-      name: data.name.trim(),
-      code: data.code?.trim() || undefined,
-      level: data.level as any,
-      tuitionAmount: data.tuitionAmount || 0,
-      currency: data.currency || "XOF",
-      durationMonths: data.durationMonths || 12,
-      isActive: true,
-      campus: { connect: { id: data.campusId } },
-      organization: { connect: { id: session.user.organizationId } },
-    },
-  });
+  data: {
+    name: data.name.trim(),
+    code: data.code?.trim() || undefined,
+    level: data.level as any,
+    tuitionAmount: data.tuitionAmount || 0,
+    currency: data.currency || "XOF",
+    durationMonths: data.durationMonths || 12,
+    formationType: data.formationType || "INITIAL",
+    isActive: true,
+    campus: { connect: { id: data.campusId } },
+    organization: { connect: { id: session.user.organizationId } },
+    pipeline: data.pipelineId 
+      ? { connect: { id: data.pipelineId } } 
+      : undefined,
+  },
+});
 
   revalidatePath("/settings/organization");
   return { success: true };
 }
 
 export async function updateProgram(programId: string, data: {
-  name?: string; code?: string; level?: string; tuitionAmount?: number; currency?: string; isActive?: boolean; durationMonths?: number;
+  name?: string; 
+  code?: string; 
+  level?: string; 
+  tuitionAmount?: number; 
+  currency?: string; 
+  isActive?: boolean; 
+  durationMonths?: number;
+  formationType?: "INITIAL" | "CONTINUE" | "BOTH";
+  pipelineId?: string;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -170,6 +206,8 @@ export async function updateProgram(programId: string, data: {
   if (data.currency !== undefined) updateData.currency = data.currency;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.durationMonths !== undefined) updateData.durationMonths = data.durationMonths;
+  if (data.formationType !== undefined) updateData.formationType = data.formationType;
+  if (data.pipelineId !== undefined) updateData.pipelineId = data.pipelineId || null;
 
   await prisma.program.update({ where: { id: programId }, data: updateData });
 

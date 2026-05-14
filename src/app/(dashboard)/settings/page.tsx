@@ -21,7 +21,7 @@ export const metadata: Metadata = { title: "Paramètres" };
 const settingsMenu = [
   { label: "Organisation", description: "Nom, logo, paramètres généraux", icon: Building2, href: "/settings/organization" },
   { label: "Équipe", description: "Utilisateurs, rôles et permissions", icon: Users, href: "/settings/users" },
-  { label: "Pipeline", description: "Étapes du pipeline de recrutement", icon: Settings, href: "/settings/pipeline" },
+  { label: "Pipeline", description: "Étapes du pipeline de recrutement", icon: Settings, href: "/settings/pipelines" },
   { label: "Champs personnalisés", description: "Champs customs captés depuis les formulaires", icon: SlidersHorizontal, href: "/settings/custom-fields" },
   { label: "Propriétés", description: "Vue d'ensemble de tous les champs collectés", icon: Database, href: "/settings/properties" },
   { label: "Intégrations", description: "API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },

@@ -11,7 +11,7 @@ export async function getLeadDetail(leadId: string) {
     where: { id: leadId },
     include: {
       assignedTo: { select: { id: true, name: true, avatar: true, email: true } },
-      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true } },
+      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true, formationType: true } },
       campus: { select: { id: true, name: true, city: true } },
       campaign: { select: { id: true, name: true, type: true } },
       stage: { select: { id: true, name: true, color: true, order: true } },

@@ -14,7 +14,7 @@ import {
   ChevronDown, ChevronUp, Clock, ArrowRight, Loader2, MessageSquare,
   Megaphone, Pencil, Trash2, Check, XCircle, ListTodo, Plus,
   StickyNote, Paperclip, Bot, Link2, ExternalLink, CalendarDays,
-  PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle,
+  PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle, Briefcase,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { ComposeEmail } from "@/components/messaging/compose-email";
@@ -497,6 +497,17 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
           <InfoRow icon={GraduationCap} label="Filière" value={lead.program.name} />
           {lead.program.code && <InfoRow icon={Tag} label="Code" value={lead.program.code} />}
           <InfoRow icon={Tag} label="Niveau" value={lead.program.level} />
+          {lead.program.formationType && (
+            <InfoRow 
+              icon={Briefcase} 
+              label="Type" 
+              value={
+                lead.program.formationType === "INITIAL" ? "Formation Initiale (FI)" :
+                lead.program.formationType === "CONTINUE" ? "Formation Continue (FC)" :
+                "FI + FC"
+              }
+            />
+          )}
           <InfoRow icon={Tag} label="Frais de scolarité" value={formatCFA(lead.program.tuitionAmount)} />
         </Section>
       )}
