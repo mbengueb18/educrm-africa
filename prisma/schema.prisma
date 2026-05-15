@@ -54,6 +54,7 @@ model Organization {
   sessions  Session[]
   pageViews PageView[]
   whatsappIntegration   WhatsAppIntegration?
+  audiences       Audience[]
 
   @@map("organizations")
 }
@@ -93,6 +94,12 @@ enum FormationType {
   INITIAL    // Formation Initiale (FI) - étudiants après bac
   CONTINUE   // Formation Continue (FC) - professionnels
   BOTH       // Les deux
+}
+
+enum AudienceType {
+  STATIC      // liste figée gérée manuellement
+  DYNAMIC     // basée sur des règles
+  IMPORTED    // snapshot d'un import CSV
 }
 
   model Program {
@@ -173,7 +180,7 @@ model User {
   assignedLeads        Lead[]            @relation("AssignedLeads")
   activities           Activity[]
   sentMessages         Message[]         @relation("SentMessages")
-  emailCampaigns       EmailCampaign[]
+  emailCampaigns       EmailCampaign[]   @relation("EmailCampaigns")
   assignedTasks        Task[]            @relation("AssignedTasks")
   createdTasks         Task[]            @relation("CreatedTasks")
   calls                Call[]            @relation("UserCalls")
@@ -181,6 +188,8 @@ model User {
   createdAppointments  Appointment[]     @relation("CreatedAppointments")
   integrations         UserIntegration[]
   portalTokens LeadPortalToken[]
+  audiencesCreated     Audience[]       @relation("AudiencesCreated")
+  audienceMembersAdded AudienceMember[] @relation("AudienceMembersAdded")
 
   @@index([organizationId])
   @@index([email])
@@ -298,6 +307,7 @@ model Lead {
   sequenceExecutions SequenceExecution[]
   aiAnalysis  LeadAIAnalysis?
   visitors  Visitor[]
+  audienceMemberships  AudienceMember[]
 
   @@index([organizationId])
   @@index([pipelineId])
@@ -850,7 +860,7 @@ model EmailCampaign {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  createdBy    User?                    @relation(fields: [createdById], references: [id])
+  createdBy       User?            @relation("EmailCampaigns", fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   recipients   EmailCampaignRecipient[]
 
@@ -1321,4 +1331,54 @@ model WhatsAppIntegration {
 
   @@index([organizationId])
   @@map("whatsapp_integrations")
+}
+
+model Audience {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  type            AudienceType    @default(STATIC)
+  color           String?         // couleur d'affichage
+  
+  // Règles pour DYNAMIC (JSON FilterGroup)
+  // Format : { operator: "AND"|"OR", rules: [{ field, operator, value } | nestedGroup] }
+  rules           Json?
+  
+  // Metadata pour IMPORTED
+  importMetadata  Json?           // { filename, importedAt, importedRows, skippedRows }
+  
+  // Stats (mises à jour à chaque évaluation)
+  memberCount     Int             @default(0)
+  lastEvaluatedAt DateTime?       // dernière fois qu'on a compté pour DYNAMIC
+  
+  organizationId  String
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User             @relation("AudiencesCreated", fields: [createdById], references: [id])
+  members         AudienceMember[]
+  
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([type])
+  @@map("audiences")
+}
+
+model AudienceMember {
+  id          String   @id @default(cuid())
+  audienceId  String
+  leadId      String
+  addedAt     DateTime @default(now())
+  addedById   String?  // user qui a ajouté (null si auto via import)
+  
+  audience    Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  addedBy     User?    @relation("AudienceMembersAdded", fields: [addedById], references: [id])
+  
+  @@unique([audienceId, leadId])
+  @@index([audienceId])
+  @@index([leadId])
+  @@map("audience_members")
 }

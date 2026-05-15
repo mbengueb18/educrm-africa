@@ -75,13 +75,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          className="btn-primary py-2 px-3 text-xs"
-          onClick={function() { window.dispatchEvent(new CustomEvent("open-new-lead")); }}
-        >
-          <Plus size={16} />
-          <span className="hidden sm:inline">Nouveau lead</span>
-        </button>
+        
 
         {/* Notifications */}
         <div className="relative">

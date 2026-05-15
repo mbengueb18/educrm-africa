@@ -5,9 +5,10 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   X, Upload, FileSpreadsheet, ArrowRight, ArrowLeft,
-  Check, AlertCircle, Loader2, Zap, Eye,
+  Check, AlertCircle, Loader2, Zap, Eye, Users,
 } from "lucide-react";
 import { importLeadsFromCSV } from "@/app/(dashboard)/pipeline/actions";
+import { createAudienceFromImport } from "@/app/(dashboard)/audiences/actions";
 
 interface ImportCSVModalProps {
   open: boolean;
@@ -92,7 +93,15 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   var [columns, setColumns] = useState<CSVColumn[]>([]);
   var [dataRows, setDataRows] = useState<string[][]>([]);
   var [importing, setImporting] = useState(false);
-  var [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  var [result, setResult] = useState<{
+    created: number;
+    skipped: number;
+    errors: string[];
+    audienceId?: string;
+    audienceName?: string;
+  } | null>(null);
+  var [createAudience, setCreateAudience] = useState(false);
+  var [audienceName, setAudienceName] = useState("");
   var fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Step 1: File upload ───
@@ -100,6 +109,9 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
     var f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
+    // Pré-remplir le nom de l'audience à partir du nom du fichier (sans extension)
+    var fileNameWithoutExt = f.name.replace(/\.[^.]+$/, "");
+    setAudienceName("Import — " + fileNameWithoutExt);
     var reader = new FileReader();
     reader.onload = function(ev) {
       var text = ev.target?.result as string;
@@ -184,8 +196,31 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
         });
         return mapped;
       }).filter(function(r) { return r.firstName || r.lastName; });
-      var res = await importLeadsFromCSV(rows);
-      setResult(res);
+
+      var res: any = await importLeadsFromCSV(rows);
+
+      // Création optionnelle d'une audience à partir des leads importés
+      var audienceData: { audienceId?: string; audienceName?: string } = {};
+      if (createAudience && audienceName.trim() && res.createdLeadIds && res.createdLeadIds.length > 0) {
+        try {
+          var audience = await createAudienceFromImport(
+            audienceName.trim(),
+            res.createdLeadIds,
+            {
+              filename: file?.name || undefined,
+              importedRows: res.created,
+              skippedRows: res.skipped,
+            }
+          );
+          audienceData.audienceId = audience.id;
+          audienceData.audienceName = audience.name;
+        } catch (audErr: any) {
+          // L'erreur d'audience ne doit pas bloquer le succès de l'import
+          toast.error("Audience non créée : " + (audErr.message || "erreur"));
+        }
+      }
+
+      setResult({ ...res, ...audienceData });
     } catch (err: any) {
       setResult({ created: 0, skipped: 0, errors: [err.message || "Erreur import"] });
     }
@@ -194,6 +229,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
 
   var resetAndClose = function(imported?: boolean) {
     setStep(1); setFile(null); setRawLines([]); setColumns([]); setDataRows([]); setResult(null);
+    setCreateAudience(false); setAudienceName("");
     onClose(imported);
   };
 
@@ -419,6 +455,46 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 <div className="text-xs text-gray-500"><span className="font-medium text-gray-700">{dataRows.length}</span> leads avec <span className="font-medium text-gray-700">{mappedCount}</span> champs</div>
                 <div className="text-xs text-gray-400">Les doublons seront ignores automatiquement</div>
               </div>
+
+              {/* Option : créer une audience */}
+              <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-lg">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createAudience}
+                    onChange={(e) => setCreateAudience(e.target.checked)}
+                    className="rounded border-violet-300 mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-violet-600" />
+                      <p className="text-sm font-semibold text-violet-900">
+                        Créer une audience avec ces leads
+                      </p>
+                    </div>
+                    <p className="text-xs text-violet-700 mt-1">
+                      Les leads importés seront regroupés dans une audience statique réutilisable pour vos campagnes.
+                    </p>
+                    {createAudience && (
+                      <div className="mt-3">
+                        <label className="text-[10px] font-semibold text-violet-800 uppercase tracking-wider mb-1 block">
+                          Nom de l'audience
+                        </label>
+                        <input
+                          type="text"
+                          value={audienceName}
+                          onChange={(e) => setAudienceName(e.target.value)}
+                          placeholder="Ex: Import Salon Septembre 2025"
+                          className="input text-sm py-1.5 px-2 w-full bg-white border-violet-300"
+                        />
+                        <p className="text-[10px] text-violet-600 mt-1">
+                          {audienceName.trim() ? `L'audience "${audienceName.trim()}" sera créée` : "Un nom est requis pour créer l'audience"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
             </div>
           )}
 
@@ -447,6 +523,26 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                       <div className="text-xs text-gray-400">Ignores</div>
                     </div>
                   </div>
+
+                  {/* Bandeau audience créée */}
+                  {result.audienceId && result.audienceName && (
+                    <div className="mb-4 p-3 bg-violet-50 border border-violet-200 rounded-lg flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+                        <Users size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-xs font-semibold text-violet-900">Audience créée</p>
+                        <p className="text-sm font-bold text-violet-700 truncate">{result.audienceName}</p>
+                      </div>
+                      <a
+                        href={`/audiences/${result.audienceId}`}
+                        className="btn-secondary py-1.5 px-3 text-xs text-violet-700 border-violet-300 hover:bg-violet-100 shrink-0"
+                      >
+                        Voir
+                      </a>
+                    </div>
+                  )}
+
                   {result.errors.length > 0 && (
                     <div className="bg-red-50 rounded-lg p-3 text-left mb-4 max-h-32 overflow-y-auto">
                       <p className="text-xs font-medium text-red-700 mb-1">Erreurs :</p>

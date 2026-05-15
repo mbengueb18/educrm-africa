@@ -489,6 +489,7 @@ export async function importLeadsFromCSV(rows: {
   var created = 0;
   var skipped = 0;
   var errors: string[] = [];
+  var createdLeadIds: string[] = [];   // ← AJOUT
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
@@ -545,39 +546,40 @@ export async function importLeadsFromCSV(rows: {
     }
 
     try {
-  // Routing automatique pipeline + stage selon programId
-  var routing = await getLeadRouting(organizationId, programId);
-  if (!routing.stageId) {
-    errors.push("Ligne " + (i + 2) + ": Aucune étape configurée");
-    skipped++;
-    continue;
-  }
+      // Routing automatique pipeline + stage selon programId
+      var routing = await getLeadRouting(organizationId, programId);
+      if (!routing.stageId) {
+        errors.push("Ligne " + (i + 2) + ": Aucune étape configurée");
+        skipped++;
+        continue;
+      }
 
-  await prisma.lead.create({
-    data: {
-      firstName: row.firstName.trim(),
-      lastName: row.lastName.trim(),
-      phone: row.phone?.trim() || "N/A",
-      email: row.email?.trim() || null,
-      whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
-      city: row.city?.trim() || null,
-      source: source as any,
-      sourceDetail: row.sourceDetail?.trim() || "Import CSV",
-      stageId: routing.stageId,
-      pipelineId: routing.pipelineId,
-      programId,
-      organizationId,
-    },
-  });
-  created++;
-} catch (err: any) {
-  errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
-  skipped++;
-}
+      var newLead = await prisma.lead.create({         // ← MODIF : capture du résultat
+        data: {
+          firstName: row.firstName.trim(),
+          lastName: row.lastName.trim(),
+          phone: row.phone?.trim() || "N/A",
+          email: row.email?.trim() || null,
+          whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
+          city: row.city?.trim() || null,
+          source: source as any,
+          sourceDetail: row.sourceDetail?.trim() || "Import CSV",
+          stageId: routing.stageId,
+          pipelineId: routing.pipelineId,
+          programId,
+          organizationId,
+        },
+      });
+      createdLeadIds.push(newLead.id);                 // ← AJOUT
+      created++;
+    } catch (err: any) {
+      errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
+      skipped++;
+    }
   }
 
   revalidatePath("/pipeline");
-  return { created, skipped, errors, total: rows.length };
+  return { created, skipped, errors, total: rows.length, createdLeadIds };  // ← MODIF
 }
 
 // ─── Export leads as CSV string ───

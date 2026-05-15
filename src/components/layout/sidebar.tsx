@@ -19,6 +19,7 @@ import {
   Phone,
   CalendarDays,
   Zap,
+  Users,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
@@ -26,7 +27,7 @@ import type { Permission } from "@/lib/permissions";
 
 interface NavItem {
   label: string;
-  href: string;
+  href: string;   
   icon: typeof LayoutDashboard;
   badge?: string;
   permission: Permission;
@@ -43,6 +44,12 @@ const navItems: NavItem[] = [
     label: "Pipeline",
     href: "/pipeline",
     icon: Kanban,
+    permission: "leads:view" as Permission,
+  },
+  {
+    label: "Audiences",
+    href: "/audiences",
+    icon: Users,
     permission: "leads:view" as Permission,
   },
   {
@@ -63,12 +70,12 @@ const navItems: NavItem[] = [
     icon: CalendarDays,
     permission: "appointments:view" as Permission,
   },
-  {
+  /* {
     label: "Calendrier",
     href: "/calendar",
     icon: CalendarDays,
     permission: "appointments:view" as Permission,
-  },
+  },*/
   {
     label: "Inbox",
     href: "/inbox",
@@ -87,12 +94,12 @@ const navItems: NavItem[] = [
     icon: GraduationCap,
     permission: "students:view" as Permission,
   },
-  {
+  /* {
     label: "Paiements",
     href: "/payments",
     icon: CreditCard,
     permission: "payments:view" as Permission,
-  },
+  },*/
   {
     label: "Workflows",
     href: "/workflows",
