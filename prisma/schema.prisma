@@ -1,5 +1,5 @@
 // ============================================
-// EduCRM Africa — Prisma Schema
+// TalibCRM — Prisma Schema
 // Stack: Next.js 15 + Prisma 6 + PostgreSQL
 // Architecture: Multi-tenant (shared DB, shared schema)
 // ============================================

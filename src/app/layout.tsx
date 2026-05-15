@@ -17,8 +17,8 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "EduCRM Africa",
-    template: "%s | EduCRM Africa",
+    default: "TalibCRM",
+    template: "%s | TalibCRM",
   },
   description:
     "CRM pour les écoles de formation supérieure privées en Afrique subsaharienne",

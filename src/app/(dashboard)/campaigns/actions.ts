@@ -424,7 +424,7 @@ function formatCampaignHtml(body: string, subject: string, senderName: string): 
     '<h1 style="margin:0;color:white;font-size:18px;font-weight:600;">' + subject + "</h1></div>" +
     '<div style="padding:32px;">' + paragraphs + "</div>" +
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-    '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via EduCRM Africa</p>" +
+    '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via TalibCRM</p>" +
     "</div></div></body></html>";
 }
 
@@ -486,7 +486,7 @@ function blocksToEmailHtml(blocks: any[], lead: { firstName: string; lastName: s
     '<div style="max-width:580px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
     '<div style="padding:32px;">' + content + "</div>" +
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-    '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via EduCRM Africa</p>' +
+    '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via TalibCRM</p>' +
     "</div></div></body></html>";
 }
 

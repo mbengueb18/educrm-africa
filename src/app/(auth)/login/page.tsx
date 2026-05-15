@@ -96,7 +96,7 @@ function LoginForm() {
 
           {/* Footer */}
           <p className="text-sm text-brand-400">
-            © 2026 EduCRM Africa — Tous droits réservés
+            © 2026 TalibCRM — Tous droits réservés
           </p>
         </div>
       </div>

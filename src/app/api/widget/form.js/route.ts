@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
           '<button type="submit" class="ecrm-btn">' + (L.submit[CONFIG.formType] || L.submit.contact) + '</button>' +
         '</form>' +
       '</div>' +
-      '<div class="ecrm-powered">Propulsé par <a href="https://educrm.africa" target="_blank">EduCRM Africa</a></div>' +
+      '<div class="ecrm-powered">Propulsé par <a href="https://educrm.africa" target="_blank">TalibCRM</a></div>' +
     '</div>';
 
     // ─── Form submit handler ───

@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { SignupForm } from "./signup-form";
 
 export var metadata: Metadata = {
-  title: "Créer un compte — EduCRM Africa",
+  title: "Créer un compte — TalibCRM",
 };
 
 export default async function SignupPage() {

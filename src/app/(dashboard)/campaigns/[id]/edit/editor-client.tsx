@@ -295,7 +295,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                   </div>
                   <div className="p-8" dangerouslySetInnerHTML={{ __html: blocksToPreviewHtml(blocks) }} />
                   <div className="px-8 py-4 bg-gray-50 border-t border-gray-100 text-center">
-                    <p className="text-xs text-gray-400">Envoye via EduCRM Africa</p>
+                    <p className="text-xs text-gray-400">Envoye via TalibCRM</p>
                   </div>
                 </div>
               ) : (

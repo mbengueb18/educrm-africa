@@ -462,7 +462,7 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
                         style={{ backgroundColor: "#1B4F72" }} disabled>
                   Envoyer ma demande
                 </button>
-                <p className="text-center text-[10px] text-gray-400 mt-4">Propulsé par EduCRM Africa</p>
+                <p className="text-center text-[10px] text-gray-400 mt-4">Propulsé par TalibCRM</p>
               </div>
             </div>
           </div>

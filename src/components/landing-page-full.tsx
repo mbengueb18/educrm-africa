@@ -569,7 +569,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div style={{ borderTop: "1px solid #ffffff10", paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ fontSize: 12 }}>© 2026 EduCRM Africa. Tous droits réservés.</p>
+            <p style={{ fontSize: 12 }}>© 2026 TalibCRM. Tous droits réservés.</p>
             <div style={{ display: "flex", gap: 24 }}>
               <a href="#" style={{ textDecoration: "none", color: "#ffffff50", fontSize: 12 }}>Confidentialité</a>
               <a href="#" style={{ textDecoration: "none", color: "#ffffff50", fontSize: 12 }}>CGU</a>
