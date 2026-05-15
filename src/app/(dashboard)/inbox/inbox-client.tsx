@@ -1,25 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
-import { ComposeEmail } from "@/components/messaging/compose-email";
 import {
-  Search, Send, Mail, MessageCircle, MessageSquare, Phone,
-  Plus, ChevronRight, ChevronLeft, Inbox as InboxIcon, Reply, Paperclip, Download, Bot,
+  Search, Mail, MessageCircle, MessageSquare, Phone, Bot,
+  Inbox as InboxIcon,
 } from "lucide-react";
 
 interface Conversation {
   lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string };
-  messages: {
-    id: string;
-    channel: string;
-    direction: string;
-    content: string;
-    status: string;
-    sentAt: Date;
-    sentBy: { id: string; name: string } | null;
-    attachments?: { id: string; filename: string; contentType: string | null; size: number }[];
-  }[];
+  messages: any[];
   lastMessage: {
     id: string;
     channel: string;
@@ -51,27 +42,57 @@ const CHANNEL_COLORS: Record<string, string> = {
   CHATBOT: "text-violet-500",
 };
 
+// Helper pour stripper le HTML
+function stripHtmlSimple(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&[a-z]+;/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/^\s+|\s+$/g, "")
+    .trim();
+}
+
+function getMessagePreview(content: string): string {
+  var body = content;
+  try {
+    var parsed = JSON.parse(content);
+    body = parsed.subject || parsed.body || content;
+  } catch {
+    // pas du JSON
+  }
+  
+  var trimmed = body.trim();
+  if (trimmed.startsWith("<")) {
+    body = stripHtmlSimple(body);
+  }
+  
+  return body.slice(0, 80);
+}
+
 export function InboxClient({ conversations: initialConversations }: InboxClientProps) {
   const [conversations, setConversations] = useState(initialConversations);
+  const [search, setSearch] = useState("");
+  const [channelFilter, setChannelFilter] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setConversations(initialConversations);
   }, [initialConversations]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [channelFilter, setChannelFilter] = useState<string | null>(null);
-  const [composing, setComposing] = useState(false);
-  const [replySubject, setReplySubject] = useState("");
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Scroll to top when compose form opens
-  useEffect(() => {
-    if (composing && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = 0;
-    }
-  }, [composing]);
-
-  const selected = conversations.find((c) => c.lead.id === selectedId);
 
   const filtered = conversations.filter((c) => {
     if (search) {
@@ -80,293 +101,111 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
       if (!name.includes(q) && !(c.lead.email || "").toLowerCase().includes(q)) return false;
     }
     if (channelFilter) {
-      if (!c.messages.some((m) => m.channel === channelFilter)) return false;
+      if (!c.messages.some((m: any) => m.channel === channelFilter)) return false;
     }
     return true;
   });
 
-  const getMessagePreview = (msg: { content: string; channel: string }) => {
-    try {
-      var parsed = JSON.parse(msg.content);
-      return parsed.subject || parsed.body?.slice(0, 60) || msg.content.slice(0, 60);
-    } catch {
-      return msg.content.slice(0, 60);
-    }
-  };
-
-  const formatMessageContent = (content: string) => {
-    try {
-      var parsed = JSON.parse(content);
-      return { subject: parsed.subject, body: parsed.body };
-    } catch {
-      return { subject: null, body: content };
-    }
-  };
-
   return (
     <div>
-      {/* Page header — compact on mobile */}
-      <div className="flex items-center justify-between mb-3 sm:mb-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Inbox</h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 sm:mt-1">
-            {conversations.length} conversation{conversations.length > 1 ? "s" : ""}
-          </p>
-        </div>
+      {/* Header */}
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Inbox</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {conversations.length} conversation{conversations.length > 1 ? "s" : ""}
+        </p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden h-[calc(100vh-180px)] md:h-[calc(100vh-220px)]">
-        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] lg:grid-cols-[340px_1fr] h-full overflow-hidden">
-
-          {/* ─── Conversation list ─── */}
-          {/* Hidden on mobile when a conversation is selected */}
-          <div className={cn(
-            "border-r border-gray-200 flex flex-col",
-            selectedId ? "hidden md:flex" : "flex"
-          )}>
-            <div className="p-3 border-b border-gray-100">
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher..."
-                  className="input pl-9 text-sm py-2"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Channel tabs — horizontal scroll on small width */}
-            <div className="flex border-b border-gray-100 overflow-x-auto no-scrollbar">
-              {[
-                { key: null, label: "Tous" },
-                { key: "EMAIL", label: "Email" },
-                { key: "WHATSAPP", label: "WhatsApp" },
-                { key: "SMS", label: "SMS" },
-                { key: "CHATBOT", label: "Chatbot" },
-              ].map((tab) => (
-                <button
-                  key={tab.key || "all"}
-                  onClick={() => setChannelFilter(tab.key)}
-                  className={cn(
-                    "px-3 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 flex-1",
-                    channelFilter === tab.key
-                      ? "text-brand-600 border-b-2 border-brand-600"
-                      : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Conversation items */}
-            <div className="flex-1 overflow-y-auto">
-              {filtered.length > 0 ? (
-                filtered.map((conv) => {
-                  var ChannelIcon = CHANNEL_ICONS[conv.lastMessage.channel] || Mail;
-                  var isSelected = conv.lead.id === selectedId;
-                  return (
-                    <button
-                      key={conv.lead.id}
-                      onClick={() => { setSelectedId(conv.lead.id); setComposing(false); setReplySubject(""); }}
-                      className={cn(
-                        "w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
-                        isSelected && "bg-brand-50/50 border-l-2 border-l-brand-500"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
-                          {getInitials(conv.lead.firstName + " " + conv.lead.lastName)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                            <p className="text-sm font-semibold text-gray-900 truncate">
-                              {conv.lead.firstName} {conv.lead.lastName}
-                            </p>
-                            <span className="text-[10px] text-gray-400 shrink-0 ml-2 whitespace-nowrap">
-                              {formatRelative(conv.lastMessage.sentAt)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <ChannelIcon size={12} className={cn("shrink-0", CHANNEL_COLORS[conv.lastMessage.channel] || "text-gray-400")} />
-                            <p className="text-xs text-gray-500 truncate">
-                              {conv.lastMessage.direction === "OUTBOUND" ? "Vous: " : ""}
-                              {getMessagePreview(conv.lastMessage)}
-                            </p>
-                          </div>
-                        </div>
-                        {conv.unreadCount > 0 && (
-                          <span className="w-5 h-5 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
-                            {conv.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                  <InboxIcon size={32} className="text-gray-300 mb-3" />
-                  <p className="text-sm text-gray-400">
-                    {search ? "Aucun resultat" : "Aucune conversation"}
-                  </p>
-                </div>
-              )}
-            </div>
+      {/* Search & filters */}
+      <div className="bg-white rounded-xl border border-gray-200 mb-4">
+        <div className="p-3 border-b border-gray-100">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher une conversation..."
+              className="input pl-9 text-sm py-2 w-full"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+        </div>
 
-          {/* ─── Message thread ─── */}
-          {selected ? (
-            <div className={cn(
-              "flex-col h-full overflow-hidden",
-              // Show on mobile only when selected, always show on desktop
-              selectedId ? "flex" : "hidden md:flex"
-            )}>
-              {/* Thread header */}
-              <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100 shrink-0 gap-2">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                  {/* Back button — mobile only */}
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="md:hidden p-1.5 -ml-1.5 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
-                    aria-label="Retour à la liste"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-100 text-brand-700 text-xs sm:text-sm font-bold flex items-center justify-center shrink-0">
-                    {getInitials(selected.lead.firstName + " " + selected.lead.lastName)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {selected.lead.firstName} {selected.lead.lastName}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {selected.lead.email || selected.lead.phone}
-                    </p>
-                  </div>
-                </div>
+        <div className="flex border-b border-gray-100 overflow-x-auto no-scrollbar">
+          {[
+            { key: null, label: "Tous" },
+            { key: "EMAIL", label: "Email" },
+            { key: "WHATSAPP", label: "WhatsApp" },
+            { key: "SMS", label: "SMS" },
+            { key: "CHATBOT", label: "Chatbot" },
+          ].map((tab) => (
+            <button
+              key={tab.key || "all"}
+              onClick={() => setChannelFilter(tab.key)}
+              className={cn(
+                "px-4 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0",
+                channelFilter === tab.key
+                  ? "text-brand-600 border-b-2 border-brand-600"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Conversation list */}
+        <div className="divide-y divide-gray-50">
+          {filtered.length > 0 ? (
+            filtered.map((conv) => {
+              var ChannelIcon = CHANNEL_ICONS[conv.lastMessage.channel] || Mail;
+              return (
                 <button
-                  onClick={() => { setComposing(true); setReplySubject(""); }}
-                  className="btn-primary py-1.5 text-xs shrink-0"
-                  aria-label="Envoyer un email"
+                  key={conv.lead.id}
+                  onClick={() => router.push("/inbox/" + conv.lead.id)}
+                  className="w-full text-left px-4 sm:px-5 py-3.5 hover:bg-gray-50 transition-colors"
                 >
-                  <Send size={13} />
-                  <span className="hidden sm:inline">Envoyer un email</span>
-                </button>
-              </div>
-
-              {/* Messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 min-h-0">
-                {composing && (
-                  <div className="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-200 mb-4 animate-scale-in">
-                    <ComposeEmail
-                      leadId={selected.lead.id}
-                      leadName={selected.lead.firstName + " " + selected.lead.lastName}
-                      leadEmail={selected.lead.email}
-                      initialSubject={replySubject}
-                      compact
-                      onSent={() => { setComposing(false); setReplySubject(""); }}
-                      onClose={() => { setComposing(false); setReplySubject(""); }}
-                    />
-                  </div>
-                )}
-
-                {[...selected.messages].reverse().map((msg) => {
-                  var isOutbound = msg.direction === "OUTBOUND";
-                  var ChannelIcon = CHANNEL_ICONS[msg.channel] || Mail;
-                  var parsed = formatMessageContent(msg.content);
-
-                  return (
-                    <div key={msg.id} className={cn("flex gap-2 sm:gap-3", isOutbound && "flex-row-reverse")}>
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                        isOutbound ? "bg-brand-100" : "bg-gray-100"
-                      )}>
-                        {isOutbound && msg.sentBy ? (
-                          <span className="text-[10px] font-bold text-brand-700">
-                            {getInitials(msg.sentBy.name)}
-                          </span>
-                        ) : (
-                          <ChannelIcon size={14} className={CHANNEL_COLORS[msg.channel] || "text-gray-500"} />
-                        )}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 text-sm font-bold flex items-center justify-center shrink-0">
+                      {getInitials(conv.lead.firstName + " " + conv.lead.lastName)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                        <p className={cn(
+                          "text-sm truncate",
+                          conv.unreadCount > 0 ? "font-bold text-gray-900" : "font-semibold text-gray-700"
+                        )}>
+                          {conv.lead.firstName} {conv.lead.lastName}
+                        </p>
+                        <span className="text-[10px] text-gray-400 shrink-0 ml-2 whitespace-nowrap">
+                          {formatRelative(conv.lastMessage.sentAt)}
+                        </span>
                       </div>
-                      <div className={cn(
-                        "max-w-[85%] sm:max-w-[70%] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 group min-w-0",
-                        isOutbound ? "bg-brand-50" : "bg-gray-100"
-                      )}>
-                        {parsed.subject && (
-                          <p className="text-xs font-semibold text-gray-700 mb-1 break-words">{parsed.subject}</p>
-                        )}
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{parsed.body}</p>
-                        {msg.attachments && msg.attachments.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {msg.attachments.map(function(att) {
-                              return (
-                                <a
-                                  key={att.id}
-                                  href={"/api/attachments/" + att.id}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-2 py-1.5 bg-white/60 hover:bg-white border border-gray-200 rounded-lg text-xs text-gray-700 hover:text-brand-600 transition-colors"
-                                >
-                                  <Paperclip size={12} className="text-gray-400 shrink-0" />
-                                  <span className="truncate flex-1">{att.filename}</span>
-                                  {att.size > 0 && (
-                                    <span className="text-[10px] text-gray-400 shrink-0">
-                                      {att.size < 1024 * 1024 ? Math.round(att.size / 1024) + " Ko" : (att.size / (1024 * 1024)).toFixed(1) + " Mo"}
-                                    </span>
-                                  )}
-                                  <Download size={11} className="text-gray-400 shrink-0" />
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <ChannelIcon size={11} className={CHANNEL_COLORS[msg.channel] || "text-gray-400"} />
-                            <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatRelative(msg.sentAt)}</span>
-                            {isOutbound && msg.sentBy && (
-                              <span className="text-[10px] text-gray-400 truncate max-w-[100px]">par {msg.sentBy.name}</span>
-                            )}
-                            <span className={cn("text-[10px] font-medium whitespace-nowrap",
-                              msg.status === "SENT" || msg.status === "DELIVERED" ? "text-emerald-500" :
-                              msg.status === "FAILED" ? "text-red-500" : "text-gray-400"
-                            )}>
-                              {msg.status === "SENT" ? "Envoyé" : msg.status === "DELIVERED" ? "Reçu" :
-                               msg.status === "FAILED" ? "Échoué" : msg.status === "QUEUED" ? "En attente" : msg.status}
-                            </span>
-                          </div>
-                          {!isOutbound && msg.channel === "EMAIL" && (
-                            <button
-                              onClick={() => {
-                                var subj = parsed.subject || "";
-                                if (!subj.toLowerCase().startsWith("re:")) subj = "Re: " + subj;
-                                setReplySubject(subj);
-                                setComposing(true);
-                              }}
-                              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] text-brand-600 hover:text-brand-700 font-medium whitespace-nowrap"
-                            >
-                              <Reply size={11} /> Répondre
-                            </button>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-1.5">
+                        <ChannelIcon size={12} className={cn("shrink-0", CHANNEL_COLORS[conv.lastMessage.channel] || "text-gray-400")} />
+                        <p className={cn(
+                          "text-xs truncate",
+                          conv.unreadCount > 0 ? "text-gray-800 font-medium" : "text-gray-500"
+                        )}>
+                          {conv.lastMessage.direction === "OUTBOUND" ? "Vous: " : ""}
+                          {getMessagePreview(conv.lastMessage.content)}
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                    {conv.unreadCount > 0 && (
+                      <span className="min-w-[20px] h-5 px-1.5 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                        {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })
           ) : (
-            <div className="hidden md:flex flex-col items-center justify-center text-center p-8 bg-gray-50/50 h-full">
-              <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mb-4">
-                <Send size={36} className="text-brand-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">Inbox</h3>
-              <p className="text-sm text-gray-500 max-w-sm">
-                Sélectionnez une conversation ou envoyez un email depuis la fiche d'un lead.
+            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+              <InboxIcon size={32} className="text-gray-300 mb-3" />
+              <p className="text-sm text-gray-400">
+                {search ? "Aucun résultat" : "Aucune conversation"}
               </p>
             </div>
           )}

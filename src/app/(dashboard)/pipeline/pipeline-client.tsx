@@ -54,6 +54,7 @@ export function PipelineClient({
   var [importOpen, setImportOpen] = useState(false);
   var [exportOpen, setExportOpen] = useState(false);
   var [filterMine, setFilterMine] = useState(false);
+  var [filterToQualify, setFilterToQualify] = useState(false);
   var [showFilters, setShowFilters] = useState(false);
   var [duplicatesOpen, setDuplicatesOpen] = useState(false);
   var [duplicates, setDuplicates] = useState<any[]>([]);
@@ -97,9 +98,15 @@ export function PipelineClient({
 
    // Filter leads
   var filteredLeads = leads.filter(function(l: any) {
-    if (filterMine) return l.assignedToId === currentUserId;
+    if (filterMine && l.assignedToId !== currentUserId) return false;
+    if (filterToQualify && l.programId) return false;
     return true;
   });
+
+  // Compteur leads à qualifier (sans filière)
+  var leadsToQualifyCount = leads.filter(function(l: any) { 
+    return !l.programId; 
+  }).length;
 
   var router = useRouter();
 
@@ -221,6 +228,25 @@ export function PipelineClient({
             )}>
             <UserPlus size={13} />
             Mes leads
+          </button>
+
+          {/* À qualifier — toujours visible */}
+          <button onClick={function() { setFilterToQualify(!filterToQualify); }}
+            className={cn("btn-secondary py-1.5 text-xs",
+              filterToQualify && "bg-amber-100 text-amber-700 border-amber-200"
+            )}>
+            <AlertTriangle size={13} />
+            À qualifier
+            {leadsToQualifyCount > 0 && (
+              <span className={cn(
+                "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                filterToQualify 
+                  ? "bg-amber-200 text-amber-800" 
+                  : "bg-amber-100 text-amber-700"
+              )}>
+                {leadsToQualifyCount}
+              </span>
+            )}
           </button>
 
           {/* Doublons — desktop only */}
@@ -349,6 +375,35 @@ export function PipelineClient({
         </div>
       )}
 
+      {/* Bandeau d'aide quand filtre "À qualifier" actif */}
+      {filterToQualify && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 animate-scale-in">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+              <AlertTriangle size={16} className="text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                {leadsToQualifyCount === 0 
+                  ? "Aucun lead à qualifier" 
+                  : leadsToQualifyCount + " lead" + (leadsToQualifyCount > 1 ? "s" : "") + " à qualifier"}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Ces leads proviennent de WhatsApp ou de formulaires sans filière sélectionnée.
+                Assignez-leur une filière pour les router automatiquement vers le bon pipeline.
+              </p>
+            </div>
+            <button 
+              onClick={function() { setFilterToQualify(false); }}
+              className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-700 shrink-0"
+              title="Fermer le filtre"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Pipeline view */}
       {viewMode === "kanban" ? (
         <KanbanBoard
@@ -384,6 +439,8 @@ export function PipelineClient({
         onClose={function() { setSelectedLeadId(null); }}
         stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
         users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+        programs={programs}
+        campuses={campuses}
       />
 
       <ImportCSVModal

@@ -219,3 +219,135 @@ export async function saveEmailTemplate(name: string, subject: string, body: str
 
   return template;
 }
+
+// ─── Get WhatsApp 24h window status for a lead ───
+export async function getWhatsAppWindowStatus(leadId: string): Promise<{
+  isOpen: boolean;
+  lastInboundAt: Date | null;
+  hoursRemaining: number;
+  hoursElapsed: number;
+}> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  // Récupère le dernier message INBOUND WhatsApp pour ce lead
+  const lastInbound = await prisma.message.findFirst({
+    where: {
+      leadId,
+      organizationId: session.user.organizationId,
+      channel: "WHATSAPP",
+      direction: "INBOUND",
+    },
+    orderBy: { sentAt: "desc" },
+    select: { sentAt: true },
+  });
+
+  if (!lastInbound) {
+    return { isOpen: false, lastInboundAt: null, hoursRemaining: 0, hoursElapsed: 0 };
+  }
+
+  const now = new Date();
+  const lastAt = new Date(lastInbound.sentAt);
+  const diffMs = now.getTime() - lastAt.getTime();
+  const hoursElapsed = diffMs / (1000 * 60 * 60);
+  const hoursRemaining = Math.max(0, 24 - hoursElapsed);
+  const isOpen = hoursElapsed < 24;
+
+  return {
+    isOpen,
+    lastInboundAt: lastAt,
+    hoursRemaining: Math.round(hoursRemaining * 10) / 10,
+    hoursElapsed: Math.round(hoursElapsed * 10) / 10,
+  };
+}
+
+// ─── Send WhatsApp text from inbox (uses existing whatsapp-actions logic) ───
+export async function sendWhatsAppFromInbox(leadId: string, text: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  // Réutilise la même logique que le slide-over
+  const { sendWhatsAppToLead } = await import("@/app/(dashboard)/leads/[leadId]/whatsapp-actions");
+  const result = await sendWhatsAppToLead({ leadId, text });
+
+  revalidatePath("/inbox");
+  return result;
+}
+
+// ─── Get full conversation for a single lead ───
+export async function getConversation(leadId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      whatsapp: true,
+      score: true,
+      pipelineId: true,
+      stage: { select: { id: true, name: true, color: true } },
+      pipeline: { select: { id: true, name: true } },
+      assignedTo: { select: { id: true, name: true } },
+      program: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!lead) throw new Error("Lead introuvable");
+
+  const messages = await prisma.message.findMany({
+    where: {
+      leadId,
+      organizationId: session.user.organizationId,
+    },
+    orderBy: { sentAt: "asc" },
+    include: {
+      sentBy: { select: { id: true, name: true } },
+      attachments: { select: { id: true, filename: true, contentType: true, size: true } },
+    },
+  });
+
+  return { lead, messages };
+}
+
+// ─── Marquer tous les messages INBOUND d'une conversation comme lus ───
+export async function markConversationAsRead(leadId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const result = await prisma.message.updateMany({
+    where: {
+      leadId,
+      organizationId: session.user.organizationId,
+      direction: "INBOUND",
+      status: { not: "READ" },
+    },
+    data: {
+      status: "READ",
+    },
+  });
+
+  revalidatePath("/inbox");
+  return { markedAsRead: result.count };
+}
+
+// ─── Compteur total de messages non lus (pour le badge sidebar) ───
+export async function getTotalUnreadCount(): Promise<number> {
+  const session = await auth();
+  if (!session?.user) return 0;
+
+  const count = await prisma.message.count({
+    where: {
+      organizationId: session.user.organizationId,
+      direction: "INBOUND",
+      status: { not: "READ" },
+      leadId: { not: null },
+    },
+  });
+
+  return count;
+}

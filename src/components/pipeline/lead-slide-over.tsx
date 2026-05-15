@@ -29,6 +29,8 @@ interface LeadSlideOverProps {
   onClose: () => void;
   stages: { id: string; name: string; color: string }[];
   users: { id: string; name: string }[];
+  programs: { id: string; name: string }[];
+  campuses: { id: string; name: string; city: string }[];
 }
 
 var sourceLabels: Record<string, string> = {
@@ -58,7 +60,7 @@ var activityIcons: Record<string, typeof Activity> = {
   DOCUMENT_UPLOADED: FileText,
 };
 
-export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverProps) {
+export function LeadSlideOver({ leadId, onClose, stages, users, programs, campuses }: LeadSlideOverProps) {
   var [lead, setLead] = useState<LeadDetail | null>(null);
   var [loading, setLoading] = useState(false);
   var [activeTab, setActiveTab] = useState<"info" | "history" | "notes">("info");
@@ -322,7 +324,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
 
             {/* Tab content */}
             <div className="flex-1 overflow-y-auto">
-              {activeTab === "info" && <InfoTab lead={lead} customFieldsConfig={customFieldsConfig} stages={stages} users={users} onLeadUpdate={function(updated) { setLead(updated); }} />}
+              {activeTab === "info" && <InfoTab lead={lead} customFieldsConfig={customFieldsConfig} stages={stages} users={users} programs={programs} campuses={campuses} onLeadUpdate={function(updated) { setLead(updated); }} />}
               {activeTab === "history" && <HistoryTab lead={lead} />}
               {activeTab === "notes" && <NotesTab lead={lead} onUpdate={function(updated) { setLead(updated); }} />}
             </div>
@@ -367,11 +369,13 @@ export function LeadSlideOver({ leadId, onClose, stages, users }: LeadSlideOverP
 }
 
 // ─── Info Tab with Edit Mode ───
-function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
+function InfoTab({ lead, customFieldsConfig, stages, users, programs, campuses, onLeadUpdate }: {
   lead: LeadDetail;
   customFieldsConfig: CustomFieldConfig[];
   stages: { id: string; name: string; color: string }[];
   users: { id: string; name: string }[];
+  programs: { id: string; name: string }[];
+  campuses: { id: string; name: string; city: string }[];
   onLeadUpdate: (lead: LeadDetail) => void;
 }) {
   var [editMode, setEditMode] = useState(false);
@@ -385,6 +389,8 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
     city: lead.city || "",
     source: lead.source as string,
     sourceDetail: lead.sourceDetail || "",
+    programId: lead.programId || "",
+    campusId: lead.campusId || "",
   });
 
   useEffect(function() {
@@ -397,6 +403,8 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       city: lead.city || "",
       source: lead.source as string,
       sourceDetail: lead.sourceDetail || "",
+      programId: lead.programId || "",
+      campusId: lead.campusId || "",
     });
     setEditMode(false);
   }, [lead.id]);
@@ -404,9 +412,34 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
   var handleSave = async function() {
     setSaving(true);
     try {
-      await updateLead(lead.id, editData);
-      onLeadUpdate({ ...lead, ...editData, email: editData.email || null, whatsapp: editData.whatsapp || null, city: editData.city || null, sourceDetail: editData.sourceDetail || null } as any);
-      toast.success("Lead mis à jour");
+      var oldProgramId = lead.programId || null;
+      var newProgramId = editData.programId || null;
+      var programChanged = oldProgramId !== newProgramId;
+
+      await updateLead(lead.id, {
+        ...editData,
+        programId: editData.programId || null,
+        campusId: editData.campusId || null,
+      });
+
+      // Si la filière a changé, on recharge complètement le lead (pipeline a peut-être changé)
+      if (programChanged) {
+        var refreshed = await getLeadDetail(lead.id);
+        onLeadUpdate(refreshed);
+        toast.success("Lead qualifié et déplacé vers le bon pipeline");
+      } else {
+        onLeadUpdate({ 
+          ...lead, 
+          ...editData, 
+          email: editData.email || null, 
+          whatsapp: editData.whatsapp || null, 
+          city: editData.city || null, 
+          sourceDetail: editData.sourceDetail || null,
+          programId: editData.programId || null,
+          campusId: editData.campusId || null,
+        } as any);
+        toast.success("Lead mis à jour");
+      }
       setEditMode(false);
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la mise à jour");
@@ -424,6 +457,8 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
       city: lead.city || "",
       source: lead.source as string,
       sourceDetail: lead.sourceDetail || "",
+      programId: lead.programId || "",
+      campusId: lead.campusId || "",
     });
     setEditMode(false);
   };
@@ -492,32 +527,84 @@ function InfoTab({ lead, customFieldsConfig, stages, users, onLeadUpdate }: {
         )}
       </Section>
 
-      {lead.program && (
-        <Section title="Formation souhaitée">
-          <InfoRow icon={GraduationCap} label="Filière" value={lead.program.name} />
-          {lead.program.code && <InfoRow icon={Tag} label="Code" value={lead.program.code} />}
-          <InfoRow icon={Tag} label="Niveau" value={lead.program.level} />
-          {lead.program.formationType && (
-            <InfoRow 
-              icon={Briefcase} 
-              label="Type" 
-              value={
-                lead.program.formationType === "INITIAL" ? "Formation Initiale (FI)" :
-                lead.program.formationType === "CONTINUE" ? "Formation Continue (FC)" :
-                "FI + FC"
-              }
-            />
-          )}
-          <InfoRow icon={Tag} label="Frais de scolarité" value={formatCFA(lead.program.tuitionAmount)} />
-        </Section>
-      )}
-
-      {lead.campus && (
-        <Section title="Campus">
-          <InfoRow icon={Building2} label="Campus" value={lead.campus.name} />
-          <InfoRow icon={MapPin} label="Ville" value={lead.campus.city} />
-        </Section>
-      )}
+      <Section title="Formation souhaitée">
+        {editMode ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Filière</label>
+              <select 
+                value={editData.programId} 
+                onChange={function(e) { setEditData({ ...editData, programId: e.target.value }); }}
+                className="input text-sm py-1.5 w-full"
+              >
+                <option value="">Non renseignée (à qualifier)</option>
+                {programs.map(function(p) { 
+                  return <option key={p.id} value={p.id}>{p.name}</option>; 
+                })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
+              <select 
+                value={editData.campusId} 
+                onChange={function(e) { setEditData({ ...editData, campusId: e.target.value }); }}
+                className="input text-sm py-1.5 w-full"
+              >
+                <option value="">Non renseigné</option>
+                {campuses.map(function(c) { 
+                  return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; 
+                })}
+              </select>
+            </div>
+            {!lead.programId && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2">
+                <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700">
+                  Ce lead est à qualifier. Assigner une filière le déplacera automatiquement vers le bon pipeline.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {lead.program ? (
+              <>
+                <InfoRow icon={GraduationCap} label="Filière" value={lead.program.name} />
+                {lead.program.code && <InfoRow icon={Tag} label="Code" value={lead.program.code} />}
+                <InfoRow icon={Tag} label="Niveau" value={lead.program.level} />
+                {lead.program.formationType && (
+                  <InfoRow 
+                    icon={Briefcase} 
+                    label="Type" 
+                    value={
+                      lead.program.formationType === "INITIAL" ? "Formation Initiale (FI)" :
+                      lead.program.formationType === "CONTINUE" ? "Formation Continue (FC)" :
+                      "FI + FC"
+                    }
+                  />
+                )}
+                <InfoRow icon={Tag} label="Frais de scolarité" value={formatCFA(lead.program.tuitionAmount)} />
+              </>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-amber-800">Lead à qualifier</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Aucune filière n'a été renseignée. Cliquez sur "Modifier" pour en assigner une.
+                  </p>
+                </div>
+              </div>
+            )}
+            {lead.campus && (
+              <>
+                <InfoRow icon={Building2} label="Campus" value={lead.campus.name} />
+                <InfoRow icon={MapPin} label="Ville campus" value={lead.campus.city} />
+              </>
+            )}
+          </>
+        )}
+      </Section>
 
       {allCustom.length > 0 && (
         <Section title="Informations complémentaires">

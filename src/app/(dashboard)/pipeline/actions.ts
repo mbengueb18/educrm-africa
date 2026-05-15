@@ -371,30 +371,55 @@ export async function updateLead(leadId: string, data: {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  var orgId = session.user.organizationId;
+
+  // Lit l'état actuel du lead pour comparer
+  var currentLead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: orgId },
+    select: { programId: true, pipelineId: true, stageId: true },
+  });
+  if (!currentLead) throw new Error("Lead introuvable");
+
+  var updateData: any = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    phone: data.phone,
+    email: data.email || null,
+    whatsapp: data.whatsapp,
+    city: data.city,
+    source: data.source as any,
+    sourceDetail: data.sourceDetail,
+    programId: data.programId,
+    campusId: data.campusId,
+    assignedToId: data.assignedToId,
+  };
+
+  // ─── Re-routing automatique si la filière change ───
+  var programChanged = data.programId !== undefined && data.programId !== currentLead.programId;
+  
+  if (programChanged) {
+    var { getLeadRouting } = await import("@/lib/pipeline-routing");
+    var routing = await getLeadRouting(orgId, data.programId || null);
+
+    // Si le pipeline cible est différent du pipeline actuel, on déplace le lead
+    if (routing.pipelineId && routing.pipelineId !== currentLead.pipelineId) {
+      updateData.pipelineId = routing.pipelineId;
+      updateData.stageId = routing.stageId;  // On le met à l'étape "Nouveau" du nouveau pipeline
+    }
+  }
+
   var lead = await prisma.lead.update({
     where: { id: leadId },
-    data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      phone: data.phone,
-      email: data.email || null,
-      whatsapp: data.whatsapp,
-      city: data.city,
-      source: data.source as any,
-      sourceDetail: data.sourceDetail,
-      programId: data.programId,
-      campusId: data.campusId,
-      assignedToId: data.assignedToId,
-    },
+    data: updateData,
   });
 
   await prisma.activity.create({
     data: {
       type: "NOTE_ADDED" as any,
-      description: "Informations du lead mises a jour",
+      description: "Informations du lead mises à jour",
       userId: session.user.id,
       leadId,
-      organizationId: session.user.organizationId,
+      organizationId: orgId,
     },
   });
 

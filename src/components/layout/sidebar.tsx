@@ -20,10 +20,19 @@ import {
   CalendarDays,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
 import type { Permission } from "@/lib/permissions";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  badge?: string;
+  permission: Permission;
+}
+
+const navItems: NavItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -34,7 +43,6 @@ const navItems = [
     label: "Pipeline",
     href: "/pipeline",
     icon: Kanban,
-    badge: "12",
     permission: "leads:view" as Permission,
   },
   {
@@ -65,7 +73,6 @@ const navItems = [
     label: "Inbox",
     href: "/inbox",
     icon: MessageSquare,
-    badge: "3",
     permission: "leads:view" as Permission,
   },
   {
@@ -118,6 +125,42 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { can } = usePermissions();
+  const [inboxUnread, setInboxUnread] = useState(0);
+
+  // ─── Fetch nombre de messages non lus pour le badge Inbox ───
+  const refreshInboxBadge = useCallback(() => {
+    if (!can("leads:view")) return;
+    getTotalUnreadCount()
+      .then(setInboxUnread)
+      .catch(() => {
+        // Silent fail
+      });
+  }, [can]);
+
+  useEffect(() => {
+    refreshInboxBadge();
+    
+    // Refresh quand on revient sur l'onglet (focus)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshInboxBadge();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Refresh toutes les 30 secondes pour rattraper les nouveaux messages
+    const interval = setInterval(refreshInboxBadge, 30000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(interval);
+    };
+  }, [refreshInboxBadge]);
+
+  // Refresh quand on change de page (par exemple, quand on quitte /inbox/[leadId])
+  useEffect(() => {
+    refreshInboxBadge();
+  }, [pathname, refreshInboxBadge]);
 
   const visibleNavItems = navItems.filter(function (item) {
     return can(item.permission);
@@ -175,18 +218,25 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                   : "text-sidebar-text hover:bg-sidebar-hover hover:text-white"
               )}
             >
-              <item.icon
-                size={20}
-                className={cn(
-                  "shrink-0 transition-colors",
-                  isActive
-                    ? "text-accent-400"
-                    : "text-sidebar-text group-hover:text-white"
+              <div className="relative shrink-0">
+                <item.icon
+                  size={20}
+                  className={cn(
+                    "transition-colors",
+                    isActive
+                      ? "text-accent-400"
+                      : "text-sidebar-text group-hover:text-white"
+                  )}
+                />
+                {/* Point rouge en mode collapsed pour signaler les non-lus Inbox */}
+                {collapsed && item.href === "/inbox" && inboxUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-sidebar-bg" />
                 )}
-              />
+              </div>
               {!collapsed && (
                 <>
                   <span className="flex-1">{item.label}</span>
+                  {/* Badge statique défini dans navItems */}
                   {item.badge && (
                     <span
                       className={cn(
@@ -197,6 +247,19 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                       )}
                     >
                       {item.badge}
+                    </span>
+                  )}
+                  {/* Badge dynamique Inbox */}
+                  {item.href === "/inbox" && inboxUnread > 0 && (
+                    <span
+                      className={cn(
+                        "min-w-[20px] px-2 py-0.5 text-xs rounded-full font-bold flex items-center justify-center",
+                        isActive
+                          ? "bg-white text-accent-600"
+                          : "bg-accent-500 text-white"
+                      )}
+                    >
+                      {inboxUnread > 99 ? "99+" : inboxUnread}
                     </span>
                   )}
                 </>
