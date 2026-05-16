@@ -4,6 +4,78 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+// ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
+async function getCampaignLeadsQuery(
+  organizationId: string,
+  audienceId: string | null,
+  rules: SegmentRule[]
+): Promise<{
+  where: any;
+  fromAudience: boolean;
+  audienceName?: string;
+}> {
+  // Mode AUDIENCE : on récupère les leadIds depuis AudienceMember
+  if (audienceId) {
+    var audience = await prisma.audience.findFirst({
+      where: { id: audienceId, organizationId: organizationId },
+      select: { id: true, name: true, type: true },
+    });
+    if (!audience) throw new Error("Audience introuvable");
+    if (audience.type === "DYNAMIC") {
+      throw new Error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
+    }
+
+    var members = await prisma.audienceMember.findMany({
+      where: { audienceId: audienceId },
+      select: { leadId: true },
+    });
+    var leadIds = members.map(function(m) { return m.leadId; });
+
+    return {
+      where: {
+        organizationId: organizationId,
+        id: { in: leadIds.length > 0 ? leadIds : ["__NO_LEADS__"] },
+        isConverted: false,
+      },
+      fromAudience: true,
+      audienceName: audience.name,
+    };
+  }
+
+  // Mode RÈGLES classique
+  var where = buildWhereFromRules(rules, organizationId);
+  return { where: where, fromAudience: false };
+}
+
+// ─── Helper : Count leads with/without email for an audience or rules ───
+async function getRecipientStats(
+  organizationId: string,
+  audienceId: string | null,
+  rules: SegmentRule[]
+): Promise<{
+  total: number;
+  withEmail: number;
+  withoutEmail: number;
+  fromAudience: boolean;
+  audienceName?: string;
+}> {
+  var queryResult = await getCampaignLeadsQuery(organizationId, audienceId, rules);
+  var baseWhere = queryResult.where;
+
+  var [total, withEmail] = await Promise.all([
+    prisma.lead.count({ where: baseWhere }),
+    prisma.lead.count({ where: { ...baseWhere, email: { not: null } } }),
+  ]);
+
+  return {
+    total: total,
+    withEmail: withEmail,
+    withoutEmail: total - withEmail,
+    fromAudience: queryResult.fromAudience,
+    audienceName: queryResult.audienceName,
+  };
+}
+
 // ─── Segment rules type ───
 export interface SegmentRule {
   field: string;      // stageId, source, city, programId, score, assignedToId, createdAt
@@ -17,14 +89,18 @@ export async function createCampaign(data: {
   subject: string;
   body: string;
   segmentRules: SegmentRule[];
+  audienceId?: string | null;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  // Count matching leads
-  var where = buildWhereFromRules(data.segmentRules, session.user.organizationId);
-  where.email = { not: null };
-
+  // Count matching leads (with email)
+  var queryResult = await getCampaignLeadsQuery(
+    session.user.organizationId,
+    data.audienceId || null,
+    data.segmentRules
+  );
+  var where = { ...queryResult.where, email: { not: null } };
   var matchingCount = await prisma.lead.count({ where: where });
 
   var campaign = await prisma.emailCampaign.create({
@@ -33,6 +109,7 @@ export async function createCampaign(data: {
       subject: data.subject,
       body: data.body,
       segmentRules: data.segmentRules as any,
+      audienceId: data.audienceId || null,
       status: "DRAFT",
       totalRecipients: matchingCount,
       createdById: session.user.id,
@@ -70,19 +147,38 @@ export async function updateCampaignDraft(campaignId: string, data: {
   subject?: string;
   body?: string;
   segmentRules?: SegmentRule[];
+  audienceId?: string | null;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // Fetch current campaign to know its mode
+  var currentCampaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    select: { audienceId: true, segmentRules: true },
+  });
+  if (!currentCampaign) throw new Error("Campagne introuvable");
 
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.subject !== undefined) updateData.subject = data.subject;
   if (data.body !== undefined) updateData.body = data.body;
+
+  // Handle audienceId update (can be set or unset)
+  var newAudienceId = data.audienceId !== undefined ? data.audienceId : currentCampaign.audienceId;
+  var newRules = data.segmentRules !== undefined ? data.segmentRules : (currentCampaign.segmentRules as unknown as SegmentRule[]) || [];
+
+  if (data.audienceId !== undefined) {
+    updateData.audienceId = data.audienceId;
+  }
   if (data.segmentRules !== undefined) {
     updateData.segmentRules = data.segmentRules as any;
-    // Recount recipients
-    var where = buildWhereFromRules(data.segmentRules, session.user.organizationId);
-    where.email = { not: null };
+  }
+
+  // Recount recipients if audience or rules changed
+  if (data.audienceId !== undefined || data.segmentRules !== undefined) {
+    var queryResult = await getCampaignLeadsQuery(session.user.organizationId, newAudienceId, newRules);
+    var where = { ...queryResult.where, email: { not: null } };
     var count = await prisma.lead.count({ where: where });
     updateData.totalRecipients = count;
   }
@@ -131,12 +227,12 @@ export async function getCampaignDetail(campaignId: string) {
 }
 
 // ─── Preview segment (count matching leads) ───
-export async function previewSegment(rules: SegmentRule[]) {
+export async function previewSegment(rules: SegmentRule[], audienceId?: string | null) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  var where = buildWhereFromRules(rules, session.user.organizationId);
-  where.email = { not: null };
+  var queryResult = await getCampaignLeadsQuery(session.user.organizationId, audienceId || null, rules);
+  var where = { ...queryResult.where, email: { not: null } };
 
   var leads = await prisma.lead.findMany({
     where: where,
@@ -160,8 +256,12 @@ export async function sendCampaign(campaignId: string) {
   if (campaign.status !== "DRAFT") throw new Error("Cette campagne a deja ete envoyee");
 
   var rules = (campaign.segmentRules as unknown as SegmentRule[]) || [];
-  var where = buildWhereFromRules(rules, session.user.organizationId);
-  where.email = { not: null };
+  var queryResult = await getCampaignLeadsQuery(
+    session.user.organizationId,
+    campaign.audienceId,
+    rules
+  );
+  var where = { ...queryResult.where, email: { not: null } };
 
   var leads = await prisma.lead.findMany({
     where: where,
@@ -364,6 +464,69 @@ export async function refreshCampaignStats(campaignId: string) {
   });
 
   return stats;
+}
+
+// ─── Get recipient stats for a campaign (used for confirmation modal) ───
+export async function getCampaignRecipientStats(campaignId: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var campaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    select: { audienceId: true, segmentRules: true },
+  });
+  if (!campaign) throw new Error("Campagne introuvable");
+
+  var rules = (campaign.segmentRules as unknown as SegmentRule[]) || [];
+  return getRecipientStats(session.user.organizationId, campaign.audienceId, rules);
+}
+
+// ─── Get available audiences for campaign selector (STATIC + IMPORTED only) ───
+export async function getAvailableAudiencesForCampaign() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var audiences = await prisma.audience.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      type: { in: ["STATIC", "IMPORTED"] },
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      type: true,
+      memberCount: true,
+      createdAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  // Pour chaque audience, compter les leads avec et sans email
+  var enriched = await Promise.all(audiences.map(async function(aud) {
+    var members = await prisma.audienceMember.findMany({
+      where: { audienceId: aud.id },
+      select: { leadId: true },
+    });
+    var leadIds = members.map(function(m) { return m.leadId; });
+    
+    if (leadIds.length === 0) {
+      return { ...aud, withEmail: 0, withoutEmail: 0 };
+    }
+
+    var [withEmail, total] = await Promise.all([
+      prisma.lead.count({ where: { id: { in: leadIds }, email: { not: null }, isConverted: false } }),
+      prisma.lead.count({ where: { id: { in: leadIds }, isConverted: false } }),
+    ]);
+
+    return {
+      ...aud,
+      withEmail: withEmail,
+      withoutEmail: total - withEmail,
+    };
+  }));
+
+  return enriched;
 }
 
 // ─── Helpers ───

@@ -756,3 +756,53 @@ export async function getAllMatchingLeadIds(
 
   return leads.map(l => l.id);
 }
+
+// ─── Create a campaign pre-filled with this audience ───
+export async function createCampaignFromAudience(audienceId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  // Vérifier que l'audience existe et qu'elle est compatible (pas DYNAMIC)
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true, name: true, type: true, memberCount: true },
+  });
+
+  if (!audience) throw new Error("Audience introuvable");
+  if (audience.type === "DYNAMIC") {
+    throw new Error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
+  }
+
+  // Compter les leads avec email
+  const members = await prisma.audienceMember.findMany({
+    where: { audienceId },
+    select: { leadId: true },
+  });
+  const leadIds = members.map(m => m.leadId);
+
+  const withEmailCount = leadIds.length > 0
+    ? await prisma.lead.count({
+        where: { id: { in: leadIds }, email: { not: null }, isConverted: false },
+      })
+    : 0;
+
+  // Création de la campagne brouillon
+  const campaign = await prisma.emailCampaign.create({
+    data: {
+      name: `Campagne — ${audience.name}`,
+      subject: "",
+      body: "[]",
+      segmentRules: [],
+      audienceId: audienceId,
+      status: "DRAFT",
+      totalRecipients: withEmailCount,
+      createdById: session.user.id,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath("/campaigns");
+  return campaign;
+}

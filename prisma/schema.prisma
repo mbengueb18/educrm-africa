@@ -859,6 +859,8 @@ model EmailCampaign {
   organizationId  String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  audienceId      String?
+  audience        Audience? @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
   createdBy       User?            @relation("EmailCampaigns", fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1359,6 +1361,7 @@ model Audience {
   organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy       User             @relation("AudiencesCreated", fields: [createdById], references: [id])
   members         AudienceMember[]
+  campaigns       EmailCampaign[]  @relation("CampaignAudience")
   
   @@unique([organizationId, name])
   @@index([organizationId])

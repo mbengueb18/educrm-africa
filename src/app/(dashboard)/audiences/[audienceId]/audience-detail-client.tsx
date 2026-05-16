@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn, formatRelative, formatDateTime, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
-import { deleteAudience, updateAudience, removeLeadsFromAudience } from "../actions";
+import { deleteAudience, updateAudience, removeLeadsFromAudience, createCampaignFromAudience } from "../actions";
 import {
   ArrowLeft, Users, Sparkles, Upload, Pencil, Trash2, Plus,
   Search, X, Loader2, Mail, Phone, MoreVertical, Filter,
-  FileText, Calendar, ChevronLeft, ChevronRight, Settings,
+  FileText, Calendar, ChevronLeft, ChevronRight, Settings, Send,
 } from "lucide-react";
 import { RuleBuilder, type FilterGroup } from "@/components/audiences/rule-builder";
 import { AddLeadsModal } from "@/components/audiences/add-leads-modal";
@@ -84,6 +84,7 @@ export function AudienceDetailClient({
   const [removing, setRemoving] = useState(false);
   const [editingRules, setEditingRules] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [showAddLeads, setShowAddLeads] = useState(false);
 
   const TypeIcon = TYPE_ICON[audience.type] || Users;
@@ -108,6 +109,30 @@ export function AudienceDetailClient({
       toast.error(err.message || "Erreur");
     }
     setSaving(false);
+  };
+
+  // ─── Lancer une campagne depuis cette audience ───
+  const handleCreateCampaign = async () => {
+    if (audience.type === "DYNAMIC") {
+      toast.error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
+      return;
+    }
+    
+    const memberCount = audience.memberCount || 0;
+    if (memberCount === 0) {
+      toast.error("Cette audience est vide. Ajoutez des leads avant de lancer une campagne.");
+      return;
+    }
+
+    setCreatingCampaign(true);
+    try {
+      const campaign = await createCampaignFromAudience(audience.id);
+      toast.success("Campagne créée");
+      router.push(`/campaigns/${campaign.id}/edit`);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+      setCreatingCampaign(false);
+    }
   };
 
   // ─── Suppression de l'audience ───
@@ -256,6 +281,22 @@ export function AudienceDetailClient({
               </>
             ) : (
               <>
+                {/* Bouton Lancer une campagne — uniquement pour STATIC/IMPORTED avec des leads */}
+                {audience.type !== "DYNAMIC" && (audience.memberCount || 0) > 0 && (
+                  <button
+                    onClick={handleCreateCampaign}
+                    disabled={creatingCampaign}
+                    className="btn-primary py-1.5 px-3 text-xs"
+                    title="Créer une campagne email ciblant cette audience"
+                  >
+                    {creatingCampaign ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Send size={12} />
+                    )}
+                    Lancer une campagne
+                  </button>
+                )}
                 <button
                   onClick={() => setEditing(true)}
                   className="btn-secondary py-1.5 px-3 text-xs"

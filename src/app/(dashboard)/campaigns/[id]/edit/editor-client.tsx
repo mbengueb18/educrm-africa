@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { updateCampaignDraft, previewSegment, type SegmentRule } from "../../actions";
+import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, type SegmentRule } from "../../actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,7 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2, LayoutGrid, Mail,
+  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle,
 } from "lucide-react";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
@@ -33,6 +33,7 @@ interface CampaignEditorClientProps {
     status: string;
     segmentRules: any;
     totalRecipients: number;
+    audienceId: string | null;
   };
   stages: { id: string; name: string; color: string }[];
   programs: { id: string; name: string; code: string | null }[];
@@ -83,6 +84,14 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     campaign.totalRecipients > 0 ? { count: campaign.totalRecipients } : null
   );
   var [showSectionPicker, setShowSectionPicker] = useState(false);
+  // Mode audience vs règles ad-hoc — par défaut sur "audience" (recommandé)
+  var [audienceMode, setAudienceMode] = useState<"audience" | "rules">(
+    campaign.audienceId ? "audience" : (initialRules.length > 0 ? "rules" : "audience")
+  );
+  var [selectedAudienceId, setSelectedAudienceId] = useState<string | null>(campaign.audienceId);
+  var [availableAudiences, setAvailableAudiences] = useState<any[]>([]);
+  var [audienceSearch, setAudienceSearch] = useState("");
+  var [loadingAudiences, setLoadingAudiences] = useState(false);
 
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
 
@@ -96,14 +105,15 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
         name: name,
         subject: subject,
         body: JSON.stringify(blocks),
-        segmentRules: rules,
+        segmentRules: audienceMode === "rules" ? rules : [],
+        audienceId: audienceMode === "audience" ? selectedAudienceId : null,
       });
       setLastSaved(new Date());
     } catch (e) {
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, rules]);
+  }, [campaign.id, name, subject, blocks, rules, audienceMode, selectedAudienceId]);
 
   useEffect(function() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -111,7 +121,16 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, rules, doSave]);
+  }, [name, subject, blocks, rules, audienceMode, selectedAudienceId, doSave]);
+
+  // Charger les audiences disponibles au montage
+  useEffect(function() {
+    setLoadingAudiences(true);
+    getAvailableAudiencesForCampaign()
+      .then(function(data) { setAvailableAudiences(data); })
+      .catch(function() {})
+      .finally(function() { setLoadingAudiences(false); });
+  }, []);
 
   // ─── Block operations ───
   var addBlock = function(type: EmailBlock["type"]) {
@@ -169,9 +188,15 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
 
   // ─── Segment preview ───
   var handlePreview = function() {
-    previewSegment(rules).then(function(data) {
-      setPreviewData(data);
-    }).catch(function() {});
+    if (audienceMode === "audience") {
+      previewSegment([], selectedAudienceId).then(function(data) {
+        setPreviewData(data);
+      }).catch(function() {});
+    } else {
+      previewSegment(rules).then(function(data) {
+        setPreviewData(data);
+      }).catch(function() {});
+    }
   };
 
   var FIELD_OPTIONS = [
@@ -247,7 +272,16 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
           onClick={function() { setActivePanel("audience"); }}
           className={cn("flex-1 py-2.5 text-xs font-medium text-center", activePanel === "audience" ? "text-brand-600 border-b-2 border-brand-500" : "text-gray-500")}
         >
-          Audience ({previewData?.count ?? "?"} destinataires)
+          Audience {(function() {
+            if (audienceMode === "audience" && selectedAudienceId) {
+              var aud = availableAudiences.find(function(a: any) { return a.id === selectedAudienceId; });
+              if (aud) return "(" + aud.withEmail + " destinataires)";
+            }
+            if (audienceMode === "rules" && previewData) {
+              return "(" + previewData.count + " destinataires)";
+            }
+            return "(non définie)";
+          })()}
         </button>
       </div>
 
@@ -618,70 +652,225 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
         /* Audience panel */
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto space-y-5">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Criteres de segmentation</h3>
-                <button onClick={function() { setRules([...rules, { field: "stageId", operator: "equals", value: "" }]); }} className="btn-secondary py-1 px-2 text-xs">
-                  <Plus size={12} /> Ajouter
-                </button>
-              </div>
-
-              {rules.length === 0 ? (
-                <div className="bg-gray-50 rounded-xl p-6 text-center">
-                  <Users size={24} className="text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">Aucun critere — tous les leads avec email seront inclus</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {rules.map(function(rule, index) {
-                    var fieldDef = FIELD_OPTIONS.find(function(f) { return f.value === rule.field; });
-                    return (
-                      <div key={index} className="flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-200">
-                        {index > 0 && <span className="text-xs text-gray-400 font-medium w-6 shrink-0">ET</span>}
-                        {index === 0 && <span className="w-6 shrink-0" />}
-                        <select value={rule.field} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], field: e.target.value, value: "" }; setRules(nr); }} className="input text-sm py-1.5 w-32">
-                          {FIELD_OPTIONS.map(function(f) { return <option key={f.value} value={f.value}>{f.label}</option>; })}
-                        </select>
-                        <select value={rule.operator} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], operator: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 w-24">
-                          <option value="equals">est</option>
-                          <option value="not_equals">n'est pas</option>
-                          {fieldDef?.type === "text" && <option value="contains">contient</option>}
-                          {fieldDef?.type === "number" && <><option value="gt">sup. a</option><option value="lt">inf. a</option></>}
-                        </select>
-                        {fieldDef?.options && fieldDef.options.length > 0 ? (
-                          <select value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1">
-                            <option value="">Choisir...</option>
-                            {fieldDef.options.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
-                          </select>
-                        ) : (
-                          <input value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1" placeholder="Valeur..." />
-                        )}
-                        <button onClick={function() { setRules(rules.filter(function(_, i) { return i !== index; })); }} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <button onClick={handlePreview} className="btn-secondary py-2 text-xs mt-3 w-full justify-center">
-                <Eye size={14} /> Compter les destinataires
+            {/* Toggle Audience / Règles ad-hoc */}
+            <div className="bg-white rounded-xl border border-gray-200 p-1 flex items-center">
+              <button
+                onClick={function() { setAudienceMode("audience"); }}
+                className={cn(
+                  "flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2",
+                  audienceMode === "audience"
+                    ? "bg-brand-50 text-brand-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <Users size={14} /> Choisir une audience
               </button>
-
-              {previewData && (
-                <div className="bg-brand-50 rounded-xl p-4 mt-3">
-                  <div className="flex items-center gap-2">
-                    <Users size={16} className="text-brand-600" />
-                    <span className="text-sm font-semibold text-brand-800">{previewData.count} destinataire{previewData.count > 1 ? "s" : ""}</span>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={function() { setAudienceMode("rules"); }}
+                className={cn(
+                  "flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2",
+                  audienceMode === "rules"
+                    ? "bg-brand-50 text-brand-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <Filter size={14} /> Règles ad-hoc
+              </button>
             </div>
+
+            {audienceMode === "audience" ? (
+              /* ─── Mode AUDIENCE ─── */
+              <div>
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-1">Choisir une audience</h3>
+                  <p className="text-xs text-gray-500">
+                    Seules les audiences statiques et import sont disponibles pour les campagnes.{" "}
+                    <Link href="/audiences" className="text-brand-600 hover:underline">Gérer les audiences →</Link>
+                  </p>
+                </div>
+
+                {/* Search */}
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    placeholder="Rechercher une audience..."
+                    className="input text-sm pl-9 py-2 w-full"
+                    value={audienceSearch}
+                    onChange={function(e) { setAudienceSearch(e.target.value); }}
+                  />
+                  <Eye size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* Liste des audiences */}
+                <div className="bg-white rounded-xl border border-gray-200 max-h-[400px] overflow-y-auto">
+                  {loadingAudiences ? (
+                    <div className="flex items-center justify-center py-8 text-gray-400">
+                      <Loader2 size={16} className="animate-spin mr-2" />
+                      <span className="text-xs">Chargement...</span>
+                    </div>
+                  ) : availableAudiences.length === 0 ? (
+                    <div className="py-12 text-center px-6">
+                      <Users size={28} className="text-gray-300 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-600 mb-1">Aucune audience disponible</p>
+                      <p className="text-xs text-gray-400 mb-4">
+                        Créez une audience statique ou importez des leads pour pouvoir cibler une campagne.
+                      </p>
+                      <Link href="/audiences" className="btn-primary py-1.5 px-3 text-xs">
+                        <Plus size={12} /> Créer une audience
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {availableAudiences
+                        .filter(function(aud: any) {
+                          if (!audienceSearch.trim()) return true;
+                          var q = audienceSearch.toLowerCase();
+                          return aud.name.toLowerCase().includes(q) ||
+                            (aud.description || "").toLowerCase().includes(q);
+                        })
+                        .map(function(aud: any) {
+                          var isSelected = aud.id === selectedAudienceId;
+                          var typeLabel = aud.type === "STATIC" ? "Statique" : "Import CSV";
+                          return (
+                            <label
+                              key={aud.id}
+                              className={cn(
+                                "flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors",
+                                isSelected ? "bg-brand-50/50" : "hover:bg-gray-50"
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name="audience"
+                                checked={isSelected}
+                                onChange={function() { setSelectedAudienceId(aud.id); }}
+                                className="text-brand-600"
+                              />
+                              <div className={cn(
+                                "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border",
+                                aud.type === "STATIC"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                              )}>
+                                <Users size={15} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{aud.name}</p>
+                                  <span className={cn(
+                                    "text-[9px] font-semibold px-1.5 py-0.5 rounded-full border",
+                                    aud.type === "STATIC"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-amber-50 text-amber-700 border-amber-200"
+                                  )}>
+                                    {typeLabel}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-500">
+                                  <span><strong className="text-gray-700">{aud.withEmail}</strong> avec email</span>
+                                  {aud.withoutEmail > 0 && (
+                                    <span className="text-amber-600">⚠ {aud.withoutEmail} sans email</span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Récap de l'audience sélectionnée */}
+                {selectedAudienceId && (function() {
+                  var aud = availableAudiences.find(function(a: any) { return a.id === selectedAudienceId; });
+                  if (!aud) return null;
+                  return (
+                    <div className="mt-4 p-4 bg-brand-50 border border-brand-200 rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle size={18} className="text-brand-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-brand-900">Audience sélectionnée : {aud.name}</p>
+                          <p className="text-xs text-brand-700 mt-1">
+                            <strong>{aud.withEmail}</strong> destinataire{aud.withEmail > 1 ? "s" : ""} avec email
+                            {aud.withoutEmail > 0 && (
+                              <span className="text-amber-700"> · {aud.withoutEmail} sans email (ignoré{aud.withoutEmail > 1 ? "s" : ""})</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* ─── Mode RÈGLES ad-hoc (existant) ─── */
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">Critères de segmentation</h3>
+                  <button onClick={function() { setRules([...rules, { field: "stageId", operator: "equals", value: "" }]); }} className="btn-secondary py-1 px-2 text-xs">
+                    <Plus size={12} /> Ajouter
+                  </button>
+                </div>
+
+                {rules.length === 0 ? (
+                  <div className="bg-gray-50 rounded-xl p-6 text-center">
+                    <Users size={24} className="text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Aucun critère — tous les leads avec email seront inclus</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {rules.map(function(rule, index) {
+                      var fieldDef = FIELD_OPTIONS.find(function(f) { return f.value === rule.field; });
+                      return (
+                        <div key={index} className="flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-200">
+                          {index > 0 && <span className="text-xs text-gray-400 font-medium w-6 shrink-0">ET</span>}
+                          {index === 0 && <span className="w-6 shrink-0" />}
+                          <select value={rule.field} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], field: e.target.value, value: "" }; setRules(nr); }} className="input text-sm py-1.5 w-32">
+                            {FIELD_OPTIONS.map(function(f) { return <option key={f.value} value={f.value}>{f.label}</option>; })}
+                          </select>
+                          <select value={rule.operator} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], operator: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 w-24">
+                            <option value="equals">est</option>
+                            <option value="not_equals">n'est pas</option>
+                            {fieldDef?.type === "text" && <option value="contains">contient</option>}
+                            {fieldDef?.type === "number" && <><option value="gt">sup. à</option><option value="lt">inf. à</option></>}
+                          </select>
+                          {fieldDef?.options && fieldDef.options.length > 0 ? (
+                            <select value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1">
+                              <option value="">Choisir...</option>
+                              {fieldDef.options.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
+                            </select>
+                          ) : (
+                            <input value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1" placeholder="Valeur..." />
+                          )}
+                          <button onClick={function() { setRules(rules.filter(function(_, i) { return i !== index; })); }} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <button onClick={handlePreview} className="btn-secondary py-2 text-xs mt-3 w-full justify-center">
+                  <Eye size={14} /> Compter les destinataires
+                </button>
+
+                {previewData && (
+                  <div className="bg-brand-50 rounded-xl p-4 mt-3">
+                    <div className="flex items-center gap-2">
+                      <Users size={16} className="text-brand-600" />
+                      <span className="text-sm font-semibold text-brand-800">
+                        {previewData.count} destinataire{previewData.count > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
-      </div>
+       </div>
     </>
   );
 }
