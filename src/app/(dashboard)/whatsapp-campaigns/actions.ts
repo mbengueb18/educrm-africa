@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getWhatsAppIntegration } from "@/lib/whatsapp/integration";
 
 // ─── Get all WhatsApp campaigns for organization ───
 export async function getWhatsAppCampaigns() {
@@ -263,6 +264,14 @@ export async function sendWhatsAppCampaign(campaignId: string) {
     throw new Error("Les audiences dynamiques ne peuvent pas être utilisées");
   }
 
+  // ⚡ Vérifier l'intégration WhatsApp AVANT de commencer
+  // Cela évite de créer des recipients FAILED si l'intégration est manquante
+  try {
+    await getWhatsAppIntegration(session.user.organizationId);
+  } catch (e: any) {
+    throw new Error(e.message);
+  }
+
   // Récupérer les leads de l'audience qui ont un WhatsApp
   const members = await prisma.audienceMember.findMany({
     where: { audienceId: campaign.audienceId },
@@ -322,7 +331,7 @@ export async function sendWhatsAppCampaign(campaignId: string) {
     const bodyVariables = resolveVariablesFromLead(campaign.template.bodyText, variableMapping, lead);
 
     // Envoyer via Meta
-    const result = await sendTemplateMessage({
+    const result = await sendTemplateMessage(session.user.organizationId, {
       to: lead.whatsapp!,
       templateName: campaign.template.metaName,
       templateLanguage: campaign.template.language,

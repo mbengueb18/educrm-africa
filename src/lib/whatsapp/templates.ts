@@ -5,6 +5,7 @@
 
 const META_API_VERSION = "v22.0";
 const META_GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+import { getWhatsAppIntegration } from "./integration";
 
 interface MetaTemplate {
   name: string;
@@ -19,12 +20,15 @@ interface MetaTemplate {
 /**
  * Liste tous les templates disponibles dans le WABA (WhatsApp Business Account)
  */
-export async function listMetaTemplates(): Promise<MetaTemplate[]> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+export async function listMetaTemplates(orgId: string): Promise<MetaTemplate[]> {
+  const integration = await getWhatsAppIntegration(orgId);
+  const token = integration.accessToken;
+  const wabaId = integration.whatsappBusinessAccountId;
 
-  if (!token || !wabaId) {
-    throw new Error("WHATSAPP_TOKEN ou WHATSAPP_BUSINESS_ACCOUNT_ID manquant dans .env");
+  if (!wabaId) {
+    throw new Error(
+      "Le WhatsApp Business Account ID n'est pas configuré. Vérifiez vos credentials dans Paramètres → Intégration WhatsApp."
+    );
   }
 
   const url = `${META_GRAPH_URL}/${wabaId}/message_templates?limit=100`;
@@ -48,20 +52,24 @@ export async function listMetaTemplates(): Promise<MetaTemplate[]> {
 /**
  * Crée un nouveau template et le soumet à Meta pour approbation
  */
-export async function submitMetaTemplate(template: {
-  name: string;
-  language: string;
-  category: "MARKETING" | "UTILITY" | "AUTHENTICATION";
-  bodyText: string;
-  headerText?: string | null;
-  footerText?: string | null;
-  buttons?: any[] | null;
-}): Promise<{ id: string; status: string }> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+export async function submitMetaTemplate(
+  orgId: string,
+  template: {
+    name: string;
+    language: string;
+    category: "MARKETING" | "UTILITY" | "AUTHENTICATION";
+    bodyText: string;
+    headerText?: string | null;
+    footerText?: string | null;
+    buttons?: any[] | null;
+  }
+): Promise<{ id: string; status: string }> {
+  const integration = await getWhatsAppIntegration(orgId);
+  const token = integration.accessToken;
+  const wabaId = integration.whatsappBusinessAccountId;
 
-  if (!token || !wabaId) {
-    throw new Error("WHATSAPP_TOKEN ou WHATSAPP_BUSINESS_ACCOUNT_ID manquant");
+  if (!wabaId) {
+    throw new Error("Le WhatsApp Business Account ID n'est pas configuré");
   }
 
   // Construire les "components" attendus par Meta
@@ -122,12 +130,13 @@ export async function submitMetaTemplate(template: {
 /**
  * Supprime un template chez Meta
  */
-export async function deleteMetaTemplate(name: string): Promise<void> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+export async function deleteMetaTemplate(orgId: string, name: string): Promise<void> {
+  const integration = await getWhatsAppIntegration(orgId);
+  const token = integration.accessToken;
+  const wabaId = integration.whatsappBusinessAccountId;
 
-  if (!token || !wabaId) {
-    throw new Error("WHATSAPP_TOKEN ou WHATSAPP_BUSINESS_ACCOUNT_ID manquant");
+  if (!wabaId) {
+    throw new Error("Le WhatsApp Business Account ID n'est pas configuré");
   }
 
   const url = `${META_GRAPH_URL}/${wabaId}/message_templates?name=${encodeURIComponent(name)}`;

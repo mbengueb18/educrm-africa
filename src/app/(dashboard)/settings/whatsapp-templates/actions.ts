@@ -158,7 +158,7 @@ export async function submitTemplate(templateId: string) {
 
   // Soumettre à Meta
   try {
-    const result = await submitMetaTemplate({
+    const result = await submitMetaTemplate(session.user.organizationId, {
       name: template.metaName,
       language: template.language,
       category: template.category,
@@ -194,7 +194,7 @@ export async function syncTemplatesFromMeta() {
   const orgId = session.user.organizationId;
 
   try {
-    const metaTemplates = await listMetaTemplates();
+    const metaTemplates = await listMetaTemplates(orgId);
 
     let created = 0;
     let updated = 0;
@@ -288,7 +288,7 @@ export async function deleteTemplate(templateId: string) {
   // Si soumis à Meta, supprimer côté Meta aussi
   if (template.metaTemplateId && template.status !== "DRAFT") {
     try {
-      await deleteMetaTemplate(template.metaName);
+      await deleteMetaTemplate(session.user.organizationId, template.metaName);
     } catch (err: any) {
       // Si Meta refuse (template déjà supprimé, etc), on continue quand même
       console.warn(`Suppression Meta échouée : ${err.message}`);

@@ -5,6 +5,7 @@
 
 const META_API_VERSION = "v22.0";
 const META_GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+import { getWhatsAppIntegration } from "./integration";
 
 interface SendTemplateMessageParams {
   to: string;                              // Numéro destinataire au format international (+221770000000)
@@ -57,15 +58,22 @@ export function formatPhoneForMeta(phone: string): string | null {
 /**
  * Envoie un message template via Meta Cloud API
  */
-export async function sendTemplateMessage(params: SendTemplateMessageParams): Promise<SendResult> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_ID;
+export async function sendTemplateMessage(
+  orgId: string,
+  params: SendTemplateMessageParams
+): Promise<SendResult> {
+  let token: string;
+  let phoneId: string;
 
-  if (!token || !phoneId) {
+  try {
+    const integration = await getWhatsAppIntegration(orgId);
+    token = integration.accessToken;
+    phoneId = integration.phoneNumberId;
+  } catch (e: any) {
     return {
       success: false,
       errorCode: "CONFIG_MISSING",
-      errorMessage: "WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID manquant dans .env",
+      errorMessage: e.message,
     };
   }
 
