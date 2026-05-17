@@ -117,10 +117,16 @@ export async function POST(
 
         const contacts = value.contacts || [];
         const messages = value.messages || [];
+        const statuses = value.statuses || [];
 
-        // Traiter chaque message
+        // Traiter chaque message entrant
         for (const msg of messages) {
           await processIncomingMessage(orgId, msg, contacts);
+        }
+
+        // Traiter chaque statut de message sortant (campagnes WhatsApp)
+        for (const status of statuses) {
+          await processMessageStatus(orgId, status);
         }
       }
     }
@@ -204,4 +210,125 @@ async function processIncomingMessage(
   });
 
   console.log(`[WA Webhook] Message ${message.id} created for lead ${lead.id}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Traitement d'un statut de message sortant (campagnes WhatsApp)
+// ═══════════════════════════════════════════════════════════════
+
+async function processMessageStatus(orgId: string, status: any) {
+  const metaMessageId = status.id; // ex: "wamid.HBgN..."
+  const statusType = status.status; // "sent" | "delivered" | "read" | "failed"
+  const timestamp = status.timestamp ? new Date(parseInt(status.timestamp) * 1000) : new Date();
+
+  if (!metaMessageId || !statusType) return;
+
+  // Chercher le recipient correspondant via metaMessageId
+  const recipient = await prisma.whatsAppCampaignRecipient.findUnique({
+    where: { metaMessageId: metaMessageId },
+    include: {
+      campaign: { select: { id: true, organizationId: true } },
+    },
+  });
+
+  if (!recipient) {
+    // Pas trouvé : ce n'est pas un message de campagne (peut-être l'Inbox)
+    return;
+  }
+
+  // Vérifier que le recipient appartient bien à cette org
+  if (recipient.campaign.organizationId !== orgId) {
+    console.warn(`[WA Webhook] Status for recipient from another org, skipping`);
+    return;
+  }
+
+  // Mapper le statut Meta vers notre enum
+  const updateData: any = {};
+
+  switch (statusType) {
+    case "sent":
+      // Si déjà passé à un statut supérieur, on ne régresse pas
+      if (recipient.status === "PENDING") {
+        updateData.status = "SENT";
+        updateData.sentAt = recipient.sentAt || timestamp;
+      }
+      break;
+
+    case "delivered":
+      if (recipient.status === "PENDING" || recipient.status === "SENT") {
+        updateData.status = "DELIVERED";
+        updateData.deliveredAt = timestamp;
+        if (!recipient.sentAt) updateData.sentAt = timestamp;
+      }
+      break;
+
+    case "read":
+      // Toujours mettre à jour readAt même si déjà READ
+      if (recipient.status !== "FAILED") {
+        updateData.status = "READ";
+        updateData.readAt = timestamp;
+        if (!recipient.deliveredAt) updateData.deliveredAt = timestamp;
+        if (!recipient.sentAt) updateData.sentAt = timestamp;
+      }
+      break;
+
+    case "failed":
+      updateData.status = "FAILED";
+      // Récupérer le détail de l'erreur si fourni
+      const errors = status.errors || [];
+      if (errors.length > 0) {
+        updateData.errorCode = errors[0].code?.toString() || "UNKNOWN";
+        updateData.errorMessage = errors[0].title || errors[0].message || "Erreur inconnue";
+      }
+      break;
+
+    default:
+      console.log(`[WA Webhook] Unknown status type: ${statusType}`);
+      return;
+  }
+
+  if (Object.keys(updateData).length === 0) return;
+
+  await prisma.whatsAppCampaignRecipient.update({
+    where: { id: recipient.id },
+    data: updateData,
+  });
+
+  // Recalculer les stats agrégées de la campagne
+  await refreshCampaignStats(recipient.campaign.id);
+
+  console.log(`[WA Webhook] Status ${statusType} updated for recipient ${recipient.id}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Recalcul des stats d'une campagne à partir des recipients
+// ═══════════════════════════════════════════════════════════════
+
+async function refreshCampaignStats(campaignId: string) {
+  const recipients = await prisma.whatsAppCampaignRecipient.findMany({
+    where: { campaignId: campaignId },
+    select: { status: true },
+  });
+
+  let sentCount = 0;
+  let deliveredCount = 0;
+  let readCount = 0;
+  let failedCount = 0;
+
+  for (const r of recipients) {
+    if (r.status === "SENT" || r.status === "DELIVERED" || r.status === "READ") sentCount++;
+    if (r.status === "DELIVERED" || r.status === "READ") deliveredCount++;
+    if (r.status === "READ") readCount++;
+    if (r.status === "FAILED") failedCount++;
+  }
+
+  await prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: {
+      sentCount,
+      deliveredCount,
+      readCount,
+      failedCount,
+    },
+  });
 }

@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Zap,
   Users,
+  MessageCircle,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
@@ -83,10 +84,17 @@ const navItems: NavItem[] = [
     permission: "leads:view" as Permission,
   },
   {
-    label: "Campagnes",
+    label: "Campagnes Email",
     href: "/campaigns",
     icon: Megaphone,
     permission: "campaigns:view" as Permission,
+  },
+  {
+  label: "Campagnes WhatsApp",
+  href: "/whatsapp-campaigns",
+  icon: MessageCircle,
+  permission: "campaigns:view" as Permission,
+  badge: "BÊTA",
   },
   {
     label: "Étudiants",

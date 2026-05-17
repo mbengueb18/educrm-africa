@@ -16,53 +16,55 @@ datasource db {
 // ─── MULTI-TENANT ROOT ───
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logo      String?
-  plan      Plan     @default(STARTER)
-  settings  Json     @default("{}") // Custom config: timezone, currency, etc.
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  logo               String?
+  plan               Plan     @default(STARTER)
+  settings           Json     @default("{}") // Custom config: timezone, currency, etc.
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   webTrackingEnabled Boolean  @default(false)
 
-  campuses         Campus[]
-  users            User[]
-  leads            Lead[]
-  students         Student[]
-  pipelineStages   PipelineStage[]
-  pipelines        Pipeline[]
-  academicYears    AcademicYear[]
-  programs         Program[]
-  messageTemplates MessageTemplate[]
-  campaigns        Campaign[]
-  payments         Payment[]
-  activities       Activity[]
-  messages         Message[]
-  automations      Automation[]
-  emailCampaigns   EmailCampaign[]
-  tasks            Task[]
-  calls            Call[]
-  appointments     Appointment[]
-  portalTokens LeadPortalToken[]
-  sequenceExecutions SequenceExecution[]
+  campuses            Campus[]
+  users               User[]
+  leads               Lead[]
+  students            Student[]
+  pipelineStages      PipelineStage[]
+  pipelines           Pipeline[]
+  academicYears       AcademicYear[]
+  programs            Program[]
+  messageTemplates    MessageTemplate[]
+  campaigns           Campaign[]
+  payments            Payment[]
+  activities          Activity[]
+  messages            Message[]
+  automations         Automation[]
+  emailCampaigns      EmailCampaign[]
+  tasks               Task[]
+  calls               Call[]
+  appointments        Appointment[]
+  portalTokens        LeadPortalToken[]
+  sequenceExecutions  SequenceExecution[]
   workflows           Workflow[]
   workflowExecutions  WorkflowExecution[]
-  sequenceConfig     OrganizationSequenceConfig?
-  chatbotConfig ChatbotConfig?
-  visitors  Visitor[]
-  sessions  Session[]
-  pageViews PageView[]
-  whatsappIntegration   WhatsAppIntegration?
-  audiences       Audience[]
+  sequenceConfig      OrganizationSequenceConfig?
+  chatbotConfig       ChatbotConfig?
+  visitors            Visitor[]
+  sessions            Session[]
+  pageViews           PageView[]
+  whatsappIntegration WhatsAppIntegration?
+  audiences           Audience[]
+  whatsappTemplates   WhatsAppTemplate[]
+  whatsappCampaigns   WhatsAppCampaign[]
 
   @@map("organizations")
 }
 
 enum Plan {
-  FREE       // Pas de pipeline custom, fonctionnalités limitées
-  STARTER    // 1 pipeline, 1 campus, 500 contacts
-  PRO        // 5 pipelines, 5 campus, 5000 contacts
+  FREE // Pas de pipeline custom, fonctionnalités limitées
+  STARTER // 1 pipeline, 1 campus, 500 contacts
+  PRO // 5 pipelines, 5 campus, 5000 contacts
   ENTERPRISE // Illimité
 }
 
@@ -89,47 +91,46 @@ model Campus {
   @@map("campuses")
 }
 
-
 enum FormationType {
-  INITIAL    // Formation Initiale (FI) - étudiants après bac
-  CONTINUE   // Formation Continue (FC) - professionnels
-  BOTH       // Les deux
+  INITIAL // Formation Initiale (FI) - étudiants après bac
+  CONTINUE // Formation Continue (FC) - professionnels
+  BOTH // Les deux
 }
 
 enum AudienceType {
-  STATIC      // liste figée gérée manuellement
-  DYNAMIC     // basée sur des règles
-  IMPORTED    // snapshot d'un import CSV
+  STATIC // liste figée gérée manuellement
+  DYNAMIC // basée sur des règles
+  IMPORTED // snapshot d'un import CSV
 }
 
-  model Program {
-    id             String       @id @default(cuid())
-    name           String // e.g. "BTS Comptabilité", "Licence Marketing"
-    code           String? // e.g. "BTS-COMPTA"
-    level          ProgramLevel
-    durationMonths Int // 12, 24, 36...
-    tuitionAmount  Float // Annual tuition in FCFA
-    currency       String       @default("XOF")
-    isActive       Boolean      @default(true)
-    campusId       String
-    organizationId String
-    createdAt      DateTime     @default(now())
-    updatedAt      DateTime     @updatedAt
-    formationType  FormationType  @default(INITIAL)
-    pipelineId     String?
+model Program {
+  id             String        @id @default(cuid())
+  name           String // e.g. "BTS Comptabilité", "Licence Marketing"
+  code           String? // e.g. "BTS-COMPTA"
+  level          ProgramLevel
+  durationMonths Int // 12, 24, 36...
+  tuitionAmount  Float // Annual tuition in FCFA
+  currency       String        @default("XOF")
+  isActive       Boolean       @default(true)
+  campusId       String
+  organizationId String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  formationType  FormationType @default(INITIAL)
+  pipelineId     String?
 
-    campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
-    organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    pipeline     Pipeline?    @relation(fields: [pipelineId], references: [id])
-    leads        Lead[]
-    students     Student[]
-    subjects     Subject[]
+  campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline?    @relation(fields: [pipelineId], references: [id])
+  leads        Lead[]
+  students     Student[]
+  subjects     Subject[]
 
-    @@index([organizationId])
-    @@index([campusId])
-    @@index([pipelineId])
-    @@map("programs")
-  }
+  @@index([organizationId])
+  @@index([campusId])
+  @@index([pipelineId])
+  @@map("programs")
+}
 
 enum ProgramLevel {
   BTS
@@ -175,21 +176,23 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  campus               Campus?           @relation(fields: [campusId], references: [id])
-  assignedLeads        Lead[]            @relation("AssignedLeads")
-  activities           Activity[]
-  sentMessages         Message[]         @relation("SentMessages")
-  emailCampaigns       EmailCampaign[]   @relation("EmailCampaigns")
-  assignedTasks        Task[]            @relation("AssignedTasks")
-  createdTasks         Task[]            @relation("CreatedTasks")
-  calls                Call[]            @relation("UserCalls")
-  assignedAppointments Appointment[]     @relation("AssignedAppointments")
-  createdAppointments  Appointment[]     @relation("CreatedAppointments")
-  integrations         UserIntegration[]
-  portalTokens LeadPortalToken[]
-  audiencesCreated     Audience[]       @relation("AudiencesCreated")
-  audienceMembersAdded AudienceMember[] @relation("AudienceMembersAdded")
+  organization             Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campus                   Campus?            @relation(fields: [campusId], references: [id])
+  assignedLeads            Lead[]             @relation("AssignedLeads")
+  activities               Activity[]
+  sentMessages             Message[]          @relation("SentMessages")
+  emailCampaigns           EmailCampaign[]    @relation("EmailCampaigns")
+  assignedTasks            Task[]             @relation("AssignedTasks")
+  createdTasks             Task[]             @relation("CreatedTasks")
+  calls                    Call[]             @relation("UserCalls")
+  assignedAppointments     Appointment[]      @relation("AssignedAppointments")
+  createdAppointments      Appointment[]      @relation("CreatedAppointments")
+  integrations             UserIntegration[]
+  portalTokens             LeadPortalToken[]
+  audiencesCreated         Audience[]         @relation("AudiencesCreated")
+  audienceMembersAdded     AudienceMember[]   @relation("AudienceMembersAdded")
+  whatsappTemplatesCreated WhatsAppTemplate[] @relation("WhatsAppTemplatesCreated")
+  whatsappCampaignsCreated WhatsAppCampaign[] @relation("WhatsAppCampaignsCreated")
 
   @@index([organizationId])
   @@index([email])
@@ -208,22 +211,22 @@ enum UserRole {
 // ─── RECRUITMENT PIPELINE ───
 
 model Pipeline {
-  id              String         @id @default(cuid())
-  name            String
-  description     String?
-  formationType   FormationType? // INITIAL / CONTINUE / null (cas 1 pipeline)
-  isDefault       Boolean        @default(false)
-  isActive        Boolean        @default(true)
-  order           Int            @default(0)
-  color           String?
-  organizationId  String
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  formationType  FormationType? // INITIAL / CONTINUE / null (cas 1 pipeline)
+  isDefault      Boolean        @default(false)
+  isActive       Boolean        @default(true)
+  order          Int            @default(0)
+  color          String?
+  organizationId String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  stages          PipelineStage[]
-  leads           Lead[]
-  programs        Program[]
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages       PipelineStage[]
+  leads        Lead[]
+  programs     Program[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -296,18 +299,19 @@ model Lead {
   campaign     Campaign?     @relation(fields: [campaignId], references: [id])
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  student      Student? // 1:1 if converted
-  activities   Activity[]
-  messages     Message[]
-  documents    Document[]
-  tasks        Task[]
-  calls        Call[]
-  appointments Appointment[]
-  portalTokens LeadPortalToken[]
-  sequenceExecutions SequenceExecution[]
-  aiAnalysis  LeadAIAnalysis?
-  visitors  Visitor[]
-  audienceMemberships  AudienceMember[]
+  student                    Student? // 1:1 if converted
+  activities                 Activity[]
+  messages                   Message[]
+  documents                  Document[]
+  tasks                      Task[]
+  calls                      Call[]
+  appointments               Appointment[]
+  portalTokens               LeadPortalToken[]
+  sequenceExecutions         SequenceExecution[]
+  aiAnalysis                 LeadAIAnalysis?
+  visitors                   Visitor[]
+  audienceMemberships        AudienceMember[]
+  whatsappCampaignRecipients WhatsAppCampaignRecipient[] @relation("WhatsAppRecipientLead")
 
   @@index([organizationId])
   @@index([pipelineId])
@@ -583,28 +587,28 @@ model Message {
   readAt      DateTime?
 
   // ─── NEW: WhatsApp tracking ───
-  whatsappContactName  String?     // Nom WhatsApp du contact (ex: "Aminata D.")
-  whatsappMediaType    String?     // "image" | "audio" | "document" | "video" | null
-  whatsappMediaId      String?     // ID Meta du média (à télécharger plus tard)
-  whatsappMediaUrl     String?     // URL Supabase Storage si déjà téléchargé
+  whatsappContactName String? // Nom WhatsApp du contact (ex: "Aminata D.")
+  whatsappMediaType   String? // "image" | "audio" | "document" | "video" | null
+  whatsappMediaId     String? // ID Meta du média (à télécharger plus tard)
+  whatsappMediaUrl    String? // URL Supabase Storage si déjà téléchargé
   // ─── /NEW ───
 
   organizationId String
   createdAt      DateTime @default(now())
 
-  lead         Lead?            @relation(fields: [leadId], references: [id])
-  sentBy       User?            @relation("SentMessages", fields: [sentById], references: [id])
-  template     MessageTemplate? @relation(fields: [templateId], references: [id])
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  events MessageEvent[]
-  attachments MessageAttachment[]
+  lead         Lead?               @relation(fields: [leadId], references: [id])
+  sentBy       User?               @relation("SentMessages", fields: [sentById], references: [id])
+  template     MessageTemplate?    @relation(fields: [templateId], references: [id])
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       MessageEvent[]
+  attachments  MessageAttachment[]
 
   @@index([organizationId])
   @@index([leadId])
   @@index([studentId])
   @@index([channel])
   @@index([sentAt])
-  @@index([externalId])  // NEW: anti-doublon webhook
+  @@index([externalId]) // NEW: anti-doublon webhook
   @@map("messages")
 }
 
@@ -637,7 +641,7 @@ model MessageTemplate {
   channel        MessageChannel
   subject        String? // For emails
   body           String // With variables: {{firstName}}, {{program}}, etc.
-  blocks         Json?            // Visual builder blocks
+  blocks         Json? // Visual builder blocks
   brandColor     String?          @default("#1B4F72")
   variables      String[] // List of available variables
   category       TemplateCategory
@@ -860,9 +864,9 @@ model EmailCampaign {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   audienceId      String?
-  audience        Audience? @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
+  audience        Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
-  createdBy       User?            @relation("EmailCampaigns", fields: [createdById], references: [id])
+  createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   recipients   EmailCampaignRecipient[]
 
@@ -1051,15 +1055,15 @@ model MessageEvent {
 }
 
 model MessageAttachment {
-  id           String   @id @default(cuid())
-  messageId    String
-  filename     String
-  contentType  String?
-  size         Int      @default(0)
-  storagePath  String?  // Supabase path (for outbound)
-  externalId   String?  // Resend attachment ID (for inbound)
-  downloadUrl  String?  // Cached signed URL (optional)
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  messageId   String
+  filename    String
+  contentType String?
+  size        Int      @default(0)
+  storagePath String? // Supabase path (for outbound)
+  externalId  String? // Resend attachment ID (for inbound)
+  downloadUrl String? // Cached signed URL (optional)
+  createdAt   DateTime @default(now())
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -1068,22 +1072,21 @@ model MessageAttachment {
 }
 
 model ChatbotConfig {
-  id              String   @id @default(cuid())
-  organizationId  String   @unique
-  enabled         Boolean  @default(false)
-  agentName       String   @default("Aïcha")
-  welcomeMessage  String   @default("Bonjour ! Comment puis-je vous aider ?")
-  primaryColor    String   @default("#1B4F72")
-  position        String   @default("bottom-right") // bottom-right, bottom-left
-  scenario        Json     @default("[]")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  enabled        Boolean  @default(false)
+  agentName      String   @default("Aïcha")
+  welcomeMessage String   @default("Bonjour ! Comment puis-je vous aider ?")
+  primaryColor   String   @default("#1B4F72")
+  position       String   @default("bottom-right") // bottom-right, bottom-left
+  scenario       Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("chatbot_configs")
 }
-
 
 model LeadPortalToken {
   id             String    @id @default(cuid())
@@ -1109,7 +1112,7 @@ model SequenceExecution {
   id             String   @id @default(cuid())
   leadId         String
   organizationId String
-  stepName       String   // "J1_email", "J3_whatsapp", "J7_call_task", "J14_last_chance", "J21_auto_lost"
+  stepName       String // "J1_email", "J3_whatsapp", "J7_call_task", "J14_last_chance", "J21_auto_lost"
   executedAt     DateTime @default(now())
   status         String   @default("DONE") // DONE, FAILED, SKIPPED
   metadata       Json?
@@ -1117,23 +1120,23 @@ model SequenceExecution {
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@unique([leadId, stepName])
   @@index([leadId])
   @@index([organizationId])
   @@index([stepName])
-  @@unique([leadId, stepName])
   @@map("sequence_executions")
 }
 
 model OrganizationSequenceConfig {
-  id                       String   @id @default(cuid())
-  organizationId           String   @unique
-  enabled                  Boolean  @default(false)
-  pauseOnReply             Boolean  @default(true)
-  pauseOnAppointment       Boolean  @default(true)
-  autoMarkLostAfterDays    Int      @default(21)
-  steps                    Json     @default("[]")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  enabled               Boolean  @default(false)
+  pauseOnReply          Boolean  @default(true)
+  pauseOnAppointment    Boolean  @default(true)
+  autoMarkLostAfterDays Int      @default(21)
+  steps                 Json     @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1141,19 +1144,19 @@ model OrganizationSequenceConfig {
 }
 
 model Workflow {
-  id             String   @id @default(cuid())
-  name           String
-  description    String?
-  enabled        Boolean  @default(false)
-  
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  enabled     Boolean @default(false)
+
   // Trigger config
-  triggerType    String   // LEAD_CREATED, STAGE_CHANGED, NO_RESPONSE_DAYS, EMAIL_OPENED, etc.
-  triggerConfig  Json     @default("{}")
-  
+  triggerType   String // LEAD_CREATED, STAGE_CHANGED, NO_RESPONSE_DAYS, EMAIL_OPENED, etc.
+  triggerConfig Json   @default("{}")
+
   // Steps as a JSON graph (nodes + edges)
   // Format: { nodes: [{id, type, data, position}], edges: [{id, source, target, sourceHandle?}] }
-  graph          Json     @default("{\"nodes\":[],\"edges\":[]}")
-  
+  graph Json @default("{\"nodes\":[],\"edges\":[]}")
+
   organizationId String
   createdById    String?
   createdAt      DateTime @default(now())
@@ -1168,16 +1171,16 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id          String   @id @default(cuid())
-  workflowId  String
-  leadId      String?
-  status      String   @default("RUNNING") // RUNNING, COMPLETED, FAILED, WAITING
-  currentNode String?  // ID du noeud en cours d'exécution
-  context     Json     @default("{}")    // Variables disponibles dans le workflow
-  waitUntil   DateTime?                   // Pour les noeuds "Attendre X temps"
-  completedAt DateTime?
+  id           String    @id @default(cuid())
+  workflowId   String
+  leadId       String?
+  status       String    @default("RUNNING") // RUNNING, COMPLETED, FAILED, WAITING
+  currentNode  String? // ID du noeud en cours d'exécution
+  context      Json      @default("{}") // Variables disponibles dans le workflow
+  waitUntil    DateTime? // Pour les noeuds "Attendre X temps"
+  completedAt  DateTime?
   errorMessage String?
-  
+
   organizationId String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1194,27 +1197,27 @@ model WorkflowExecution {
 }
 
 model LeadAIAnalysis {
-  id          String   @id @default(cuid())
-  leadId      String   @unique
-  
+  id     String @id @default(cuid())
+  leadId String @unique
+
   // Cached AI analyses (JSON for flexibility)
-  briefData         Json?
-  actionsData       Json?
-  
+  briefData   Json?
+  actionsData Json?
+
   // Snapshot of lead state at analysis time (for change detection)
-  snapshotMessageCount    Int      @default(0)
-  snapshotCallCount       Int      @default(0)
+  snapshotMessageCount     Int     @default(0)
+  snapshotCallCount        Int     @default(0)
   snapshotAppointmentCount Int     @default(0)
-  snapshotTaskCount       Int      @default(0)
-  snapshotStageId         String?
-  snapshotScore           Int      @default(0)
-  snapshotIsConverted     Boolean  @default(false)
-  
-  briefGeneratedAt    DateTime?
-  actionsGeneratedAt  DateTime?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  snapshotTaskCount        Int     @default(0)
+  snapshotStageId          String?
+  snapshotScore            Int     @default(0)
+  snapshotIsConverted      Boolean @default(false)
+
+  briefGeneratedAt   DateTime?
+  actionsGeneratedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -1223,25 +1226,25 @@ model LeadAIAnalysis {
 }
 
 model Visitor {
-  id             String   @id @default(cuid())
-  visitorId      String   // Cookie ID côté navigateur
-  
+  id        String @id @default(cuid())
+  visitorId String // Cookie ID côté navigateur
+
   // Lead linkage
   leadId         String?
   organizationId String
-  
+
   // Fingerprint (capté à la 1ère visite)
-  userAgent      String?  @db.Text
-  language       String?
-  screenSize     String?
-  timezone       String?
-  
-  firstSeenAt    DateTime @default(now())
-  lastSeenAt     DateTime @default(now())
-  
-  sessions       Session[]
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  userAgent  String? @db.Text
+  language   String?
+  screenSize String?
+  timezone   String?
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  sessions     Session[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@unique([visitorId, organizationId])
   @@index([leadId])
@@ -1250,34 +1253,34 @@ model Visitor {
 }
 
 model Session {
-  id             String   @id @default(cuid())
-  visitorDbId    String
-  sessionId      String   @unique  // ID généré côté navigateur
-  
+  id          String @id @default(cuid())
+  visitorDbId String
+  sessionId   String @unique // ID généré côté navigateur
+
   // Source captée au démarrage de la session
-  referrer       String?  @db.Text
-  utmSource      String?
-  utmMedium      String?
-  utmCampaign    String?
-  utmContent     String?
-  utmTerm        String?
-  gclid          String?
-  fbclid         String?
-  
+  referrer    String? @db.Text
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmContent  String?
+  utmTerm     String?
+  gclid       String?
+  fbclid      String?
+
   // Cycle de vie
-  startedAt      DateTime @default(now())
-  lastActivityAt DateTime @default(now())
+  startedAt      DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
   endedAt        DateTime?
-  
+
   // Métriques d'engagement (issues des heartbeats)
-  engagedTimeMs  Int      @default(0)
-  pageviewCount  Int      @default(0)
-  
+  engagedTimeMs Int @default(0)
+  pageviewCount Int @default(0)
+
   organizationId String
-  
-  pageViews      PageView[]
-  visitor        Visitor      @relation(fields: [visitorDbId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  pageViews    PageView[]
+  visitor      Visitor      @relation(fields: [visitorDbId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([visitorDbId])
@@ -1286,20 +1289,20 @@ model Session {
 }
 
 model PageView {
-  id             String   @id @default(cuid())
-  sessionDbId    String
-  
-  url            String   @db.Text
-  path           String
-  title          String?
-  
-  engagedTimeMs  Int      @default(0)
-  
+  id          String @id @default(cuid())
+  sessionDbId String
+
+  url   String  @db.Text
+  path  String
+  title String?
+
+  engagedTimeMs Int @default(0)
+
   organizationId String
   viewedAt       DateTime @default(now())
-  
-  session        Session      @relation(fields: [sessionDbId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  session      Session      @relation(fields: [sessionDbId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([sessionDbId])
   @@index([organizationId, viewedAt])
@@ -1308,61 +1311,62 @@ model PageView {
 }
 
 model WhatsAppIntegration {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
-  
-  // Credentials Meta (chiffrés idéalement, mais en clair pour MVP)
-  phoneNumberId          String   // ID du numéro côté Meta
-  whatsappBusinessAccountId String  // WABA ID
-  accessToken            String   @db.Text  // Permanent token
-  verifyToken            String   // Pour la vérification webhook (l'école choisit une chaîne)
-  appSecret              String   @db.Text  // App Secret pour vérifier signatures webhook
-  
-  // Métadonnées
-  displayPhoneNumber     String?  // Le numéro lisible (+221 XX XXX XX XX)
-  verifiedName           String?  // Nom vérifié Meta (ex: "BEM Dakar Business")
-  
-  // État
-  isActive               Boolean  @default(true)
-  lastSyncedAt           DateTime?
-  
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id             String @id @default(cuid())
+  organizationId String @unique
 
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Credentials Meta (chiffrés idéalement, mais en clair pour MVP)
+  phoneNumberId             String // ID du numéro côté Meta
+  whatsappBusinessAccountId String // WABA ID
+  accessToken               String @db.Text // Permanent token
+  verifyToken               String // Pour la vérification webhook (l'école choisit une chaîne)
+  appSecret                 String @db.Text // App Secret pour vérifier signatures webhook
+
+  // Métadonnées
+  displayPhoneNumber String? // Le numéro lisible (+221 XX XXX XX XX)
+  verifiedName       String? // Nom vérifié Meta (ex: "BEM Dakar Business")
+
+  // État
+  isActive     Boolean   @default(true)
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("whatsapp_integrations")
 }
 
 model Audience {
-  id              String          @id @default(cuid())
-  name            String
-  description     String?
-  type            AudienceType    @default(STATIC)
-  color           String?         // couleur d'affichage
-  
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  type        AudienceType @default(STATIC)
+  color       String? // couleur d'affichage
+
   // Règles pour DYNAMIC (JSON FilterGroup)
   // Format : { operator: "AND"|"OR", rules: [{ field, operator, value } | nestedGroup] }
-  rules           Json?
-  
+  rules Json?
+
   // Metadata pour IMPORTED
-  importMetadata  Json?           // { filename, importedAt, importedRows, skippedRows }
-  
+  importMetadata Json? // { filename, importedAt, importedRows, skippedRows }
+
   // Stats (mises à jour à chaque évaluation)
-  memberCount     Int             @default(0)
-  lastEvaluatedAt DateTime?       // dernière fois qu'on a compté pour DYNAMIC
-  
-  organizationId  String
-  createdById     String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy       User             @relation("AudiencesCreated", fields: [createdById], references: [id])
-  members         AudienceMember[]
-  campaigns       EmailCampaign[]  @relation("CampaignAudience")
-  
+  memberCount     Int       @default(0)
+  lastEvaluatedAt DateTime? // dernière fois qu'on a compté pour DYNAMIC
+
+  organizationId String
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         User               @relation("AudiencesCreated", fields: [createdById], references: [id])
+  members           AudienceMember[]
+  campaigns         EmailCampaign[]    @relation("CampaignAudience")
+  whatsappCampaigns WhatsAppCampaign[] @relation("WhatsAppCampaignAudience")
+
   @@unique([organizationId, name])
   @@index([organizationId])
   @@index([type])
@@ -1370,18 +1374,157 @@ model Audience {
 }
 
 model AudienceMember {
-  id          String   @id @default(cuid())
-  audienceId  String
-  leadId      String
-  addedAt     DateTime @default(now())
-  addedById   String?  // user qui a ajouté (null si auto via import)
-  
-  audience    Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  addedBy     User?    @relation("AudienceMembersAdded", fields: [addedById], references: [id])
-  
+  id         String   @id @default(cuid())
+  audienceId String
+  leadId     String
+  addedAt    DateTime @default(now())
+  addedById  String? // user qui a ajouté (null si auto via import)
+
+  audience Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  addedBy  User?    @relation("AudienceMembersAdded", fields: [addedById], references: [id])
+
   @@unique([audienceId, leadId])
   @@index([audienceId])
   @@index([leadId])
   @@map("audience_members")
+}
+
+// ═══════════════════════════════════════════════
+// ═══ WhatsApp Campaigns Module ═══
+// ═══════════════════════════════════════════════
+
+enum WhatsAppCampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+enum WhatsAppRecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum WhatsAppTemplateStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+enum WhatsAppTemplateCategory {
+  MARKETING
+  UTILITY
+  AUTHENTICATION
+}
+
+model WhatsAppTemplate {
+  id             String @id @default(cuid())
+  organizationId String
+
+  metaName       String
+  metaTemplateId String?
+  language       String                   @default("fr")
+  category       WhatsAppTemplateCategory @default(MARKETING)
+  status         WhatsAppTemplateStatus   @default(DRAFT)
+
+  bodyText   String  @db.Text
+  headerText String? @db.Text
+  footerText String? @db.Text
+
+  buttons         Json?
+  variableMapping Json?
+
+  rejectionReason String?   @db.Text
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+
+  source String @default("local")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("WhatsAppTemplatesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  campaigns WhatsAppCampaign[]
+
+  @@unique([organizationId, metaName, language])
+  @@index([organizationId, status])
+  @@map("whatsapp_templates")
+}
+
+model WhatsAppCampaign {
+  id             String @id @default(cuid())
+  organizationId String
+
+  name String
+
+  audienceId   String?
+  segmentRules Json?
+
+  templateId String
+
+  status WhatsAppCampaignStatus @default(DRAFT)
+
+  totalRecipients Int @default(0)
+  sentCount       Int @default(0)
+  deliveredCount  Int @default(0)
+  readCount       Int @default(0)
+  failedCount     Int @default(0)
+
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  completedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audience     Audience?        @relation("WhatsAppCampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
+  template     WhatsAppTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  createdBy    User?            @relation("WhatsAppCampaignsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  recipients WhatsAppCampaignRecipient[]
+
+  @@index([organizationId, status])
+  @@map("whatsapp_campaigns")
+}
+
+model WhatsAppCampaignRecipient {
+  id         String @id @default(cuid())
+  campaignId String
+  leadId     String
+
+  whatsappNumber String
+
+  status WhatsAppRecipientStatus @default(PENDING)
+
+  metaMessageId String? @unique
+
+  variableValues Json?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  errorCode    String?
+  errorMessage String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  campaign WhatsAppCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead             @relation("WhatsAppRecipientLead", fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId])
+  @@index([metaMessageId])
+  @@map("whatsapp_campaign_recipients")
 }
