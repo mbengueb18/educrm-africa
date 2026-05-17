@@ -36,3 +36,6 @@ prisma/migrations/
 # IDE
 .vscode/
 .idea/
+
+#read me
+.README.md
