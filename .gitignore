@@ -27,7 +27,7 @@ yarn-error.log*
 .env.production.local
 
 # vercel
-.vercel
+.vercel/
 
 # prisma
 prisma/*.db
@@ -38,4 +38,4 @@ prisma/migrations/
 .idea/
 
 #read me
-.README.md
+.README
