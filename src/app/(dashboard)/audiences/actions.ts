@@ -806,3 +806,101 @@ export async function createCampaignFromAudience(audienceId: string) {
   revalidatePath("/campaigns");
   return campaign;
 }
+
+// ─── Create a WhatsApp campaign pre-filled with this audience ───
+export async function createWhatsAppCampaignFromAudience(audienceId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  // Vérifier l'audience
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true, name: true, type: true, memberCount: true },
+  });
+
+  if (!audience) throw new Error("Audience introuvable");
+  if (audience.type === "DYNAMIC") {
+    throw new Error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
+  }
+
+  // Trouver un template approuvé par défaut
+  const firstTemplate = await prisma.whatsAppTemplate.findFirst({
+    where: {
+      organizationId: orgId,
+      status: "APPROVED",
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!firstTemplate) {
+    throw new Error("Aucun template WhatsApp approuvé disponible. Créez et faites approuver un template d'abord.");
+  }
+
+  // Compter les leads avec WhatsApp
+  const members = await prisma.audienceMember.findMany({
+    where: { audienceId },
+    select: { leadId: true },
+  });
+  const leadIds = members.map((m) => m.leadId);
+
+  const withWhatsAppCount = leadIds.length > 0
+    ? await prisma.lead.count({
+        where: {
+          id: { in: leadIds },
+          whatsapp: { not: null },
+          isConverted: false,
+        },
+      })
+    : 0;
+
+  // Création de la campagne brouillon
+  const campaign = await prisma.whatsAppCampaign.create({
+    data: {
+      name: `Campagne WhatsApp — ${audience.name}`,
+      templateId: firstTemplate.id,
+      audienceId: audienceId,
+      status: "DRAFT",
+      totalRecipients: withWhatsAppCount,
+      createdById: session.user.id,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath("/whatsapp-campaigns");
+  return campaign;
+}
+
+// ─── Get audience stats for both Email + WhatsApp ───
+export async function getAudienceCampaignStats(audienceId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true, type: true },
+  });
+
+  if (!audience) throw new Error("Audience introuvable");
+
+  const members = await prisma.audienceMember.findMany({
+    where: { audienceId },
+    select: { leadId: true },
+  });
+  const leadIds = members.map((m) => m.leadId);
+
+  if (leadIds.length === 0) {
+    return { total: 0, withEmail: 0, withWhatsApp: 0 };
+  }
+
+  const [total, withEmail, withWhatsApp] = await Promise.all([
+    prisma.lead.count({ where: { id: { in: leadIds }, isConverted: false } }),
+    prisma.lead.count({ where: { id: { in: leadIds }, email: { not: null }, isConverted: false } }),
+    prisma.lead.count({ where: { id: { in: leadIds }, whatsapp: { not: null }, isConverted: false } }),
+  ]);
+
+  return { total, withEmail, withWhatsApp };
+}

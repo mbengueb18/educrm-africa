@@ -5,11 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn, formatRelative, formatDateTime, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
-import { deleteAudience, updateAudience, removeLeadsFromAudience, createCampaignFromAudience } from "../actions";
+import {
+  deleteAudience,
+  updateAudience,
+  removeLeadsFromAudience,
+  createCampaignFromAudience,
+  createWhatsAppCampaignFromAudience,
+  getAudienceCampaignStats,
+} from "../actions";
 import {
   ArrowLeft, Users, Sparkles, Upload, Pencil, Trash2, Plus,
   Search, X, Loader2, Mail, Phone, MoreVertical, Filter,
-  FileText, Calendar, ChevronLeft, ChevronRight, Settings, Send,
+  FileText, Calendar, ChevronLeft, ChevronRight, Settings, Send, MessageCircle,
 } from "lucide-react";
 import { RuleBuilder, type FilterGroup } from "@/components/audiences/rule-builder";
 import { AddLeadsModal } from "@/components/audiences/add-leads-modal";
@@ -84,7 +91,11 @@ export function AudienceDetailClient({
   const [removing, setRemoving] = useState(false);
   const [editingRules, setEditingRules] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
-  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [showChannelChooser, setShowChannelChooser] = useState(false);
+  const [channelStats, setChannelStats] = useState<{ total: number; withEmail: number; withWhatsApp: number } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [creatingEmailCampaign, setCreatingEmailCampaign] = useState(false);
+  const [creatingWhatsAppCampaign, setCreatingWhatsAppCampaign] = useState(false);
   const [showAddLeads, setShowAddLeads] = useState(false);
 
   const TypeIcon = TYPE_ICON[audience.type] || Users;
@@ -112,7 +123,8 @@ export function AudienceDetailClient({
   };
 
   // ─── Lancer une campagne depuis cette audience ───
-  const handleCreateCampaign = async () => {
+  // Ouvre le modal de choix de canal
+  const handleOpenChannelChooser = async () => {
     if (audience.type === "DYNAMIC") {
       toast.error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
       return;
@@ -124,14 +136,42 @@ export function AudienceDetailClient({
       return;
     }
 
-    setCreatingCampaign(true);
+    setShowChannelChooser(true);
+    setLoadingStats(true);
+    setChannelStats(null);
+    try {
+      const stats = await getAudienceCampaignStats(audience.id);
+      setChannelStats(stats);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+      setShowChannelChooser(false);
+    }
+    setLoadingStats(false);
+  };
+
+  // Création d'une campagne Email
+  const handleCreateEmailCampaign = async () => {
+    setCreatingEmailCampaign(true);
     try {
       const campaign = await createCampaignFromAudience(audience.id);
-      toast.success("Campagne créée");
+      toast.success("Campagne email créée");
       router.push(`/campaigns/${campaign.id}/edit`);
     } catch (err: any) {
       toast.error(err.message || "Erreur");
-      setCreatingCampaign(false);
+      setCreatingEmailCampaign(false);
+    }
+  };
+
+  // Création d'une campagne WhatsApp
+  const handleCreateWhatsAppCampaign = async () => {
+    setCreatingWhatsAppCampaign(true);
+    try {
+      const campaign = await createWhatsAppCampaignFromAudience(audience.id);
+      toast.success("Campagne WhatsApp créée");
+      router.push(`/whatsapp-campaigns/${campaign.id}/edit`);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+      setCreatingWhatsAppCampaign(false);
     }
   };
 
@@ -284,16 +324,11 @@ export function AudienceDetailClient({
                 {/* Bouton Lancer une campagne — uniquement pour STATIC/IMPORTED avec des leads */}
                 {audience.type !== "DYNAMIC" && (audience.memberCount || 0) > 0 && (
                   <button
-                    onClick={handleCreateCampaign}
-                    disabled={creatingCampaign}
+                    onClick={handleOpenChannelChooser}
                     className="btn-primary py-1.5 px-3 text-xs"
-                    title="Créer une campagne email ciblant cette audience"
+                    title="Créer une campagne ciblant cette audience"
                   >
-                    {creatingCampaign ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Send size={12} />
-                    )}
+                    <Send size={12} />
                     Lancer une campagne
                   </button>
                 )}
@@ -639,6 +674,171 @@ export function AudienceDetailClient({
           }}
         />
       )}
+      {/* Modal choix du canal de campagne */}
+      {showChannelChooser && (
+        <ChannelChooserModal
+          stats={channelStats}
+          loading={loadingStats}
+          creatingEmail={creatingEmailCampaign}
+          creatingWhatsApp={creatingWhatsAppCampaign}
+          audienceName={audience.name}
+          onCancel={() => {
+            setShowChannelChooser(false);
+            setChannelStats(null);
+          }}
+          onChooseEmail={handleCreateEmailCampaign}
+          onChooseWhatsApp={handleCreateWhatsAppCampaign}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal de choix du canal de campagne ───
+function ChannelChooserModal({
+  stats,
+  loading,
+  creatingEmail,
+  creatingWhatsApp,
+  audienceName,
+  onCancel,
+  onChooseEmail,
+  onChooseWhatsApp,
+}: {
+  stats: { total: number; withEmail: number; withWhatsApp: number } | null;
+  loading: boolean;
+  creatingEmail: boolean;
+  creatingWhatsApp: boolean;
+  audienceName: string;
+  onCancel: () => void;
+  onChooseEmail: () => void;
+  onChooseWhatsApp: () => void;
+}) {
+  const isProcessing = creatingEmail || creatingWhatsApp;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={isProcessing ? undefined : onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-scale-in">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Lancer une campagne</h3>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">
+            Audience : <span className="font-semibold">{audienceName}</span>
+          </p>
+        </div>
+
+        {/* Content */}
+        <div className="px-5 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8 text-gray-400">
+              <Loader2 size={20} className="animate-spin mr-2" />
+              <span className="text-sm">Analyse des destinataires...</span>
+            </div>
+          ) : stats ? (
+            <>
+              <p className="text-xs text-gray-600 mb-4">
+                Choisissez le canal de communication pour cette campagne :
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Email card */}
+                <button
+                  onClick={onChooseEmail}
+                  disabled={isProcessing || stats.withEmail === 0}
+                  className={cn(
+                    "p-4 rounded-xl border-2 text-left transition-all relative",
+                    "hover:border-brand-500 hover:bg-brand-50/30",
+                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white",
+                    stats.withEmail === 0 ? "border-gray-200" : "border-gray-300"
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                      <Mail size={18} />
+                    </div>
+                    {creatingEmail && <Loader2 size={14} className="animate-spin text-brand-600" />}
+                  </div>
+
+                  <p className="text-sm font-bold text-gray-900 mb-1">Email</p>
+                  <p className="text-xs text-gray-500 mb-3">Envoi via Brevo SMTP</p>
+
+                  {stats.withEmail > 0 ? (
+                    <div className="space-y-1">
+                      <p className="text-lg font-bold text-blue-700">{stats.withEmail}</p>
+                      <p className="text-[10px] text-gray-500">
+                        destinataire{stats.withEmail > 1 ? "s" : ""} avec email
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-red-600 font-medium">
+                      ⚠ Aucun lead avec email
+                    </p>
+                  )}
+                </button>
+
+                {/* WhatsApp card */}
+                <button
+                  onClick={onChooseWhatsApp}
+                  disabled={isProcessing || stats.withWhatsApp === 0}
+                  className={cn(
+                    "p-4 rounded-xl border-2 text-left transition-all relative",
+                    "hover:border-emerald-500 hover:bg-emerald-50/30",
+                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:bg-white",
+                    stats.withWhatsApp === 0 ? "border-gray-200" : "border-gray-300"
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <MessageCircle size={18} />
+                    </div>
+                    {creatingWhatsApp && <Loader2 size={14} className="animate-spin text-emerald-600" />}
+                  </div>
+
+                  <p className="text-sm font-bold text-gray-900 mb-1">WhatsApp</p>
+                  <p className="text-xs text-gray-500 mb-3">Via Meta Cloud API</p>
+
+                  {stats.withWhatsApp > 0 ? (
+                    <div className="space-y-1">
+                      <p className="text-lg font-bold text-emerald-700">{stats.withWhatsApp}</p>
+                      <p className="text-[10px] text-gray-500">
+                        destinataire{stats.withWhatsApp > 1 ? "s" : ""} avec WhatsApp
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-red-600 font-medium">
+                      ⚠ Aucun lead avec WhatsApp
+                    </p>
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-[11px] text-gray-500 text-center">
+                  Audience totale : <span className="font-semibold text-gray-700">{stats.total} lead{stats.total > 1 ? "s" : ""}</span>
+                </p>
+              </div>
+
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-[11px] text-blue-800">
+                  💡 <strong>Bon à savoir</strong> : WhatsApp a un taux d'ouverture &gt; 90% (vs 20% en email), mais nécessite un template Meta-approuvé. Email permet plus de créativité visuelle.
+                </p>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end">
+          <button
+            onClick={onCancel}
+            disabled={isProcessing}
+            className="btn-secondary py-1.5 px-4 text-xs"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
