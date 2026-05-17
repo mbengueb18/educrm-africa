@@ -9,10 +9,11 @@ import {
   saveIntegration,
   toggleIntegrationActive,
   deleteIntegration,
+  testConnection,
 } from "./actions";
 import {
   MessageCircle, Save, Loader2, Eye, EyeOff, CheckCircle, AlertCircle,
-  Copy, Check, Trash2, BookOpen, ExternalLink, AlertTriangle, Power,
+  Copy, Check, Trash2, BookOpen, ExternalLink, AlertTriangle, Power, Zap,
 } from "lucide-react";
 
 interface Integration {
@@ -112,6 +113,22 @@ export function IntegrationClient({ integration, webhookUrl }: Props) {
     });
   };
 
+  // ─── Test connexion ───
+  const handleTestConnection = () => {
+    startTransition(async () => {
+      try {
+        const result = await testConnection();
+        toast.success(
+          `Connexion OK : ${result.verifiedName || "Numéro vérifié"} (${result.displayPhoneNumber || ""})${result.qualityRating ? ` · Qualité : ${result.qualityRating}` : ""}`,
+          { duration: 6000 }
+        );
+        router.refresh();
+      } catch (e: any) {
+        toast.error(e.message, { duration: 6000 });
+      }
+    });
+  };
+
   // ─── Delete ───
   const handleDelete = () => {
     if (!confirm("Supprimer l'intégration WhatsApp ? Vous ne pourrez plus envoyer de campagnes ni recevoir de messages tant que vous ne la reconfigurez pas.")) return;
@@ -200,14 +217,25 @@ export function IntegrationClient({ integration, webhookUrl }: Props) {
           </p>
         </div>
         {isConfigured && (
-          <button
-            onClick={handleToggleActive}
-            disabled={isPending}
-            className="btn-secondary py-1.5 px-3 text-xs shrink-0"
-          >
-            <Power size={12} />
-            {isActive ? "Désactiver" : "Activer"}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleTestConnection}
+              disabled={isPending || !isActive}
+              className="btn-secondary py-1.5 px-3 text-xs"
+              title={!isActive ? "Activez d'abord l'intégration" : "Tester la connexion Meta"}
+            >
+              <Zap size={12} />
+              Tester
+            </button>
+            <button
+              onClick={handleToggleActive}
+              disabled={isPending}
+              className="btn-secondary py-1.5 px-3 text-xs"
+            >
+              <Power size={12} />
+              {isActive ? "Désactiver" : "Activer"}
+            </button>
+          </div>
         )}
       </div>
 

@@ -26,6 +26,9 @@ export async function saveIntegration(data: {
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée. Seul un administrateur peut configurer WhatsApp.");
+  }
 
   const orgId = session.user.organizationId;
 
@@ -41,6 +44,33 @@ export async function saveIntegration(data: {
     where: { organizationId: orgId },
   });
 
+  // Validation côté Meta : appel API pour vérifier les credentials
+  let displayPhoneNumber: string | null = data.displayPhoneNumber?.trim() || null;
+  let verifiedName: string | null = data.verifiedName?.trim() || null;
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v22.0/${data.phoneNumberId.trim()}?fields=display_phone_number,verified_name`,
+      {
+        headers: {
+          Authorization: `Bearer ${data.accessToken.trim()}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "Credentials invalides côté Meta");
+    }
+
+    const meta = await response.json();
+    // On écrase avec les vraies valeurs Meta (plus fiable que ce que l'utilisateur a saisi)
+    if (meta.display_phone_number) displayPhoneNumber = meta.display_phone_number;
+    if (meta.verified_name) verifiedName = meta.verified_name;
+  } catch (e: any) {
+    throw new Error(`Validation Meta échouée : ${e.message}. Vérifiez votre Access Token et Phone Number ID.`);
+  }
+
   if (existing) {
     // Update
     await prisma.whatsAppIntegration.update({
@@ -51,8 +81,9 @@ export async function saveIntegration(data: {
         accessToken: data.accessToken.trim(),
         verifyToken: data.verifyToken.trim(),
         appSecret: data.appSecret.trim(),
-        displayPhoneNumber: data.displayPhoneNumber?.trim() || null,
-        verifiedName: data.verifiedName?.trim() || null,
+        displayPhoneNumber: displayPhoneNumber,
+        verifiedName: verifiedName,
+        lastSyncedAt: new Date(),
         isActive: true,
       },
     });
@@ -66,8 +97,9 @@ export async function saveIntegration(data: {
         accessToken: data.accessToken.trim(),
         verifyToken: data.verifyToken.trim(),
         appSecret: data.appSecret.trim(),
-        displayPhoneNumber: data.displayPhoneNumber?.trim() || null,
-        verifiedName: data.verifiedName?.trim() || null,
+        displayPhoneNumber: displayPhoneNumber,
+        verifiedName: verifiedName,
+        lastSyncedAt: new Date(),
         isActive: true,
       },
     });
@@ -81,6 +113,9 @@ export async function saveIntegration(data: {
 export async function toggleIntegrationActive(isActive: boolean) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée. Seul un administrateur peut configurer WhatsApp.");
+  }
 
   await prisma.whatsAppIntegration.update({
     where: { organizationId: session.user.organizationId },
@@ -95,6 +130,9 @@ export async function toggleIntegrationActive(isActive: boolean) {
 export async function deleteIntegration() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée. Seul un administrateur peut configurer WhatsApp.");
+  }
 
   // Vérifier qu'aucune campagne WhatsApp en cours
   const activeCampaigns = await prisma.whatsAppCampaign.count({
@@ -129,4 +167,53 @@ export async function getWebhookUrl() {
   const baseUrl = host.startsWith("http") ? host : `${protocol}://${host}`;
 
   return `${baseUrl}/api/webhooks/whatsapp/${session.user.organizationId}`;
+}
+
+// ─── Test de connexion Meta ───
+export async function testConnection() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const integration = await prisma.whatsAppIntegration.findUnique({
+    where: { organizationId: session.user.organizationId },
+  });
+
+  if (!integration) throw new Error("Aucune intégration configurée");
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v22.0/${integration.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
+      {
+        headers: { Authorization: `Bearer ${integration.accessToken}` },
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "Erreur Meta");
+    }
+
+    const data = await response.json();
+
+    // Mettre à jour les métadonnées
+    await prisma.whatsAppIntegration.update({
+      where: { organizationId: session.user.organizationId },
+      data: {
+        displayPhoneNumber: data.display_phone_number || integration.displayPhoneNumber,
+        verifiedName: data.verified_name || integration.verifiedName,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    revalidatePath("/settings/whatsapp-integration");
+
+    return {
+      success: true,
+      displayPhoneNumber: data.display_phone_number,
+      verifiedName: data.verified_name,
+      qualityRating: data.quality_rating,
+    };
+  } catch (e: any) {
+    throw new Error(`Test échoué : ${e.message}`);
+  }
 }
