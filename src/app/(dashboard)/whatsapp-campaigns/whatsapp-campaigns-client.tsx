@@ -124,9 +124,9 @@ export function WhatsAppCampaignsClient({ campaigns }: Props) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Campagnes WhatsApp</h1>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+           {/* <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
               BÊTA
-            </span>
+            </span>*/}
           </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Envoyez des messages WhatsApp à vos leads via des templates Meta-approuvés

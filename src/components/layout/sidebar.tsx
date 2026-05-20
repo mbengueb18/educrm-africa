@@ -94,7 +94,7 @@ const navItems: NavItem[] = [
   href: "/whatsapp-campaigns",
   icon: MessageCircle,
   permission: "campaigns:view" as Permission,
-  badge: "BÊTA",
+  /*badge: "BÊTA",*/
   },
   {
     label: "Étudiants",
