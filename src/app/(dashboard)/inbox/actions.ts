@@ -351,3 +351,135 @@ export async function getTotalUnreadCount(): Promise<number> {
 
   return count;
 }
+
+import { sendTemplateMessage, resolveVariablesFromLead } from "@/lib/whatsapp/send";
+import { getWhatsAppIntegration } from "@/lib/whatsapp/integration";
+
+// ─── Liste les templates Meta approuvés disponibles pour cette org ───
+export async function getApprovedTemplatesForInbox() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const templates = await prisma.whatsAppTemplate.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      status: "APPROVED",
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      metaName: true,
+      category: true,
+      language: true,
+      bodyText: true,
+      headerText: true,
+      footerText: true,
+      buttons: true,
+      variableMapping: true,
+    },
+  });
+
+  return templates;
+}
+
+// ─── Envoie un template Meta depuis l'Inbox (utilisable même hors fenêtre 24h) ───
+export async function sendWhatsAppTemplateFromInbox(
+  leadId: string,
+  templateId: string
+) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  // Vérifier l'intégration AVANT toute action
+  try {
+    await getWhatsAppIntegration(orgId);
+  } catch (e: any) {
+    throw new Error(e.message);
+  }
+
+  // Récupérer le lead
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: orgId },
+  });
+  if (!lead) throw new Error("Lead introuvable");
+  if (!lead.whatsapp) throw new Error("Ce lead n'a pas de numéro WhatsApp");
+
+  // Récupérer le template
+  const template = await prisma.whatsAppTemplate.findFirst({
+    where: {
+      id: templateId,
+      organizationId: orgId,
+      status: "APPROVED",
+    },
+  });
+  if (!template) throw new Error("Template introuvable ou non approuvé");
+
+  // Résoudre les variables du template depuis le lead
+  const variableMapping = (template.variableMapping as Record<string, string> | null) || {};
+  const bodyVariables = resolveVariablesFromLead(template.bodyText, variableMapping, lead);
+
+  // Envoyer via Meta
+  const result = await sendTemplateMessage(orgId, {
+    to: lead.whatsapp,
+    templateName: template.metaName,
+    templateLanguage: template.language,
+    bodyVariables: bodyVariables,
+  });
+
+  if (!result.success) {
+    throw new Error(
+      `Envoi échoué : ${result.errorMessage || "Erreur inconnue"} (code: ${result.errorCode || "—"})`
+    );
+  }
+
+  // Construire un aperçu du message envoyé pour l'historique
+  let renderedContent = template.bodyText;
+  bodyVariables.forEach((value, idx) => {
+    const placeholder = `{{${idx + 1}}}`;
+    renderedContent = renderedContent.replace(placeholder, value);
+  });
+
+  // Créer un Message OUTBOUND dans la conversation
+  await prisma.message.create({
+    data: {
+      organizationId: orgId,
+      leadId: lead.id,
+      channel: "WHATSAPP",
+      direction: "OUTBOUND",
+      content: renderedContent,
+      status: "SENT",
+      externalId: result.metaMessageId || null,
+      sentAt: new Date(),
+      sentById: session.user.id,
+    },
+  });
+
+  // Créer une Activity
+  await prisma.activity.create({
+    data: {
+      organizationId: orgId,
+      leadId: lead.id,
+      userId: session.user.id,
+      type: "MESSAGE_SENT",
+      description: `Template WhatsApp envoyé : ${template.metaName}`,
+      metadata: {
+        channel: "WHATSAPP",
+        direction: "OUTBOUND",
+        templateId: template.id,
+        templateName: template.metaName,
+        externalId: result.metaMessageId,
+      },
+    },
+  });
+
+  revalidatePath(`/inbox/${lead.id}`);
+  revalidatePath("/inbox");
+
+  return {
+    success: true,
+    metaMessageId: result.metaMessageId,
+    renderedContent,
+  };
+}

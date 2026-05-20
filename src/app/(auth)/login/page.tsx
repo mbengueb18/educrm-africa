@@ -210,7 +210,7 @@ function LoginForm() {
           <p className="mt-8 text-center text-sm text-gray-500">
             Pas encore de compte ?{" "}
             <a
-              href="/register"
+              href="/signup"
               className="text-brand-600 hover:text-brand-700 font-semibold"
             >
               Demander un accès

@@ -4,13 +4,19 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ComposeEmail } from "@/components/messaging/compose-email";
-import { getWhatsAppWindowStatus, sendWhatsAppFromInbox, markConversationAsRead } from "../actions";
+import {
+  getWhatsAppWindowStatus,
+  sendWhatsAppFromInbox,
+  markConversationAsRead,
+  getApprovedTemplatesForInbox,
+  sendWhatsAppTemplateFromInbox,
+} from "../actions";
 import { cn, formatRelative, formatDateTime, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft, Send, Mail, MessageCircle, MessageSquare, Phone, Bot,
   Paperclip, Download, Clock, AlertTriangle, Loader2, Sparkles,
-  ChevronRight, X, ExternalLink,
+  ChevronRight, X, ExternalLink, FileText, Tag, Globe, Search,
 } from "lucide-react";
 
 interface Lead {
@@ -461,19 +467,66 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
   sending: boolean;
   onSend: (text: string) => Promise<void>;
 }) {
+  const router = useRouter();
   const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [sendingTemplate, setSendingTemplate] = useState<string | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<any | null>(null);
+
   const phone = (lead.phone || "").replace(/\D/g, "");
   const prenom = lead.firstName;
-  const nom = lead.lastName;
 
-  const templates = [
-    { label: "Premier contact", icon: "👋", text: "Bonjour " + prenom + " " + nom + ",\n\nMerci de votre intérêt pour notre établissement. Je suis votre conseiller(ère) d'orientation et je serais ravi(e) de répondre à toutes vos questions.\n\nQuand seriez-vous disponible pour en discuter ?\n\nCordialement" },
-    { label: "Relance", icon: "🔄", text: "Bonjour " + prenom + ",\n\nJe me permets de revenir vers vous concernant votre projet de formation. Avez-vous eu le temps d'y réfléchir ?\n\nJe reste disponible pour toute question.\n\nBien cordialement" },
-    { label: "Envoi brochure", icon: "📄", text: "Bonjour " + prenom + ",\n\nComme convenu, je vous envoie notre brochure. N'hésitez pas à la consulter et à me poser vos questions.\n\nBonne lecture !" },
-    { label: "Confirmation RDV", icon: "📅", text: "Bonjour " + prenom + ",\n\nJe vous confirme notre rendez-vous prévu prochainement. Merci de me prévenir en cas d'empêchement.\n\nÀ bientôt !" },
-    { label: "Demande de documents", icon: "📋", text: "Bonjour " + prenom + ",\n\nPour finaliser votre dossier de candidature, pourriez-vous nous transmettre les documents suivants :\n\n- Copie de la pièce d'identité\n- Relevés de notes\n- CV\n- Photo d'identité\n\nMerci d'avance !" },
-    { label: "Félicitations admission", icon: "🎉", text: "Bonjour " + prenom + ",\n\nFélicitations ! Nous avons le plaisir de vous informer que votre candidature a été retenue.\n\nPour confirmer votre inscription, merci de nous contacter dans les plus brefs délais.\n\nBienvenue parmi nous !" },
-  ];
+  // Charger les templates approuvés
+  useEffect(() => {
+    if (!showTemplates) return;
+    setLoadingTemplates(true);
+    getApprovedTemplatesForInbox()
+      .then((data) => setTemplates(data))
+      .catch(() => toast.error("Impossible de charger les templates"))
+      .finally(() => setLoadingTemplates(false));
+  }, [showTemplates]);
+
+  // Filtrage des templates par recherche
+  const filteredTemplates = templates.filter((tpl: any) => {
+    if (!templateSearch.trim()) return true;
+    const q = templateSearch.toLowerCase();
+    return tpl.metaName.toLowerCase().includes(q) || tpl.bodyText.toLowerCase().includes(q);
+  });
+
+  // Aperçu du template avec valeurs du lead
+  const renderTemplatePreview = (template: any) => {
+    let body = template.bodyText;
+    const mapping = template.variableMapping || {};
+    const sortedKeys = Object.keys(mapping).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedKeys.forEach((key) => {
+      const path = mapping[key];
+      let value = "";
+      if (path.startsWith("lead.")) {
+        const field = path.substring(5);
+        value = (lead as any)[field] || `[${field}]`;
+      }
+      body = body.replace(`{{${key}}}`, value);
+    });
+    return body;
+  };
+
+  // Envoi d'un template Meta
+  const handleSendTemplate = async (template: any) => {
+    setSendingTemplate(template.id);
+    try {
+      await sendWhatsAppTemplateFromInbox(lead.id, template.id);
+      toast.success(`Template "${template.metaName}" envoyé à ${prenom}`);
+      setShowTemplates(false);
+      setPreviewTemplate(null);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de l'envoi");
+    }
+    setSendingTemplate(null);
+  };
 
   if (!status) {
     return (
@@ -486,6 +539,7 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
 
   return (
     <div className="space-y-3">
+      {/* Statut fenêtre 24h */}
       {status.isOpen ? (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
           <Clock size={12} className="text-emerald-600 shrink-0" />
@@ -500,69 +554,146 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
             <p className="text-[11px] text-amber-800 font-semibold">Fenêtre 24h fermée</p>
             <p className="text-[10px] text-amber-700">
               {status.lastInboundAt
-                ? "Dernier message du lead il y a " + Math.round(status.hoursElapsed) + "h. Utilisez un template."
-                : "Le lead ne vous a jamais écrit. Utilisez un template."}
+                ? `Dernier message du lead il y a ${Math.round(status.hoursElapsed)}h. Utilisez un template Meta-approuvé.`
+                : "Le lead ne vous a jamais écrit. Utilisez un template Meta-approuvé."}
             </p>
           </div>
         </div>
       )}
 
+      {/* Texte libre — UNIQUEMENT si fenêtre ouverte */}
       {status.isOpen && (
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={"Écrivez votre message à " + prenom + "..."}
+          placeholder={`Écrivez votre message à ${prenom}...`}
           className="input text-sm w-full min-h-[80px] max-h-[200px] resize-y"
           rows={3}
         />
       )}
 
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowTemplates(!showTemplates)}
-          className={cn(
-            "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-            !status.isOpen
-              ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-200"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
-          )}
-        >
-          <span className="flex items-center gap-2">
-            <Sparkles size={12} />
-            {!status.isOpen ? "Choisir un template (obligatoire)" : "Insérer un template"}
-          </span>
-          <ChevronRight size={11} className={cn("transition-transform", showTemplates && "rotate-90")} />
-        </button>
-
-        {showTemplates && (
-          <div className="mt-2 bg-white border border-gray-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
-            {templates.map((tpl) => (
-              <button
-                key={tpl.label}
-                onClick={() => {
-                  if (status.isOpen) {
-                    setText(tpl.text);
-                    setShowTemplates(false);
-                  } else {
-                    onSend(tpl.text);
-                    setShowTemplates(false);
-                  }
-                }}
-                disabled={sending}
-                className="w-full flex items-start gap-2.5 px-3 py-2 hover:bg-emerald-50 transition-colors text-left border-b border-gray-50 last:border-0 disabled:opacity-50"
-              >
-                <span className="text-base shrink-0">{tpl.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-800">{tpl.label}</p>
-                  <p className="text-[10px] text-gray-400 line-clamp-1">{tpl.text.substring(0, 70)}...</p>
-                </div>
-              </button>
-            ))}
-          </div>
+      {/* Bouton sélecteur de templates */}
+      <button
+        type="button"
+        onClick={() => setShowTemplates(!showTemplates)}
+        className={cn(
+          "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+          !status.isOpen
+            ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-200"
+            : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
         )}
-      </div>
+      >
+        <span className="flex items-center gap-2">
+          <FileText size={12} />
+          {!status.isOpen ? "Choisir un template Meta (obligatoire)" : "Envoyer un template Meta"}
+        </span>
+        <ChevronRight size={11} className={cn("transition-transform", showTemplates && "rotate-90")} />
+      </button>
 
+      {/* Panneau templates */}
+      {showTemplates && (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          {/* Recherche */}
+          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+            <div className="relative">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher un template..."
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                className="input text-xs pl-7 py-1.5 w-full"
+              />
+            </div>
+          </div>
+
+          {/* Liste */}
+          <div className="max-h-64 overflow-y-auto">
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-6 text-gray-400">
+                <Loader2 size={14} className="animate-spin mr-2" />
+                <span className="text-xs">Chargement des templates...</span>
+              </div>
+            ) : filteredTemplates.length === 0 ? (
+              <div className="py-6 text-center px-4">
+                <FileText size={20} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-xs text-gray-500 mb-3">
+                  {templates.length === 0
+                    ? "Aucun template approuvé"
+                    : "Aucun template ne correspond"}
+                </p>
+                {templates.length === 0 && (
+                  <Link
+                    href="/settings/whatsapp-templates"
+                    className="btn-primary py-1 px-2 text-[10px] inline-flex"
+                  >
+                    Créer un template
+                  </Link>
+                )}
+              </div>
+            ) : (
+              filteredTemplates.map((tpl: any) => (
+                <div
+                  key={tpl.id}
+                  className="px-3 py-2.5 border-b border-gray-50 last:border-0 hover:bg-emerald-50/30 transition-colors"
+                >
+                  <div className="flex items-start gap-2 mb-1 flex-wrap">
+                    <p className="text-xs font-semibold text-gray-900 font-mono truncate flex-1">
+                      {tpl.metaName}
+                    </p>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {tpl.category}
+                    </span>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-600 border border-gray-200">
+                      {tpl.language.toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 line-clamp-2 mb-2">
+                    {renderTemplatePreview(tpl)}
+                  </p>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setPreviewTemplate(tpl)}
+                      className="text-[10px] text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Aperçu
+                    </button>
+                    <button
+                      onClick={() => handleSendTemplate(tpl)}
+                      disabled={sendingTemplate === tpl.id}
+                      className="btn-primary py-1 px-2 text-[10px] bg-emerald-500 hover:bg-emerald-600 border-emerald-500"
+                    >
+                      {sendingTemplate === tpl.id ? (
+                        <Loader2 size={9} className="animate-spin" />
+                      ) : (
+                        <Send size={9} />
+                      )}
+                      Envoyer
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal preview */}
+      {previewTemplate && (
+        <TemplatePreviewModal
+          template={previewTemplate}
+          renderedBody={renderTemplatePreview(previewTemplate)}
+          onClose={() => setPreviewTemplate(null)}
+          onSend={() => {
+            const tpl = previewTemplate;
+            setPreviewTemplate(null);
+            handleSendTemplate(tpl);
+          }}
+          sending={sendingTemplate === previewTemplate.id}
+        />
+      )}
+
+      {/* Bouton envoyer le texte libre */}
       {status.isOpen && (
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
           <div className="text-[10px] text-gray-500 truncate flex-1">
@@ -578,6 +709,96 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Modal preview template ───
+function TemplatePreviewModal({
+  template,
+  renderedBody,
+  onClose,
+  onSend,
+  sending,
+}: {
+  template: any;
+  renderedBody: string;
+  onClose: () => void;
+  onSend: () => void;
+  sending: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">{template.metaName}</h3>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                {template.category}
+              </span>
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-50 text-gray-600 border border-gray-200">
+                {template.language.toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded text-gray-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4">
+          <p className="text-xs text-gray-500 mb-3">Aperçu avec les données du lead :</p>
+
+          {/* WhatsApp bubble */}
+          <div className="bg-gradient-to-br from-[#e5ddd5] to-[#e5ddd5]/70 rounded-xl p-4">
+            <div className="max-w-[280px] ml-auto bg-[#dcf8c6] rounded-lg shadow-sm overflow-hidden">
+              {template.headerText && (
+                <div className="px-3 pt-2 font-bold text-sm text-gray-900">
+                  {template.headerText}
+                </div>
+              )}
+              <div className="px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
+                {renderedBody}
+              </div>
+              {template.footerText && (
+                <div className="px-3 pb-2 text-xs text-gray-500">{template.footerText}</div>
+              )}
+              <div className="px-3 pb-1 text-right">
+                <span className="text-[10px] text-gray-500">10:30 ✓✓</span>
+              </div>
+            </div>
+
+            {template.buttons && Array.isArray(template.buttons) && template.buttons.length > 0 && (
+              <div className="max-w-[280px] ml-auto mt-1 space-y-1">
+                {template.buttons.map((btn: any, i: number) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-lg px-3 py-2 text-center text-sm text-blue-600 font-medium shadow-sm"
+                  >
+                    {btn.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary py-1.5 px-3 text-xs">
+            Annuler
+          </button>
+          <button
+            onClick={onSend}
+            disabled={sending}
+            className="btn-primary py-1.5 px-3 text-xs bg-emerald-500 hover:bg-emerald-600 border-emerald-500"
+          >
+            {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+            Envoyer ce template
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
