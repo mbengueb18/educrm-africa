@@ -118,7 +118,7 @@ const testimonials = [
   {
     name: "Dr. Amadou Diallo",
     role: "Directeur Général, ISM Dakar",
-    text: "EduCRM a transformé notre processus de recrutement. Nous avons doublé notre taux de conversion en 3 mois.",
+    text: "TalibCRM a transformé notre processus de recrutement. Nous avons doublé notre taux de conversion en 3 mois.",
     avatar: "AD",
   },
   {
@@ -174,7 +174,7 @@ export default function LandingPage() {
               color: "#fff", fontWeight: 700, fontSize: 16,
             }}>E</div>
             <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: scrolled ? COLORS.dark : COLORS.dark }}>
-              EduCRM<span style={{ color: COLORS.accent, fontWeight: 400 }}>.africa</span>
+              TalibCRM<span style={{ color: COLORS.accent, fontWeight: 400 }}>.africa</span>
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 32 }} className="nav-links">
@@ -247,7 +247,7 @@ export default function LandingPage() {
               fontSize: 18, lineHeight: 1.7, color: COLORS.gray, marginBottom: 40,
               maxWidth: 560, margin: "0 auto 40px",
             }}>
-              EduCRM est le premier CRM conçu pour les établissements d'enseignement supérieur en Afrique.
+              TalibCRM est le premier CRM conçu pour les établissements d'enseignement supérieur en Afrique.
               Pipeline de recrutement, suivi des appels, campagnes email et conversion en un seul outil.
             </p>
 
@@ -501,7 +501,7 @@ export default function LandingPage() {
             Prêt à transformer le recrutement de votre école ?
           </h2>
           <p style={{ fontSize: 17, color: "#ffffff90", lineHeight: 1.7, marginBottom: 40 }}>
-            Rejoignez les établissements qui utilisent EduCRM pour recruter plus efficacement.
+            Rejoignez les établissements qui utilisent TalibCRM pour recruter plus efficacement.
             Commencez gratuitement, sans engagement.
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
@@ -536,7 +536,7 @@ export default function LandingPage() {
                   color: "#fff", fontWeight: 700, fontSize: 14,
                 }}>E</div>
                 <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 18, color: "#fff" }}>
-                  EduCRM<span style={{ color: COLORS.accent }}>.africa</span>
+                  TalibCRM
                 </span>
               </div>
               <p style={{ fontSize: 13, lineHeight: 1.7, maxWidth: 280 }}>

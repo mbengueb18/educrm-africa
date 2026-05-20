@@ -42,7 +42,7 @@ export default function SettingsPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Paramètres</h1>
-        <p className="text-sm text-gray-500 mt-1">Configurez votre espace EduCRM</p>
+        <p className="text-sm text-gray-500 mt-1">Configurez votre espace TalibCRM</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

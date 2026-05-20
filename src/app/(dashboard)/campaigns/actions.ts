@@ -295,7 +295,7 @@ export async function sendCampaign(campaignId: string) {
   // Send emails via Brevo
   var apiKey = process.env.BREVO_API_KEY;
   var senderEmail = process.env.EMAIL_FROM || "noreply@educrm.africa";
-  var senderName = process.env.EMAIL_FROM_NAME || "EduCRM";
+  var senderName = process.env.EMAIL_FROM_NAME || "TalibCRM";
   var sentCount = 0;
   var failedCount = 0;
 

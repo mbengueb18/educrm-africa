@@ -252,7 +252,7 @@ export default function CustomFieldsPage() {
           </div>
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">2</div>
-            <p>Le code de suivi EduCRM capture la valeur et l&apos;envoie comme champ personnalisé</p>
+            <p>Le code de suivi TalibCRM capture la valeur et l&apos;envoie comme champ personnalisé</p>
           </div>
           <div className="flex gap-3">
             <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">3</div>

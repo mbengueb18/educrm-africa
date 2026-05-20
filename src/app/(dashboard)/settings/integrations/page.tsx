@@ -66,16 +66,16 @@ export default function IntegrationsPage() {
     toast.success("Copié !");
   };
 
-  const widgetCode = `<!-- Formulaire EduCRM — Coller sur votre site -->
+  const widgetCode = `<!-- Formulaire TalibCRM — Coller sur votre site -->
 <div id="educrm-form"></div>
 <script src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/widget/form.js?org=${orgSlug}&key=${generatedKey || keys[0]?.prefix?.replace('...', 'VOTRE_CLE') || 'VOTRE_CLE_API'}&type=contact&color=%231B4F72"></script>`;
 
-  const trackingCode = `<!-- Start of EduCRM Tracking Code -->
+  const trackingCode = `<!-- Start of TalibCRM Tracking Code -->
 <script>
   window._ecrmConfig = { apiKey: "${generatedKey || keys[0]?.prefix?.replace('...', 'VOTRE_CLE') || 'VOTRE_CLE_API'}" };
 </script>
 <script async defer src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/t/ecrm.js?id=${orgSlug}"></script>
-<!-- End of EduCRM Tracking Code -->`;
+<!-- End of TalibCRM Tracking Code -->`;
 
   const gtmCode = `<!-- Pour GTM : Ajouter en tant que balise HTML personnalisée -->
 <script>
@@ -277,14 +277,14 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
                 <Code size={20} className="text-emerald-600" />
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Code de suivi EduCRM</h3>
+                <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Code de suivi TalibCRM</h3>
                 <p className="text-xs sm:text-sm text-gray-500">Comme HubSpot — un seul script, capture automatique des formulaires</p>
               </div>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 sm:px-4 py-3 my-4">
               <p className="text-xs text-amber-800">
-                Ce script détecte automatiquement toutes les soumissions de formulaire sur votre site et envoie les données vers EduCRM. Il mappe intelligemment les champs (prénom, nom, téléphone, email, filière...) quelle que soit la langue ou le nom du champ. Aucune modification de vos formulaires existants n&apos;est nécessaire.
+                Ce script détecte automatiquement toutes les soumissions de formulaire sur votre site et envoie les données vers TalibCRM. Il mappe intelligemment les champs (prénom, nom, téléphone, email, filière...) quelle que soit la langue ou le nom du champ. Aucune modification de vos formulaires existants n&apos;est nécessaire.
               </p>
             </div>
 
@@ -306,7 +306,7 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
               <StepItem number="2" title="Un visiteur remplit un formulaire"
                 desc="Contact, brochure, inscription, peu importe — tout formulaire avec un nom, email ou téléphone est détecté." />
               <StepItem number="3" title="Les champs sont mappés automatiquement"
-                desc="Le script reconnaît 'prénom', 'first_name', 'fname', 'your-name'... et les associe au bon champ EduCRM. Fonctionne en français et en anglais." />
+                desc="Le script reconnaît 'prénom', 'first_name', 'fname', 'your-name'... et les associe au bon champ TalibCRM. Fonctionne en français et en anglais." />
               <StepItem number="4" title="Le lead arrive dans votre pipeline"
                 desc="En temps réel, dans la colonne 'Nouveau'. Source, page d'origine et nom du formulaire sont enregistrés." />
             </div>
@@ -319,7 +319,7 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
             <table className="w-full text-sm">
               <thead className="hidden sm:table-header-group">
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-3 py-2 font-medium text-gray-500 text-xs sm:text-sm">Champ EduCRM</th>
+                  <th className="text-left px-3 py-2 font-medium text-gray-500 text-xs sm:text-sm">Champ TalibCRM</th>
                   <th className="text-left px-3 py-2 font-medium text-gray-500 text-xs sm:text-sm">Noms reconnus</th>
                 </tr>
               </thead>

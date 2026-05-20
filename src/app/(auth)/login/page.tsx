@@ -57,10 +57,12 @@ function LoginForm() {
               <School size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">EduCRM</h1>
+              <h1 className="text-xl font-bold tracking-tight">TalibCRM</h1>
+              {/* 
               <p className="text-[11px] text-brand-300 uppercase tracking-[0.2em]">
                 Africa
               </p>
+              */}
             </div>
           </div>
 
@@ -122,7 +124,7 @@ function LoginForm() {
               Bienvenue
             </h2>
             <p className="text-gray-500 mt-1.5">
-              Connectez-vous à votre espace EduCRM
+              Connectez-vous à votre espace TalibCRM
             </p>
           </div>
 
@@ -213,7 +215,7 @@ function LoginForm() {
               href="/signup"
               className="text-brand-600 hover:text-brand-700 font-semibold"
             >
-              Demander un accès
+              Créer un compte gratuit
             </a>
           </p>
         </div>

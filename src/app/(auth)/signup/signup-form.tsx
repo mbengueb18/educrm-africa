@@ -110,14 +110,14 @@ export function SignupForm() {
         <div style={{ position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 48 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 16 }}>E</div>
-            <span style={{ fontWeight: 700, fontSize: 20 }}>EduCRM<span style={{ color: "#F5A623", fontWeight: 400 }}>.africa</span></span>
+            <span style={{ fontWeight: 700, fontSize: 20 }}>TalibCRM</span>
           </div>
 
           <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.3, marginBottom: 16 }}>
             Créez votre espace CRM en quelques minutes
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.8 }}>
-            Rejoignez les établissements qui utilisent EduCRM pour recruter plus efficacement leurs étudiants.
+            Rejoignez les établissements qui utilisent TalibCRM pour recruter plus efficacement leurs étudiants.
           </p>
 
           {/* Steps indicator */}
@@ -364,7 +364,7 @@ export function SignupForm() {
                 <CheckCircle2 size={40} color="#10B981" />
               </div>
               <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F1923", marginBottom: 12 }}>
-                Bienvenue sur EduCRM ! 🎉
+                Bienvenue sur TalibCRM ! 🎉
               </h2>
               <p style={{ fontSize: 15, color: "#64748B", lineHeight: 1.7, marginBottom: 32 }}>
                 Votre espace <strong>{schoolName}</strong> est prêt.<br />
@@ -390,7 +390,7 @@ export function SignupForm() {
                   </div>
                   <div>
                     <p style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>URL</p>
-                    <p style={{ fontSize: 14, color: "#0E7C6B", fontWeight: 600 }}>app.educrm.africa/{result.slug}</p>
+                    <p style={{ fontSize: 14, color: "#0E7C6B", fontWeight: 600 }}>app.talibcrm.com/{result.slug}</p>
                   </div>
                 </div>
               </div>

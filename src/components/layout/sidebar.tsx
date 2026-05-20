@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     permission: "appointments:view" as Permission,
   },*/
   {
-    label: "Inbox",
+    label: "Boite de réception",
     href: "/inbox",
     icon: MessageSquare,
     permission: "leads:view" as Permission,
