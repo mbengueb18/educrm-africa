@@ -70,7 +70,7 @@ function LoginForm() {
           <div className="space-y-6">
             <h2 className="text-4xl font-bold leading-tight">
               Le CRM conçu pour<br />
-              <span className="text-accent-400">l&apos;éducation africaine</span>
+              <span className="text-accent-400">les établissements d&apos;enseignement supérieur d'Afrique francophone</span>
             </h2>
             <p className="text-brand-200 text-lg leading-relaxed max-w-md">
               Recrutez, inscrivez et accompagnez vos étudiants avec un outil
@@ -82,8 +82,6 @@ function LoginForm() {
               {[
                 "Pipeline de recrutement",
                 "WhatsApp intégré",
-                "Suivi des paiements",
-                "Mobile Money",
                 "Reporting temps réel",
               ].map((feature) => (
                 <span
@@ -155,12 +153,12 @@ function LoginForm() {
                 >
                   Mot de passe
                 </label>
-                <a
+                {/*<a
                   href="/forgot-password"
                   className="text-sm text-brand-600 hover:text-brand-700 font-medium"
                 >
                   Oublié ?
-                </a>
+                </a>*/}
               </div>
               <div className="relative">
                 <input
@@ -209,7 +207,7 @@ function LoginForm() {
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-gray-500">
+          {/*<p className="mt-8 text-center text-sm text-gray-500">
             Pas encore de compte ?{" "}
             <a
               href="/signup"
@@ -217,7 +215,7 @@ function LoginForm() {
             >
               Créer un compte gratuit
             </a>
-          </p>
+          </p>*/}
         </div>
       </div>
     </div>
