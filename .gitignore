@@ -39,3 +39,6 @@ prisma/migrations/
 
 #read me
 .README
+
+#script and backups
+scripts
