@@ -42,3 +42,22 @@ prisma/migrations/
 
 #script and backups
 scripts
+
+# ─── Backups de BDD (jamais commit) ───
+backup-org-*.json
+backup-*.sql
+*.dump
+prisma/backups/
+
+# ─── Scripts destructifs ───
+scripts/clean-*.ts
+scripts/drop-*.ts
+scripts/reset-*.ts
+
+# ─── Fichiers de données locaux ───
+*.local.json
+*.local.csv
+data-local/
+
+# TypeScript build cache
+*.tsbuildinfo
