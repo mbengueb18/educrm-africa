@@ -16,15 +16,22 @@ datasource db {
 // ─── MULTI-TENANT ROOT ───
 
 model Organization {
-  id                 String   @id @default(cuid())
-  name               String
-  slug               String   @unique
-  logo               String?
-  plan               Plan     @default(STARTER)
-  settings           Json     @default("{}") // Custom config: timezone, currency, etc.
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  webTrackingEnabled Boolean  @default(false)
+  id                     String        @id @default(cuid())
+  name                   String
+  slug                   String        @unique
+  logo                   String?
+  plan                   Plan          @default(ESSENTIEL)
+  billingCycle           BillingCycle?
+  aiAddonEnabled         Boolean       @default(false)
+  extraUsersCount        Int           @default(0)
+  aiActionsUsedThisMonth Int           @default(0)
+  aiActionsResetAt       DateTime      @default(now())
+  planLockedUntil        DateTime?
+  planChangedAt          DateTime?
+  settings               Json          @default("{}") // Custom config: timezone, currency, etc.
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  webTrackingEnabled     Boolean       @default(false)
 
   campuses            Campus[]
   users               User[]
@@ -62,10 +69,14 @@ model Organization {
 }
 
 enum Plan {
-  FREE // Pas de pipeline custom, fonctionnalités limitées
-  STARTER // 1 pipeline, 1 campus, 500 contacts
-  PRO // 5 pipelines, 5 campus, 5000 contacts
-  ENTERPRISE // Illimité
+  ESSENTIEL
+  CROISSANCE
+  PERFORMANCE
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
 }
 
 // ─── CAMPUS & PROGRAMS ───
