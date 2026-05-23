@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 
+import { assertCanAddUser } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+
 export async function getUsers() {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -37,6 +40,21 @@ export async function createUser(data: {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+
+  // ✅ NOUVEAU : vérifier la limite du plan AVANT toute autre opération
+  try {
+    await assertCanAddUser(session.user.organizationId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      // Renvoyer un message clair au client
+      var msg = error.upgradeTarget
+        ? error.message + " Passez au plan " + error.upgradeTarget + " pour augmenter la limite."
+        : error.message;
+      throw new Error(msg);
+    }
+    throw error;
+  }
+
   var existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
   if (existing) throw new Error("Cet email est déjà utilisé");
   var passwordHash = await bcrypt.hash(data.password, 12);
@@ -59,6 +77,29 @@ export async function updateUser(userId: string, data: {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+
+  // ✅ NOUVEAU : si on réactive un utilisateur, vérifier la limite
+  if (data.isActive === true) {
+    var currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+    // Seulement si on passe de inactif à actif
+    if (currentUser && !currentUser.isActive) {
+      try {
+        await assertCanAddUser(session.user.organizationId);
+      } catch (error) {
+        if (error instanceof PlanLimitError) {
+          var msg = error.upgradeTarget
+            ? error.message + " Passez au plan " + error.upgradeTarget + " pour réactiver cet utilisateur."
+            : error.message;
+          throw new Error(msg);
+        }
+        throw error;
+      }
+    }
+  }
+
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name.trim();
   if (data.email !== undefined) {
