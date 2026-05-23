@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { getLeadDetail, logWhatsAppMessage, updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
+import { getLeadDetail,  updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
 import { generatePortalLink, sendPortalLinkByEmail } from "@/app/(dashboard)/pipeline/portal-actions";
 import { moveLeadToStage, assignLead, updateLeadScore, updateLead, deleteLead } from "@/app/(dashboard)/pipeline/actions";
 import { createTask } from "@/app/(dashboard)/tasks/actions";
@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import {
   X, Phone, MessageCircle, Mail, MapPin, GraduationCap, Calendar,
   User as UserIcon, Building2, Tag, Activity, FileText, Send,
-  ChevronDown, ChevronUp, Clock, ArrowRight, Loader2, MessageSquare,
+  Clock, ArrowRight, Loader2, MessageSquare,
   Megaphone, Pencil, Trash2, Check, XCircle, ListTodo, Plus,
   StickyNote, Paperclip, Bot, Link2, ExternalLink, CalendarDays,
   PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle, Briefcase,
@@ -21,6 +21,9 @@ import { ComposeEmail } from "@/components/messaging/compose-email";
 import { ConvertLeadModal } from "@/components/pipeline/convert-lead-modal";
 import Link from "next/link";
 import { stripHtml } from "@/lib/email-blocks";
+import { WhatsAppUpgradeModal } from "@/components/lead/whatsapp-upgrade-modal";
+import { WhatsAppButton } from "@/components/lead/whatsapp-button";
+import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 
 type LeadDetail = Awaited<ReturnType<typeof getLeadDetail>>;
 
@@ -70,6 +73,9 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
   var [showConvert, setShowConvert] = useState(false);
   var [showTaskForm, setShowTaskForm] = useState(false);
   var [showCompose, setShowCompose] = useState(false);
+    // ✅ NOUVEAU : info plan pour le bouton WhatsApp
+  var [canUseWhatsAppAPI, setCanUseWhatsAppAPI] = useState(false);
+  var [currentPlanName, setCurrentPlanName] = useState("Essentiel");
   var router = useRouter();
 
   useEffect(function() {
@@ -87,6 +93,18 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
   var [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   useEffect(function() {
     getCustomFields().then(setCustomFieldsConfig).catch(function() {});
+  }, []);
+
+    // ✅ NOUVEAU : charger les infos plan au mount
+  useEffect(function() {
+    getCurrentPlanInfo().then(function(info) {
+      if (info) {
+        setCanUseWhatsAppAPI(info.features.WHATSAPP_BUSINESS_API);
+        setCurrentPlanName(info.planName);
+      }
+    }).catch(function() {
+      // Silent fail, on garde les valeurs par défaut
+    });
   }, []);
 
   useEffect(function() {
@@ -187,7 +205,15 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
                   <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs" title="Appeler">
                     <Phone size={13} /> Appeler
                   </a>
-                  {(lead.whatsapp || lead.phone) && <WhatsAppQuickActions lead={lead} />}
+                  {(lead.whatsapp || lead.phone) && (
+                    <WhatsAppButton
+                      leadId={lead.id}
+                      leadName={lead.firstName + " " + lead.lastName}
+                      leadPhone={lead.whatsapp || lead.phone}
+                      canUseWhatsAppAPI={canUseWhatsAppAPI}
+                      currentPlanName={currentPlanName}
+                    />
+                  )}
                   {lead.email && (
                     <button onClick={function() { setShowCompose(true); }} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs" title="Envoyer un email">
                       <Mail size={13} /> Email
@@ -1035,183 +1061,6 @@ function EditRow({ label, value, onChange, type }: { label: string; value: strin
         className="input text-sm py-1.5 w-full"
         placeholder={label}
       />
-    </div>
-  );
-}
-
-// ─── WhatsApp Quick Actions with Templates (Cloud API + wa.me fallback) ───
-function WhatsAppQuickActions({ lead }: { lead: LeadDetail }) {
-  var [open, setOpen] = useState(false);
-  var [mode, setMode] = useState<"cloud_api" | "wa_link" | "loading">("loading");
-  var [sending, setSending] = useState<string | null>(null); // label du template en cours d'envoi
-
-  // Détection du mode au montage
-  useEffect(function() {
-    import("@/lib/whatsapp-status").then(function(mod) {
-      mod.getWhatsAppMode().then(function(m) {
-        setMode(m);
-      });
-    });
-  }, []);
-
-  var prenom = lead.firstName;
-  var nom = lead.lastName;
-  var filiere = lead.program?.name || "votre filière";
-  var campus = lead.campus?.name || "notre campus";
-  var phone = (lead.whatsapp || lead.phone || "").replace(/\D/g, '');
-
-  var templates = [
-    {
-      label: "Premier contact",
-      icon: "👋",
-      text: "Bonjour " + prenom + " " + nom + ",\n\nMerci de votre intérêt pour " + filiere + " à " + campus + ". Je suis votre conseiller(ère) d'orientation et je serais ravi(e) de répondre à toutes vos questions.\n\nQuand seriez-vous disponible pour en discuter ?\n\nCordialement",
-    },
-    {
-      label: "Relance",
-      icon: "🔄",
-      text: "Bonjour " + prenom + ",\n\nJe me permets de revenir vers vous concernant votre intérêt pour " + filiere + ". Avez-vous eu le temps de réfléchir à votre projet de formation ?\n\nJe reste disponible pour toute question.\n\nBien cordialement",
-    },
-    {
-      label: "Envoi brochure",
-      icon: "📄",
-      text: "Bonjour " + prenom + ",\n\nComme convenu, je vous envoie la brochure de notre programme " + filiere + ". N'hésitez pas à la consulter et à me poser vos questions.\n\nBonne lecture !",
-    },
-    {
-      label: "Confirmation RDV",
-      icon: "📅",
-      text: "Bonjour " + prenom + ",\n\nJe vous confirme notre rendez-vous prévu prochainement. Merci de me prévenir en cas d'empêchement.\n\nÀ bientôt !",
-    },
-    {
-      label: "Demande de documents",
-      icon: "📋",
-      text: "Bonjour " + prenom + ",\n\nPour finaliser votre dossier de candidature en " + filiere + ", pourriez-vous nous transmettre les documents suivants :\n\n- Copie de la pièce d'identité\n- Relevés de notes\n- CV\n- Photo d'identité\n\nMerci d'avance !",
-    },
-    {
-      label: "Félicitations admission",
-      icon: "🎉",
-      text: "Bonjour " + prenom + ",\n\nFélicitations ! Nous avons le plaisir de vous informer que votre candidature en " + filiere + " a été retenue.\n\nPour confirmer votre inscription, merci de nous contacter dans les plus brefs délais.\n\nBienvenue parmi nous !",
-    },
-    {
-      label: "Message libre",
-      icon: "✏️",
-      text: "",
-    },
-  ];
-
-  var sendTemplate = async function(label: string, text: string) {
-    if (!text) {
-      // Message libre → ouvre wa.me sans texte (l'utilisateur tape sur place)
-      window.open("https://wa.me/" + phone, "_blank");
-      setOpen(false);
-      return;
-    }
-
-    if (mode === "cloud_api") {
-      // ─── Mode Cloud API : envoi automatique via Meta ───
-      setSending(label);
-      try {
-        var actions = await import("@/app/(dashboard)/leads/[leadId]/whatsapp-actions");
-        await actions.sendWhatsAppToLead({ leadId: lead.id, text: text });
-        toast.success("Message envoyé à " + lead.firstName + " " + lead.lastName);
-        setOpen(false);
-      } catch (err: any) {
-        // Si erreur "fenêtre 24h fermée" → on tente wa.me en fallback
-        var msg = err.message || "";
-        if (msg.toLowerCase().includes("24") || msg.toLowerCase().includes("template") || msg.toLowerCase().includes("re-engagement")) {
-          toast("Ouverture de WhatsApp pour finaliser l'envoi", { icon: "📱" });
-          window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(text), "_blank");
-          setOpen(false);
-        } else {
-          toast.error("Impossible d'envoyer le message");
-        }
-      }
-      setSending(null);
-    } else {
-      // ─── Mode wa.me : ouverture WhatsApp Web (méthode actuelle) ───
-      var url = "https://wa.me/" + phone + "?text=" + encodeURIComponent(text);
-      window.open(url, "_blank");
-      setOpen(false);
-
-      try {
-        await logWhatsAppMessage(lead.id, text);
-        toast.success("Message WhatsApp tracké");
-      } catch {
-        // Silent fail
-      }
-    }
-  };
-
-  var isCloudApi = mode === "cloud_api";
-
-  return (
-    <div className="relative">
-      <button
-        onClick={function() { setOpen(!open); }}
-        disabled={mode === "loading"}
-        className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 flex items-center gap-1"
-        title={isCloudApi ? "Envoyer via WhatsApp Cloud API" : "Ouvrir WhatsApp"}
-      >
-        <MessageCircle size={13} /> WhatsApp
-        {isCloudApi && (
-          <span className="hidden sm:inline-flex text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
-            API
-          </span>
-        )}
-        {open ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-50" onClick={function() { setOpen(false); }} />
-          <div className="absolute top-full left-0 mt-1 w-[calc(100vw-2rem)] sm:w-80 max-w-xs sm:max-w-sm bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden animate-scale-in">
-            <div className={cn(
-              "px-3 py-2 border-b",
-              isCloudApi ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"
-            )}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-emerald-700">
-                  {isCloudApi ? "Envoi automatique" : "Envoi via WhatsApp Web"}
-                </p>
-                {isCloudApi && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 font-bold">
-                    Cloud API
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-gray-600 truncate">{lead.whatsapp || lead.phone}</p>
-              {isCloudApi && (
-                <p className="text-[9px] text-emerald-600 mt-0.5">
-                  ⚠️ Ces templates ne fonctionnent que si le lead vous a écrit dans les 24h
-                </p>
-              )}
-            </div>
-            <div className="max-h-64 overflow-y-auto">
-              {templates.map(function(tpl) {
-                var isSending = sending === tpl.label;
-                return (
-                  <button
-                    key={tpl.label}
-                    onClick={function() { sendTemplate(tpl.label, tpl.text); }}
-                    disabled={sending !== null}
-                    className="w-full flex items-start gap-2.5 px-3 py-2.5 hover:bg-emerald-50/50 transition-colors text-left border-b border-gray-50 last:border-0 disabled:opacity-50"
-                  >
-                    <span className="text-base mt-0.5">{tpl.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-800 flex items-center gap-1.5">
-                        {tpl.label}
-                        {isSending && <Loader2 size={10} className="animate-spin text-emerald-500" />}
-                      </p>
-                      {tpl.text && (
-                        <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2">{tpl.text.substring(0, 80)}...</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }

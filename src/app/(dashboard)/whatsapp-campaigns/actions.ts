@@ -4,6 +4,26 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getWhatsAppIntegration } from "@/lib/whatsapp/integration";
+import { assertCanAccessFeature } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+
+/**
+ * Helper local : vérifie l'accès aux campagnes WhatsApp
+ * Throws une erreur claire avec message d'upgrade si plan insuffisant
+ */
+async function assertCanUseWhatsAppCampaigns(organizationId: string) {
+  try {
+    await assertCanAccessFeature(organizationId, "WHATSAPP_CAMPAIGNS");
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      throw new Error(
+        "Les campagnes WhatsApp ne sont disponibles qu'en plan Performance. " +
+        "Passez à Performance pour créer et envoyer des campagnes WhatsApp à vos audiences."
+      );
+    }
+    throw error;
+  }
+}
 
 // ─── Get all WhatsApp campaigns for organization ───
 export async function getWhatsAppCampaigns() {
@@ -26,6 +46,9 @@ export async function getWhatsAppCampaigns() {
 export async function quickCreateWhatsAppCampaign() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
 
   // Trouver un premier template APPROVED comme template par défaut
   const firstTemplate = await prisma.whatsAppTemplate.findFirst({
@@ -80,6 +103,9 @@ export async function updateWhatsAppCampaignDraft(campaignId: string, data: {
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
 
   const campaign = await prisma.whatsAppCampaign.findFirst({
     where: { id: campaignId, organizationId: session.user.organizationId },
@@ -242,6 +268,9 @@ import { sendTemplateMessage, formatPhoneForMeta, resolveVariablesFromLead } fro
 export async function sendWhatsAppCampaign(campaignId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate AVANT toute opération
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
 
   // Récupérer la campagne avec template + audience
   const campaign = await prisma.whatsAppCampaign.findFirst({

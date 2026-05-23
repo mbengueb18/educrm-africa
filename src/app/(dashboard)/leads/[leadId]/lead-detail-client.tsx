@@ -36,6 +36,8 @@ const activityIcons: Record<string, any> = {
 interface LeadDetailClientProps {
   lead: any;
   initialTab: string;
+  canUseWhatsAppAPI: boolean;
+  currentPlanName: string;
 }
 
 const TABS = [
@@ -49,7 +51,11 @@ const TABS = [
   { id: "appointments", label: "Rendez-vous", icon: Calendar },
 ];
 
-export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
+export function LeadDetailClient({ 
+  lead, 
+  initialTab, 
+  canUseWhatsAppAPI,
+  currentPlanName, }: LeadDetailClientProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -125,6 +131,8 @@ export function LeadDetailClient({ lead, initialTab }: LeadDetailClientProps) {
             leadId={lead.id}
             leadName={lead.firstName + " " + lead.lastName}
             leadPhone={lead.whatsapp || lead.phone}
+            canUseWhatsAppAPI={canUseWhatsAppAPI}
+            currentPlanName={currentPlanName}
           />
         )}
         {lead.email && (

@@ -3,6 +3,25 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { assertCanAccessFeature } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+/**
+ * Helper local : vérifie l'accès WhatsApp Business API
+ * Throws une erreur claire avec message d'upgrade si plan insuffisant
+ */
+async function assertCanUseWhatsAppBusinessAPI(organizationId: string) {
+  try {
+    await assertCanAccessFeature(organizationId, "WHATSAPP_BUSINESS_API");
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      throw new Error(
+        "WhatsApp Business API est exclusivement disponible dans le plan Performance. " +
+        "Passez à Performance pour configurer votre compte Meta, créer des templates et envoyer des campagnes WhatsApp."
+      );
+    }
+    throw error;
+  }
+}
 
 // ─── Get integration for current org ───
 export async function getIntegration() {
@@ -31,6 +50,9 @@ export async function saveIntegration(data: {
   }
 
   const orgId = session.user.organizationId;
+
+  // check feature gate Performance
+  await assertCanUseWhatsAppBusinessAPI(orgId);
 
   // Validation basique
   if (!data.phoneNumberId?.trim()) throw new Error("Le Phone Number ID est requis");
@@ -117,6 +139,9 @@ export async function toggleIntegrationActive(isActive: boolean) {
     throw new Error("Permission refusée. Seul un administrateur peut configurer WhatsApp.");
   }
 
+  // check feature gate
+  await assertCanUseWhatsAppBusinessAPI(session.user.organizationId);
+
   await prisma.whatsAppIntegration.update({
     where: { organizationId: session.user.organizationId },
     data: { isActive },
@@ -173,6 +198,9 @@ export async function getWebhookUrl() {
 export async function testConnection() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate
+  await assertCanUseWhatsAppBusinessAPI(session.user.organizationId);
 
   const integration = await prisma.whatsAppIntegration.findUnique({
     where: { organizationId: session.user.organizationId },

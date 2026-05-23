@@ -12,6 +12,56 @@ import {
   mapMetaStatusToLocal,
 } from "@/lib/whatsapp/templates";
 
+import { assertCanAccessFeature } from "@/lib/plans/checks";
+import { canCreateWhatsAppTemplate } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+
+/**
+ * Helper local : vérifie l'accès à la création de templates WhatsApp
+ * - Check feature gate (WHATSAPP_BUSINESS_API uniquement Performance)
+ * - Check quota templates (max 10 en Performance)
+ */
+async function assertCanCreateWhatsAppTemplate(organizationId: string) {
+  // Check 1 : feature gate
+  try {
+    await assertCanAccessFeature(organizationId, "WHATSAPP_BUSINESS_API");
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      throw new Error(
+        "Les templates WhatsApp ne sont disponibles qu'en plan Performance. " +
+        "Passez à Performance pour créer vos modèles de messages WhatsApp validés par Meta."
+      );
+    }
+    throw error;
+  }
+
+  // Check 2 : quota templates
+  const check = await canCreateWhatsAppTemplate(organizationId);
+  if (!check.allowed) {
+    throw new Error(
+      check.reason || `Limite de templates WhatsApp atteinte (10 max).`
+    );
+  }
+}
+
+/**
+ * Helper local pour les actions de gestion (édition, soumission, sync)
+ * Ne check QUE le feature gate, pas le quota
+ */
+async function assertCanManageWhatsAppTemplates(organizationId: string) {
+  try {
+    await assertCanAccessFeature(organizationId, "WHATSAPP_BUSINESS_API");
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      throw new Error(
+        "La gestion des templates WhatsApp nécessite le plan Performance. " +
+        "Passez à Performance pour modifier ou soumettre vos templates Meta."
+      );
+    }
+    throw error;
+  }
+}
+
 // ─── List templates (local DB) ───
 export async function listTemplates() {
   const session = await auth();
@@ -56,6 +106,9 @@ export async function createTemplate(data: {
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate + quota
+  await assertCanCreateWhatsAppTemplate(session.user.organizationId);
 
   // Valider le nom : seulement lowercase, chiffres et underscores
   if (!/^[a-z0-9_]+$/.test(data.metaName)) {
@@ -103,6 +156,9 @@ export async function updateTemplate(templateId: string, data: {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  // check feature gate (pas de quota check pour update)
+  await assertCanManageWhatsAppTemplates(session.user.organizationId);
+
   const template = await prisma.whatsAppTemplate.findFirst({
     where: { id: templateId, organizationId: session.user.organizationId },
   });
@@ -145,6 +201,9 @@ export async function updateTemplate(templateId: string, data: {
 export async function submitTemplate(templateId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate
+  await assertCanManageWhatsAppTemplates(session.user.organizationId);
 
   const template = await prisma.whatsAppTemplate.findFirst({
     where: { id: templateId, organizationId: session.user.organizationId },
@@ -190,6 +249,9 @@ export async function submitTemplate(templateId: string) {
 export async function syncTemplatesFromMeta() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+    // check feature gate
+  await assertCanManageWhatsAppTemplates(session.user.organizationId);
 
   const orgId = session.user.organizationId;
 
