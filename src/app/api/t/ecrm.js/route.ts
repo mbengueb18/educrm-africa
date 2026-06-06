@@ -30,15 +30,22 @@ export async function GET(request: NextRequest) {
   ECRM.endpoint = '${baseUrl}/api/leads/ingest';
   ECRM.pageviewEndpoint = '${baseUrl}/api/t/pageview';
   ECRM.apiKey = null;
+  ECRM.siteId = null;
   ECRM.debug = false;
   ECRM.excludeForms = [];
   ECRM.capturedForms = [];
   ECRM.visitorId = null;
   ECRM.sessionId = null;
 
-  if (window._ecrmConfig) {
-    Object.keys(window._ecrmConfig).forEach(function(k) { ECRM[k] = window._ecrmConfig[k]; });
+  // Lecture config : _talibConfig (nouveau) ou _ecrmConfig (rétrocompat)
+  var _cfg = window._talibConfig || window._ecrmConfig;
+  if (_cfg) {
+    Object.keys(_cfg).forEach(function(k) { ECRM[k] = _cfg[k]; });
   }
+
+  // siteId est le nouveau nom public ; apiKey reste accepté pour rétrocompat
+  ECRM.siteId = ECRM.siteId || ECRM.apiKey;
+  ECRM.apiKey = ECRM.siteId;
 
   // ─── Constants ───
   var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes idle
@@ -186,7 +193,7 @@ export async function GET(request: NextRequest) {
       var key = scripts[i].getAttribute('data-key');
       if (key) { ECRM.apiKey = key; attachListeners(); return; }
     }
-    log('warn', 'Clé API manquante. Ajoutez data-key="ecrm_xxx" au script.');
+    log('warn', 'Identifiant de suivi manquant. Vérifiez votre code de suivi TalibCRM.');
   }
 
   // ─── Field name mapping ───
