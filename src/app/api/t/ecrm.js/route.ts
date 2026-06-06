@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+
 export async function GET(request: NextRequest) {
   var orgSlug = request.nextUrl.searchParams.get("id") || "";
   var baseUrl = request.nextUrl.origin;
