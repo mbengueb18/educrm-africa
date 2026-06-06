@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+
 export async function GET(request: NextRequest) {
   var orgSlug = request.nextUrl.searchParams.get("id") || "";
   var baseUrl = request.nextUrl.origin;
@@ -496,6 +497,43 @@ export async function GET(request: NextRequest) {
     xhr.send(JSON.stringify(payload));
   }
 
+  // ─── Gravity Forms support (AJAX) ───
+  // Gravity Forms soumet en AJAX : pas d'événement submit natif exploitable.
+  // On capture les valeurs au submit (avant vidage), puis on envoie le lead
+  // uniquement quand Gravity confirme le succès (gform_confirmation_loaded).
+  var _gravityPending = {};
+
+  function setupGravityForms() {
+    if (typeof window.jQuery === 'undefined') return;
+    var $ = window.jQuery;
+
+    // 1. Capturer les valeurs au submit (avant que Gravity ne vide le formulaire)
+    document.addEventListener('submit', function(e) {
+      var form = e.target;
+      if (!form || form.tagName !== 'FORM') return;
+      if (!form.id || form.id.indexOf('gform_') !== 0) return; // formulaires Gravity uniquement
+      if (!shouldCapture(form)) return;
+      // form.id = "gform_5" → formId = "5"
+      var formId = form.id.replace('gform_', '');
+      _gravityPending[formId] = extractFormData(form);
+      log('info', 'Gravity: valeurs capturées pour le formulaire', formId);
+    }, true);
+
+    // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
+    $(document).on('gform_confirmation_loaded', function(event, formId) {
+      var data = _gravityPending[String(formId)];
+      if (!data) {
+        log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
+        return;
+      }
+      log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
+      sendLead(data);
+      delete _gravityPending[String(formId)];
+    });
+
+    log('info', 'Gravity Forms support activé');
+  }
+
   // ─── Attach form listeners ───
   function attachListeners() {
     log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ', pageviewTracking: ${pageviewTrackingEnabled})');
@@ -514,10 +552,15 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
+      // Les formulaires Gravity sont gérés par setupGravityForms (AJAX) → on les ignore ici
+      if (form.id && form.id.indexOf('gform_') === 0) return;
       if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);
     }, true);
+
+    // Support des formulaires Gravity Forms (soumission AJAX)
+    setupGravityForms();
   }
 
   // ─── Logging ───
