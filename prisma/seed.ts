@@ -11,7 +11,7 @@ async function main() {
     data: {
       name: "Institut Supérieur de Management de Dakar",
       slug: "ism-dakar",
-      plan: "PRO",
+      plan: "PERFORMANCE",
       settings: {
         timezone: "Africa/Dakar",
         currency: "XOF",

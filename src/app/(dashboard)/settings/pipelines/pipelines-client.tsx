@@ -23,6 +23,18 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+// Helper pour afficher joliment le nom du plan
+const PLAN_LABELS: Record<string, string> = {
+  ESSENTIEL: "Essentiel",
+  CROISSANCE: "Croissance",
+  PERFORMANCE: "Performance",
+};
+
+const PLAN_BADGES: Record<string, { bg: string; text: string }> = {
+  ESSENTIEL: { bg: "bg-gray-100", text: "text-gray-700" },
+  CROISSANCE: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  PERFORMANCE: { bg: "bg-blue-100", text: "text-blue-700" },
+};
 
 
 const FORMATION_TYPE_LABELS = {
@@ -52,7 +64,6 @@ export default function PipelinesClient({ initialPipelines, plan, limit }: Props
   const [pending, startTransition] = useTransition();
 
   const canCreateMore = initialPipelines.length < limit;
-  const unlimited = limit === Number.MAX_SAFE_INTEGER;
 
   return (
     <div>
@@ -81,17 +92,24 @@ export default function PipelinesClient({ initialPipelines, plan, limit }: Props
           <Sparkles size={16} className={canCreateMore ? "text-blue-600" : "text-amber-600"} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={cn("text-sm font-semibold", canCreateMore ? "text-blue-900" : "text-amber-900")}>
-            Plan {plan}
-          </p>
-          <p className={cn("text-xs mt-0.5", canCreateMore ? "text-blue-700" : "text-amber-700")}>
-            {unlimited 
-              ? "Pipelines illimités"
-              : `${initialPipelines.length} / ${limit} pipeline${limit > 1 ? "s" : ""} utilisé${initialPipelines.length > 1 ? "s" : ""}.`
-            }
-            {!canCreateMore && !unlimited && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={cn("text-sm font-semibold", canCreateMore ? "text-blue-900" : "text-amber-900")}>
+              Plan {PLAN_LABELS[plan] || plan}
+            </p>
+            <span className={cn(
+              "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+              PLAN_BADGES[plan]?.bg || "bg-gray-100",
+              PLAN_BADGES[plan]?.text || "text-gray-700"
+            )}>
+              {plan === "ESSENTIEL" ? "Gratuit" : plan === "CROISSANCE" ? "45k FCFA/mois" : "100k FCFA/mois"}
+            </span>
+          </div>
+          <p className={cn("text-xs mt-1", canCreateMore ? "text-blue-700" : "text-amber-700")}>
+            {initialPipelines.length} / {limit} pipeline{limit > 1 ? "s" : ""} utilisé{initialPipelines.length > 1 ? "s" : ""}.
+            {!canCreateMore && (
               <span className="block mt-1">
-                Limite atteinte. Passez à un plan supérieur pour créer plus de pipelines.
+                Limite atteinte. <Link href="/settings/billing" className="underline font-semibold hover:text-amber-900">Passez à un plan supérieur</Link> pour créer plus de pipelines.
+               {/* <a href="https://talibcrm.com/tarifs" target="_blank" rel="noopener" className="underline font-semibold hover:text-amber-900">Passez à un plan supérieur</a> */}
               </span>
             )}
           </p>

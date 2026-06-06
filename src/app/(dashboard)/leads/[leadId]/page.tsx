@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
+import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 import { LeadDetailClient } from "./lead-detail-client";
 
 export const metadata: Metadata = {
@@ -31,5 +32,17 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
 
   if (!lead) notFound();
 
-  return <LeadDetailClient lead={lead as any} initialTab={tab || "overview"} />;
+  // ✅ NOUVEAU : récupérer les infos plan pour la modale WhatsApp
+  const planInfo = await getCurrentPlanInfo();
+  const canUseWhatsAppAPI = planInfo?.features.WHATSAPP_BUSINESS_API ?? false;
+  const currentPlanName = planInfo?.planName ?? "Essentiel";
+
+  return (
+    <LeadDetailClient
+      lead={lead as any}
+      initialTab={tab || "overview"}
+      canUseWhatsAppAPI={canUseWhatsAppAPI}
+      currentPlanName={currentPlanName}
+    />
+  );
 }

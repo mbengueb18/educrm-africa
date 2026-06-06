@@ -4,6 +4,25 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertCanAccessFeature } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+
+/**
+ * Helper local : vérifie l'accès aux campagnes WhatsApp depuis les audiences
+ */
+async function assertCanUseWhatsAppCampaigns(organizationId: string) {
+  try {
+    await assertCanAccessFeature(organizationId, "WHATSAPP_CAMPAIGNS");
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      throw new Error(
+        "Les campagnes WhatsApp ne sont disponibles qu'en plan Performance. " +
+        "Passez à Performance pour envoyer des campagnes WhatsApp à vos audiences."
+      );
+    }
+    throw error;
+  }
+}
 
 // ─── Types pour les règles dynamiques ───
 export interface FilterRule {
@@ -811,6 +830,9 @@ export async function createCampaignFromAudience(audienceId: string) {
 export async function createWhatsAppCampaignFromAudience(audienceId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // check feature gate
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
 
   const orgId = session.user.organizationId;
 

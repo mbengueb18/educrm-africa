@@ -65,7 +65,7 @@ export async function registerOrganization(data: {
     data: {
       name: data.schoolName.trim(),
       slug,
-      plan: "STARTER",
+      plan: "ESSENTIEL", // ✅ MODIFIÉ : Plan gratuit par défaut au signup
       settings: {
         schoolType: data.schoolType,
         timezone: "Africa/Dakar",
@@ -100,12 +100,26 @@ export async function registerOrganization(data: {
     },
   });
 
-  // Create default pipeline stages
+  // ✅ NOUVEAU : Créer le pipeline par défaut AVANT les stages
+  var defaultPipeline = await prisma.pipeline.create({
+    data: {
+      name: "Pipeline principal",
+      description: "Votre premier pipeline d'admissions",
+      color: "#3B82F6",
+      isDefault: true,
+      isActive: true,
+      order: 0,
+      organizationId: org.id,
+    },
+  });
+
+  // Create default pipeline stages (now linked to the default pipeline)
   for (var stage of DEFAULT_STAGES) {
     await prisma.pipelineStage.create({
       data: {
         ...stage,
         organizationId: org.id,
+        pipelineId: defaultPipeline.id, // ✅ NOUVEAU : lien avec le pipeline
       },
     });
   }

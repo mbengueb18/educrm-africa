@@ -4,17 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-// ─── LIMITES PAR PLAN ───
-const PIPELINE_LIMITS: Record<string, number> = {
-  FREE: 1,
-  STARTER: 2,
-  PRO: 5,
-  ENTERPRISE: Number.MAX_SAFE_INTEGER,
-};
+import { assertCanCreatePipeline } from "@/lib/plans/checks";
+import { PlanLimitError } from "@/lib/plans/errors";
+import { PLAN_LIMITS } from "@/lib/plans/config";
 
-function getPipelineLimit(plan: string): number {
-  return PIPELINE_LIMITS[plan] || 1;
-}
 
 // ─── GET ALL PIPELINES + STAGES ───
 export async function getPipelinesData() {
@@ -47,11 +40,13 @@ export async function getPipelinesData() {
     },
   });
 
-  const limit = getPipelineLimit(org?.plan || "STARTER");
+  // ✅ NOUVEAU : utiliser PLAN_LIMITS comme source de vérité
+  const plan = org?.plan || "ESSENTIEL";
+  const limit = PLAN_LIMITS[plan].maxPipelines;
   
   return {
     pipelines,
-    plan: org?.plan || "STARTER",
+    plan,
     limit,
     canCreateMore: pipelines.length < limit,
   };
@@ -70,19 +65,17 @@ export async function createPipeline(input: {
 
   const orgId = session.user.organizationId;
 
-  // Vérif limite plan
-  const org = await prisma.organization.findUnique({
-    where: { id: orgId },
-    select: { plan: true },
-  });
-  const existingCount = await prisma.pipeline.count({ where: { organizationId: orgId } });
-  const limit = getPipelineLimit(org?.plan || "STARTER");
-  
-  if (existingCount >= limit) {
-    throw new Error(
-      `Limite atteinte : votre plan ${org?.plan} autorise max ${limit} pipeline(s). ` +
-      `Passez à un plan supérieur pour en créer davantage.`
-    );
+  // ✅ NOUVEAU : check de limite via notre helper centralisé
+  try {
+    await assertCanCreatePipeline(orgId);
+  } catch (error) {
+    if (error instanceof PlanLimitError) {
+      const msg = error.upgradeTarget
+        ? error.message + " Passez au plan " + error.upgradeTarget + " pour augmenter la limite."
+        : error.message;
+      throw new Error(msg);
+    }
+    throw error;
   }
 
   // Vérif nom unique
@@ -90,6 +83,9 @@ export async function createPipeline(input: {
     where: { organizationId: orgId, name: input.name.trim() },
   });
   if (existing) throw new Error("Un pipeline avec ce nom existe déjà");
+
+  // Compter pour le order (besoin de existingCount pour les défauts)
+  const existingCount = await prisma.pipeline.count({ where: { organizationId: orgId } });
 
   // Création
   const pipeline = await prisma.pipeline.create({

@@ -18,13 +18,19 @@ export default function IntegrationsPage() {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<"overview" | "tracking" | "api" | "widget" | "docs">("overview");
-  const [orgSlug, setOrgSlug] = useState("ism-dakar");
-
+  const [orgSlug, setOrgSlug] = useState("");
+  // Clé affichée dans les snippets : vraie clé si générée à l'instant, sinon placeholder
+  const snippetKey = generatedKey || "VOTRE_ID_SUIVI";
+''
   useEffect(() => {
     listApiKeys().then(setKeys).catch(() => {});
     fetch("/api/settings/chatbot-status")
       .then(function(r) { return r.json(); })
       .then(function(data) { setChatbotEnabled(!!data.enabled); })
+      .catch(function() {});
+    fetch("/api/settings/org-info")
+      .then(function(r) { return r.json(); })
+      .then(function(data) { if (data.slug) setOrgSlug(data.slug); })
       .catch(function() {});
   }, []);
 
@@ -68,20 +74,20 @@ export default function IntegrationsPage() {
 
   const widgetCode = `<!-- Formulaire TalibCRM — Coller sur votre site -->
 <div id="educrm-form"></div>
-<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/widget/form.js?org=${orgSlug}&key=${generatedKey || keys[0]?.prefix?.replace('...', 'VOTRE_CLE') || 'VOTRE_CLE_API'}&type=contact&color=%231B4F72"></script>`;
+<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/widget/form.js?org=${orgSlug || "VOTRE_ORG"}&key=${snippetKey}&type=contact&color=%231B4F72"></script>`;
 
   const trackingCode = `<!-- Start of TalibCRM Tracking Code -->
 <script>
-  window._ecrmConfig = { apiKey: "${generatedKey || keys[0]?.prefix?.replace('...', 'VOTRE_CLE') || 'VOTRE_CLE_API'}" };
+  window._talibConfig = { siteId: "${snippetKey}" };
 </script>
-<script async defer src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/t/ecrm.js?id=${orgSlug}"></script>
+<script async defer src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/t/ecrm.js?id=${orgSlug || "VOTRE_ORG"}"></script>
 <!-- End of TalibCRM Tracking Code -->`;
 
   const gtmCode = `<!-- Pour GTM : Ajouter en tant que balise HTML personnalisée -->
 <script>
-  window._ecrmConfig = { apiKey: "${generatedKey || keys[0]?.prefix?.replace('...', 'VOTRE_CLE') || 'VOTRE_CLE_API'}" };
+  window._talibConfig = { siteId: "${snippetKey}" };
 </script>
-<script async defer src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/t/ecrm.js?id=${orgSlug}"></script>`;
+<script async defer src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/t/ecrm.js?id=${orgSlug || "VOTRE_ORG"}"></script>`;
 
   const apiExample = `// Exemple d'intégration avec votre site
 fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.educrm.africa'}/api/leads/ingest", {
@@ -270,6 +276,18 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
       {/* Tracking tab */}
       {activeTab === "tracking" && (
         <div className="space-y-4 sm:space-y-6">
+          {!generatedKey && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2">
+              <Key size={16} className="text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-800">
+                Le code ci-dessous contient un emplacement <code className="bg-blue-100 px-1 rounded">VOTRE_CLE_API</code>.
+                Remplacez-le par votre clé : générez-en une dans l&apos;onglet{" "}
+                <button onClick={() => setActiveTab("api")} className="font-semibold underline">API &amp; Clés</button>,
+                puis copiez le code immédiatement (la clé n&apos;est affichée qu&apos;une seule fois).
+              </p>
+            </div>
+          )}
+
           {/* Main tracking code */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
             <div className="flex items-start sm:items-center gap-3 mb-2">
@@ -343,8 +361,8 @@ fetch("${typeof window !== 'undefined' ? window.location.origin : 'https://app.e
             <h3 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">Configuration avancée</h3>
             <CodeBlock code={`<!-- Options avancées (avant le script de suivi) -->
 <script>
-  window._ecrmConfig = {
-    apiKey: "ecrm_xxx",
+  window._talibConfig = {
+    siteId: "${snippetKey}",
     debug: true,           // Affiche les logs dans la console
     excludeForms: [        // IDs de formulaires à ignorer
       "search-form",
