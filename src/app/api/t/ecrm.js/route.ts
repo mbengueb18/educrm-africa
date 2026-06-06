@@ -276,15 +276,17 @@ export async function GET(request: NextRequest) {
   function findPartialMatch(text) {
     if (!text) return null;
     text = text.toLowerCase();
+    // Retirer les accents : "prénom" → "prenom", "téléphone" → "telephone"
+    text = text.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     var priorities = [
       ['whatsapp', 'whatsapp'],
       ['prenom', 'firstName'], ['first', 'firstName'], ['fname', 'firstName'],
       ['nom_famille', 'lastName'], ['nom de famille', 'lastName'], ['last', 'lastName'], ['lname', 'lastName'], ['surname', 'lastName'],
       ['nom_complet', '_fullName'], ['full', '_fullName'],
-      ['téléphone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
+      ['telephone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
       ['e-mail', 'email'], ['email', 'email'], ['mail', 'email'], ['courriel', 'email'],
       ['ville', 'city'], ['city', 'city'],
-      ['formation', 'filière'], ['filière', 'filière'], ['programme', 'filière'],
+      ['formation', 'filiere'], ['filiere', 'filière'], ['programme', 'filière'],
       ['campus', 'campus'],
       ['message', 'message'], ['commentaire', 'message'], ['question', 'message'],
       ['nom', 'lastName'],
