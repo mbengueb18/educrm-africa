@@ -498,37 +498,46 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── Gravity Forms support (AJAX) ───
-  // Gravity Forms soumet en AJAX : pas d'événement submit natif exploitable.
-  // On capture les valeurs au submit (avant vidage), puis on envoie le lead
-  // uniquement quand Gravity confirme le succès (gform_confirmation_loaded).
-  var _gravityPending = {};
+  // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
+  // Stratégie : on mémorise les valeurs en continu (input/change) par formulaire,
+  // puis on envoie le lead quand Gravity confirme le succès (gform_confirmation_loaded).
+  var _gravityData = {};
+
+  function readGravityForm(form) {
+    if (!form) return null;
+    return extractFormData(form);
+  }
 
   function setupGravityForms() {
     if (typeof window.jQuery === 'undefined') return;
     var $ = window.jQuery;
 
-    // 1. Capturer les valeurs au submit (avant que Gravity ne vide le formulaire)
-    document.addEventListener('submit', function(e) {
-      var form = e.target;
-      if (!form || form.tagName !== 'FORM') return;
-      if (!form.id || form.id.indexOf('gform_') !== 0) return; // formulaires Gravity uniquement
-      if (!shouldCapture(form)) return;
-      // form.id = "gform_5" → formId = "5"
+    // 1. Mémoriser les valeurs à chaque saisie dans un formulaire Gravity
+    document.addEventListener('input', function(e) {
+      var form = e.target && e.target.form;
+      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
       var formId = form.id.replace('gform_', '');
-      _gravityPending[formId] = extractFormData(form);
-      log('info', 'Gravity: valeurs capturées pour le formulaire', formId);
+      _gravityData[formId] = readGravityForm(form);
+    }, true);
+
+    document.addEventListener('change', function(e) {
+      var form = e.target && e.target.form;
+      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
+      var formId = form.id.replace('gform_', '');
+      _gravityData[formId] = readGravityForm(form);
     }, true);
 
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
     $(document).on('gform_confirmation_loaded', function(event, formId) {
-      var data = _gravityPending[String(formId)];
+      var key = String(formId);
+      var data = _gravityData[key];
       if (!data) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
         return;
       }
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
       sendLead(data);
-      delete _gravityPending[String(formId)];
+      delete _gravityData[key];
     });
 
     log('info', 'Gravity Forms support activé');
