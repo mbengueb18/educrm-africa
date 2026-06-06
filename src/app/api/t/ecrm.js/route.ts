@@ -222,11 +222,15 @@ export async function GET(request: NextRequest) {
     demande: 'message', objet: 'message', sujet: 'message', subject: 'message',
   };
 
-  // ─── Extract form data ───
+// ─── Extract form data ───
   function extractFormData(form) {
     var data = {};
     var raw = {};
+    var mappedKeys = {}; // clés brutes déjà mappées vers un champ principal
     var elements = form.elements;
+
+    // Clés principales connues (si une valeur atterrit là, la clé brute est "consommée")
+    var CORE_KEYS = ['firstName','lastName','phone','email','whatsapp','city','filière','campus','niveau','message','_fullName'];
 
     for (var i = 0; i < elements.length; i++) {
       var el = elements[i];
@@ -241,21 +245,24 @@ export async function GET(request: NextRequest) {
       var value = (el.value || '').trim();
       if (!key || !value) continue;
 
+      // Ignorer les champs techniques internes de Gravity Forms
+      if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/.test(key)) continue;
+
       raw[key] = value;
 
       var mapped = FIELD_MAP[key];
-      if (mapped) { data[mapped] = value; continue; }
+      if (mapped) { if (!data[mapped]) { data[mapped] = value; mappedKeys[key] = true; } continue; }
 
       var partialMatch = findPartialMatch(key);
-      if (partialMatch) { data[partialMatch] = value; continue; }
+      if (partialMatch) { if (!data[partialMatch]) { data[partialMatch] = value; mappedKeys[key] = true; } continue; }
 
       var placeholder = (el.placeholder || '').toLowerCase();
       var labelText = getLabelText(el);
       var hintMatch = findPartialMatch(placeholder) || findPartialMatch(labelText);
-      if (hintMatch) { data[hintMatch] = value; continue; }
+      if (hintMatch) { if (!data[hintMatch]) { data[hintMatch] = value; mappedKeys[key] = true; } continue; }
 
-      if (!data.email && isEmail(value)) { data.email = value; continue; }
-      if (!data.phone && isPhone(value)) { data.phone = value; continue; }
+      if (!data.email && isEmail(value)) { data.email = value; mappedKeys[key] = true; continue; }
+      if (!data.phone && isPhone(value)) { data.phone = value; mappedKeys[key] = true; continue; }
     }
 
     if (data._fullName && (!data.firstName || !data.lastName)) {
@@ -265,7 +272,13 @@ export async function GET(request: NextRequest) {
       delete data._fullName;
     }
 
-    data._raw = raw;
+    // Ne garder dans _raw que les champs NON mappés vers un champ principal
+    var cleanRaw = {};
+    Object.keys(raw).forEach(function(k) {
+      if (!mappedKeys[k]) cleanRaw[k] = raw[k];
+    });
+
+    data._raw = cleanRaw;
     data._formId = form.id || form.getAttribute('name') || form.action || '';
     data._pageUrl = window.location.href;
     data._pageTitle = document.title;
