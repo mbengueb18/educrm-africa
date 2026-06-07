@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import {
-  getCustomFields, addCustomField, updateCustomField, deleteCustomField, getUnmappedFields,
+  getCustomFields, addCustomField, updateCustomField, deleteCustomField, getUnmappedFields, MAPPABLE_STANDARD_FIELDS,
   type CustomFieldConfig,
 } from "@/lib/custom-fields";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   Eye, EyeOff, Tag, AlertTriangle, Zap, Settings2,
 } from "lucide-react";
 import Link from "next/link";
+
 
 export default function CustomFieldsPage() {
   const [fields, setFields] = useState<CustomFieldConfig[]>([]);
@@ -287,6 +288,8 @@ function AddFieldForm({
   const [options, setOptions] = useState("");
   const [showInCard, setShowInCard] = useState(false);
   const [showInList, setShowInList] = useState(true);
+  const [target, setTarget] = useState<"custom" | "standard">("custom");
+  const [standardField, setStandardField] = useState("");
 
   // Auto-generate key from label
   const handleLabelChange = (v: string) => {
@@ -318,6 +321,10 @@ function AddFieldForm({
       toast.error("Le label et la clé sont requis");
       return;
     }
+    if (target === "standard" && !standardField) {
+      toast.error("Choisissez le champ standard de destination");
+      return;
+    }
     onAdd({
       label: label.trim(),
       key: key.trim(),
@@ -327,6 +334,8 @@ function AddFieldForm({
       required: false,
       showInCard,
       showInList,
+      target,
+      standardField: target === "standard" ? standardField : undefined,
     });
   };
 
@@ -376,6 +385,38 @@ function AddFieldForm({
             placeholder="niveau_etudes"
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value as "custom" | "standard")}
+            className="input"
+          >
+            <option value="custom">Champ personnalisé</option>
+            <option value="standard">Champ standard du CRM</option>
+          </select>
+        </div>
+
+        {target === "standard" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Champ standard cible *</label>
+            <select
+              value={standardField}
+              onChange={(e) => setStandardField(e.target.value)}
+              className="input"
+            >
+              <option value="">Sélectionner…</option>
+              {MAPPABLE_STANDARD_FIELDS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              La valeur ira directement dans la propriété native du lead, pas en champ personnalisé.
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
           <select value={type} onChange={(e) => setType(e.target.value as any)} className="input">

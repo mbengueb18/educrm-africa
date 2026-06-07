@@ -4,17 +4,26 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+// Champs standard du Lead mappables sans transcodage (texte libre uniquement)
+// gender (enum), programId/campusId (lookup), source (enum) sont volontairement exclus pour l'instant.
+export const MAPPABLE_STANDARD_FIELDS: { value: string; label: string }[] = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "city", label: "Ville" },
+];
+
 export interface CustomFieldConfig {
   id: string;
-  label: string;           // Display name in CRM: "Niveau d'études actuel"
-  key: string;             // Internal key: "niveau_etudes"
+  label: string;
+  key: string;
   type: "text" | "select" | "number" | "date" | "email" | "phone";
-  options?: string[];       // For select type: ["Terminale", "Bac", "Bac+1", ...]
-  mappedFormFields: string[]; // Form field names that map here: ["niveau_actuel", "niveau", "level", "education_level"]
+  options?: string[];
+  mappedFormFields: string[];
   required: boolean;
-  showInCard: boolean;      // Show on Kanban card
-  showInList: boolean;      // Show in student table
+  showInCard: boolean;
+  showInList: boolean;
   order: number;
+  target?: "custom" | "standard";   // "custom" (défaut) = stocké en customFields ; "standard" = propriété native du lead
+  standardField?: string;            // si target === "standard" : nom du champ Lead (ex: "city", "whatsapp")
 }
 
 // ─── Get custom fields config ───

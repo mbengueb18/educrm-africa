@@ -73,6 +73,38 @@ function mapSource(source: string): string {
   return map[s] || "WEBSITE";
 }
 
+// ─── Extract standard-field overrides from configured mappings ───
+// Retourne { city: "...", whatsapp: "..." } pour les champs formulaire
+// mappés vers une propriété standard du Lead.
+var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city"]);
+
+function extractStandardOverrides(
+  rawData: Record<string, any>,
+  orgCustomFieldsConfig: any[]
+): Record<string, string> {
+  var overrides: Record<string, string> = {};
+
+  for (var [key, value] of Object.entries(rawData)) {
+    if (!value || typeof value !== "string" || !value.trim()) continue;
+    if (key.startsWith("_")) continue;
+
+    var keyLower = key.toLowerCase();
+
+    var configMatch = orgCustomFieldsConfig.find(function(cf: any) {
+      return cf.target === "standard"
+        && cf.standardField
+        && ALLOWED_STANDARD_FIELDS.has(cf.standardField)
+        && cf.mappedFormFields.some(function(mf: string) { return mf.toLowerCase() === keyLower; });
+    });
+
+    if (configMatch) {
+      overrides[configMatch.standardField] = value.trim();
+    }
+  }
+
+  return overrides;
+}
+
 // ─── Extract custom fields (anything not in CORE_FIELDS) ───
 function extractCustomFields(
   rawData: Record<string, any>,
@@ -93,6 +125,8 @@ function extractCustomFields(
     });
 
     if (configMatch) {
+      // Si ce champ est mappé vers une propriété STANDARD, il ne va pas en custom
+      if (configMatch.target === "standard") continue;
       custom[configMatch.key] = value.trim();
     } else {
       custom[key] = value.trim();
@@ -325,6 +359,10 @@ export async function POST(request: NextRequest) {
 
     // ─── Extract custom fields ───
     var customFields = extractCustomFields(parsed.data, customFieldsConfig);
+    // ─── Champs mappés vers des propriétés standard (ville, whatsapp...) ───
+    var standardOverrides = extractStandardOverrides(parsed.data, customFieldsConfig);
+    if (standardOverrides.city && !fields.city) fields.city = standardOverrides.city;
+    if (standardOverrides.whatsapp) fields.whatsapp = standardOverrides.whatsapp;
 
     // ─── Classify traffic source ───
     var trafficSource = classifyTrafficSource(parsed.data);
