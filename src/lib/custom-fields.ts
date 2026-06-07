@@ -4,13 +4,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-// Champs standard du Lead mappables sans transcodage (texte libre uniquement)
-// gender (enum), programId/campusId (lookup), source (enum) sont volontairement exclus pour l'instant.
-export const MAPPABLE_STANDARD_FIELDS: { value: string; label: string }[] = [
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "city", label: "Ville" },
-];
-
 export interface CustomFieldConfig {
   id: string;
   label: string;

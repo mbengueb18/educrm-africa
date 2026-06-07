@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useTransition } from "react";
 import {
-  getCustomFields, addCustomField, updateCustomField, deleteCustomField, getUnmappedFields, MAPPABLE_STANDARD_FIELDS,
+  getCustomFields, addCustomField, updateCustomField, deleteCustomField, getUnmappedFields,
   type CustomFieldConfig,
 } from "@/lib/custom-fields";
+import { MAPPABLE_STANDARD_FIELDS } from "@/lib/custom-fields-constants";
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Save, Loader2,
