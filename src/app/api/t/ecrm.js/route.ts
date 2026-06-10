@@ -222,11 +222,15 @@ export async function GET(request: NextRequest) {
     demande: 'message', objet: 'message', sujet: 'message', subject: 'message',
   };
 
-  // ─── Extract form data ───
+// ─── Extract form data ───
   function extractFormData(form) {
     var data = {};
     var raw = {};
+    var mappedKeys = {}; // clés brutes déjà mappées vers un champ principal
     var elements = form.elements;
+
+    // Clés principales connues (si une valeur atterrit là, la clé brute est "consommée")
+    var CORE_KEYS = ['firstName','lastName','phone','email','whatsapp','city','filière','campus','niveau','message','_fullName'];
 
     for (var i = 0; i < elements.length; i++) {
       var el = elements[i];
@@ -241,21 +245,24 @@ export async function GET(request: NextRequest) {
       var value = (el.value || '').trim();
       if (!key || !value) continue;
 
+      // Ignorer les champs techniques internes de Gravity Forms
+      if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/.test(key)) continue;
+
       raw[key] = value;
 
       var mapped = FIELD_MAP[key];
-      if (mapped) { data[mapped] = value; continue; }
+      if (mapped) { if (!data[mapped]) { data[mapped] = value; mappedKeys[key] = true; } continue; }
 
       var partialMatch = findPartialMatch(key);
-      if (partialMatch) { data[partialMatch] = value; continue; }
+      if (partialMatch) { if (!data[partialMatch]) { data[partialMatch] = value; mappedKeys[key] = true; } continue; }
 
       var placeholder = (el.placeholder || '').toLowerCase();
       var labelText = getLabelText(el);
       var hintMatch = findPartialMatch(placeholder) || findPartialMatch(labelText);
-      if (hintMatch) { data[hintMatch] = value; continue; }
+      if (hintMatch) { if (!data[hintMatch]) { data[hintMatch] = value; mappedKeys[key] = true; } continue; }
 
-      if (!data.email && isEmail(value)) { data.email = value; continue; }
-      if (!data.phone && isPhone(value)) { data.phone = value; continue; }
+      if (!data.email && isEmail(value)) { data.email = value; mappedKeys[key] = true; continue; }
+      if (!data.phone && isPhone(value)) { data.phone = value; mappedKeys[key] = true; continue; }
     }
 
     if (data._fullName && (!data.firstName || !data.lastName)) {
@@ -265,7 +272,13 @@ export async function GET(request: NextRequest) {
       delete data._fullName;
     }
 
-    data._raw = raw;
+    // Ne garder dans _raw que les champs NON mappés vers un champ principal
+    var cleanRaw = {};
+    Object.keys(raw).forEach(function(k) {
+      if (!mappedKeys[k]) cleanRaw[k] = raw[k];
+    });
+
+    data._raw = cleanRaw;
     data._formId = form.id || form.getAttribute('name') || form.action || '';
     data._pageUrl = window.location.href;
     data._pageTitle = document.title;
@@ -276,15 +289,17 @@ export async function GET(request: NextRequest) {
   function findPartialMatch(text) {
     if (!text) return null;
     text = text.toLowerCase();
+    // Retirer les accents : "prénom" → "prenom", "téléphone" → "telephone"
+    text = text.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     var priorities = [
       ['whatsapp', 'whatsapp'],
       ['prenom', 'firstName'], ['first', 'firstName'], ['fname', 'firstName'],
       ['nom_famille', 'lastName'], ['nom de famille', 'lastName'], ['last', 'lastName'], ['lname', 'lastName'], ['surname', 'lastName'],
       ['nom_complet', '_fullName'], ['full', '_fullName'],
-      ['téléphone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
+      ['telephone', 'phone'], ['phone', 'phone'], ['mobile', 'phone'], ['portable', 'phone'], ['tel', 'phone'],
       ['e-mail', 'email'], ['email', 'email'], ['mail', 'email'], ['courriel', 'email'],
       ['ville', 'city'], ['city', 'city'],
-      ['formation', 'filière'], ['filière', 'filière'], ['programme', 'filière'],
+      ['formation', 'filiere'], ['filiere', 'filière'], ['programme', 'filière'],
       ['campus', 'campus'],
       ['message', 'message'], ['commentaire', 'message'], ['question', 'message'],
       ['nom', 'lastName'],
@@ -498,37 +513,46 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── Gravity Forms support (AJAX) ───
-  // Gravity Forms soumet en AJAX : pas d'événement submit natif exploitable.
-  // On capture les valeurs au submit (avant vidage), puis on envoie le lead
-  // uniquement quand Gravity confirme le succès (gform_confirmation_loaded).
-  var _gravityPending = {};
+  // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
+  // Stratégie : on mémorise les valeurs en continu (input/change) par formulaire,
+  // puis on envoie le lead quand Gravity confirme le succès (gform_confirmation_loaded).
+  var _gravityData = {};
+
+  function readGravityForm(form) {
+    if (!form) return null;
+    return extractFormData(form);
+  }
 
   function setupGravityForms() {
     if (typeof window.jQuery === 'undefined') return;
     var $ = window.jQuery;
 
-    // 1. Capturer les valeurs au submit (avant que Gravity ne vide le formulaire)
-    document.addEventListener('submit', function(e) {
-      var form = e.target;
-      if (!form || form.tagName !== 'FORM') return;
-      if (!form.id || form.id.indexOf('gform_') !== 0) return; // formulaires Gravity uniquement
-      if (!shouldCapture(form)) return;
-      // form.id = "gform_5" → formId = "5"
+    // 1. Mémoriser les valeurs à chaque saisie dans un formulaire Gravity
+    document.addEventListener('input', function(e) {
+      var form = e.target && e.target.form;
+      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
       var formId = form.id.replace('gform_', '');
-      _gravityPending[formId] = extractFormData(form);
-      log('info', 'Gravity: valeurs capturées pour le formulaire', formId);
+      _gravityData[formId] = readGravityForm(form);
+    }, true);
+
+    document.addEventListener('change', function(e) {
+      var form = e.target && e.target.form;
+      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
+      var formId = form.id.replace('gform_', '');
+      _gravityData[formId] = readGravityForm(form);
     }, true);
 
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
     $(document).on('gform_confirmation_loaded', function(event, formId) {
-      var data = _gravityPending[String(formId)];
+      var key = String(formId);
+      var data = _gravityData[key];
       if (!data) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
         return;
       }
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
       sendLead(data);
-      delete _gravityPending[String(formId)];
+      delete _gravityData[key];
     });
 
     log('info', 'Gravity Forms support activé');
