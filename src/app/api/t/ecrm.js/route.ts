@@ -558,6 +558,101 @@ export async function GET(request: NextRequest) {
     log('info', 'Gravity Forms support activé');
   }
 
+  // ─── Form schema capture (pour la page Gestion des formulaires du CRM) ───
+  // Envoie la STRUCTURE des formulaires (pas les valeurs), seulement si elle a changé.
+  ECRM.formSchemaEndpoint = '${baseUrl}/api/t/form-schema';
+  var SCHEMA_HASH_KEY = '_ecrm_schema_hash';
+
+  function buildFormSchemas() {
+    var forms = document.querySelectorAll('form');
+    var result = [];
+    for (var i = 0; i < forms.length; i++) {
+      var form = forms[i];
+      if (!shouldCapture(form)) continue;
+
+      var formId = form.id || form.getAttribute('name') || ('form_' + i);
+      var fields = [];
+      var seen = {};
+      var els = form.elements;
+      for (var j = 0; j < els.length; j++) {
+        var el = els[j];
+        var nm = (el.name || el.id || '').trim();
+        if (!nm) continue;
+        if (el.type === 'submit' || el.type === 'button' || el.type === 'hidden' || el.type === 'password' || el.type === 'file') continue;
+        // Ignorer les champs techniques Gravity
+        if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/i.test(nm)) continue;
+        if (seen[nm]) continue;
+        seen[nm] = true;
+        fields.push({
+          name: nm,
+          type: el.type || el.tagName.toLowerCase(),
+          label: getLabelTextRaw(el),
+        });
+      }
+      if (fields.length > 0) {
+        result.push({ formId: formId, name: getFormName(form, formId), fields: fields });
+      }
+    }
+    return result;
+  }
+
+  // Label en conservant la casse d'origine (getLabelText met en minuscule, ici on veut l'affichage)
+  function getLabelTextRaw(el) {
+    if (el.id) {
+      var label = document.querySelector('label[for="' + el.id + '"]');
+      if (label) return label.textContent.trim();
+    }
+    var parent = el.closest ? el.closest('label') : null;
+    if (parent) return parent.textContent.trim();
+    return '';
+  }
+
+  function getFormName(form, fallback) {
+    // Cherche un titre lisible : aria-label, heading proche, ou fallback sur l'ID
+    if (form.getAttribute('aria-label')) return form.getAttribute('aria-label').trim();
+    var heading = form.querySelector('h1, h2, h3, legend');
+    if (heading && heading.textContent.trim()) return heading.textContent.trim().slice(0, 100);
+    return fallback;
+  }
+
+  function simpleHash(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return String(h);
+  }
+
+  function sendFormSchemas() {
+    if (!ECRM.apiKey) return;
+    try {
+      var schemas = buildFormSchemas();
+      if (!schemas.length) return;
+      var payload = JSON.stringify({ forms: schemas });
+      var hash = simpleHash(payload);
+      // N'envoyer que si le schéma a changé depuis la dernière fois
+      var lastHash = null;
+      try { lastHash = localStorage.getItem(SCHEMA_HASH_KEY); } catch(e) {}
+      if (lastHash === hash) {
+        log('info', 'Schéma des formulaires inchangé, envoi ignoré');
+        return;
+      }
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', ECRM.formSchemaEndpoint, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('x-api-key', ECRM.apiKey);
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { localStorage.setItem(SCHEMA_HASH_KEY, hash); } catch(e) {}
+          log('info', 'Schéma des formulaires envoyé:', schemas.length, 'formulaire(s)');
+        }
+      };
+      xhr.send(payload);
+    } catch(e) {
+      log('warn', 'Erreur envoi schéma formulaires:', e);
+    }
+  }
+
   // ─── Attach form listeners ───
   function attachListeners() {
     log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ', pageviewTracking: ${pageviewTrackingEnabled})');
@@ -585,6 +680,8 @@ export async function GET(request: NextRequest) {
 
     // Support des formulaires Gravity Forms (soumission AJAX)
     setupGravityForms();
+    // Remonter le schéma des formulaires au CRM (différé pour ne pas gêner le chargement)
+    setTimeout(sendFormSchemas, 1500);
   }
 
   // ─── Logging ───
