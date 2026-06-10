@@ -563,12 +563,34 @@ export async function GET(request: NextRequest) {
   ECRM.formSchemaEndpoint = '${baseUrl}/api/t/form-schema';
   var SCHEMA_HASH_KEY = '_ecrm_schema_hash';
 
+  // Filtre pour la capture de SCHÉMA : plus permissif que shouldCapture (lead).
+  // On exclut les formulaires techniques mais on n'exige PAS de champ contact
+  // détectable par name (les champs Gravity input_X ont leurs mots dans les labels).
+  function shouldCaptureSchema(form) {
+    if (form.role === 'search') return false;
+    var idStr = (form.id || '') + ' ' + (form.getAttribute('name') || '') + ' ' + (form.action || '') + ' ' + (form.className || '');
+    if (/search|login|signin|register|signup|password|reset|checkout|payment|cart|wp-link|comment/i.test(idStr)) return false;
+    if (ECRM.excludeForms.indexOf(form.id) !== -1) return false;
+    // Doit avoir au moins 2 champs utiles (sinon c'est un form de recherche/newsletter à 1 champ)
+    var usefulCount = 0;
+    var els = form.elements;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var nm = (el.name || el.id || '').trim();
+      if (!nm) continue;
+      if (el.type === 'submit' || el.type === 'button' || el.type === 'hidden') continue;
+      if (/^(gform_|is_submit_|state_)/i.test(nm)) continue;
+      usefulCount++;
+    }
+    return usefulCount >= 2;
+  }
+
   function buildFormSchemas() {
     var forms = document.querySelectorAll('form');
     var result = [];
     for (var i = 0; i < forms.length; i++) {
       var form = forms[i];
-      if (!shouldCapture(form)) continue;
+      if (!shouldCaptureSchema(form)) continue;
 
       var formId = form.id || form.getAttribute('name') || ('form_' + i);
       var fields = [];
@@ -682,6 +704,12 @@ export async function GET(request: NextRequest) {
     setupGravityForms();
     // Remonter le schéma des formulaires au CRM (différé pour ne pas gêner le chargement)
     setTimeout(sendFormSchemas, 1500);
+    setTimeout(sendFormSchemas, 4000);
+    if (typeof window.jQuery !== 'undefined') {
+      window.jQuery(document).on('gform_post_render', function() {
+        setTimeout(sendFormSchemas, 300);
+      });
+    }
   }
 
   // ─── Logging ───
