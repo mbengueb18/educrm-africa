@@ -610,6 +610,9 @@ export async function GET(request: NextRequest) {
           type: el.type || el.tagName.toLowerCase(),
           label: getLabelTextRaw(el),
         });
+        // Ignorer les conteneurs (fieldset) et pseudo-champs de structure Gravity
+        if (el.type === 'fieldset' || el.tagName.toLowerCase() === 'fieldset') continue;
+        if (/^field_/i.test(nm)) continue;
       }
       if (fields.length > 0) {
         result.push({ formId: formId, name: getFormName(form, formId), fields: fields });
@@ -630,10 +633,18 @@ export async function GET(request: NextRequest) {
   }
 
   function getFormName(form, fallback) {
-    // Cherche un titre lisible : aria-label, heading proche, ou fallback sur l'ID
+    // 1. aria-label explicite
     if (form.getAttribute('aria-label')) return form.getAttribute('aria-label').trim();
-    var heading = form.querySelector('h1, h2, h3, legend');
-    if (heading && heading.textContent.trim()) return heading.textContent.trim().slice(0, 100);
+    // 2. Titre Gravity : .gform_title est généralement à côté/au-dessus du <form>
+    var wrapper = form.closest('.gform_wrapper') || form.parentElement;
+    if (wrapper) {
+      var gtitle = wrapper.querySelector('.gform_title, .gform_heading h3, .gform_heading h2');
+      if (gtitle && gtitle.textContent.trim()) return gtitle.textContent.trim().slice(0, 100);
+    }
+    // 3. Fallback neutre basé sur l'ID : "gform_7" → "Formulaire 7"
+    if (fallback && /^gform_(\\d+)$/.test(fallback)) {
+      return 'Formulaire ' + fallback.replace('gform_', '');
+    }
     return fallback;
   }
 
