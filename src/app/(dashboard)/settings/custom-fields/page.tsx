@@ -9,7 +9,7 @@ import { MAPPABLE_STANDARD_FIELDS } from "@/lib/custom-fields-constants";
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Save, Loader2,
-  Eye, EyeOff, Tag, AlertTriangle, Zap, Settings2,
+  Eye, EyeOff, Tag, AlertTriangle, Zap, Settings2, Pencil,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -18,21 +18,55 @@ export default function CustomFieldsPage() {
   const [fields, setFields] = useState<CustomFieldConfig[]>([]);
   const [unmapped, setUnmapped] = useState<{ field: string; count: number; sampleValue: string }[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingField, setEditingField] = useState<CustomFieldConfig | null>(null);
+  // Champ formulaire à pré-remplir quand on ouvre le formulaire depuis l'encart "non mappés"
+  const [prefillFormField, setPrefillFormField] = useState<string | null>(null);
 
   useEffect(() => {
     getCustomFields().then(setFields).catch(() => {});
     getUnmappedFields().then(setUnmapped).catch(() => {});
   }, []);
 
+  const openCreateForm = (prefill?: string) => {
+    setEditingField(null);
+    setPrefillFormField(prefill || null);
+    setShowAddForm(true);
+  };
+
+  const openEditForm = (field: CustomFieldConfig) => {
+    setEditingField(field);
+    setPrefillFormField(null);
+    setShowAddForm(true);
+  };
+
+  const closeForm = () => {
+    setShowAddForm(false);
+    setEditingField(null);
+    setPrefillFormField(null);
+  };
+
   const handleAdd = (field: Omit<CustomFieldConfig, "id" | "order">) => {
     startTransition(async () => {
       try {
         const newField = await addCustomField(field);
         setFields((prev) => [...prev, newField]);
-        setShowAddForm(false);
+        closeForm();
         toast.success(`Champ "${field.label}" ajouté`);
+        getUnmappedFields().then(setUnmapped);
+      } catch (e: any) {
+        toast.error(e.message);
+      }
+    });
+  };
+
+  const handleUpdate = (fieldId: string, updates: Partial<CustomFieldConfig>) => {
+    startTransition(async () => {
+      try {
+        await updateCustomField(fieldId, updates);
+        setFields((prev) => prev.map((f) => f.id === fieldId ? { ...f, ...updates } : f));
+        closeForm();
+        toast.success(`Champ "${updates.label || ""}" mis à jour`);
         getUnmappedFields().then(setUnmapped);
       } catch (e: any) {
         toast.error(e.message);
@@ -78,7 +112,7 @@ export default function CustomFieldsPage() {
             Configurez les champs supplémentaires captés depuis les formulaires de votre site
           </p>
         </div>
-        <button onClick={() => setShowAddForm(true)} className="btn-primary text-sm shrink-0">
+        <button onClick={() => openCreateForm()} className="btn-primary text-sm shrink-0">
           <Plus size={16} /> <span className="hidden sm:inline">Ajouter un champ</span><span className="sm:hidden">Ajouter</span>
         </button>
       </div>
@@ -99,9 +133,7 @@ export default function CustomFieldsPage() {
             {unmapped.map((u) => (
               <button
                 key={u.field}
-                onClick={() => {
-                  setShowAddForm(true);
-                }}
+                onClick={() => openCreateForm(u.field)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-amber-200 text-xs hover:border-amber-400 transition-colors max-w-full"
               >
                 <Tag size={12} className="text-amber-500 shrink-0" />
@@ -114,11 +146,15 @@ export default function CustomFieldsPage() {
         </div>
       )}
 
-      {/* Add form */}
+      {/* Add / Edit form */}
       {showAddForm && (
-        <AddFieldForm
+        <FieldForm
+          key={editingField?.id || "new"}
+          editingField={editingField}
+          prefillFormField={prefillFormField}
           onAdd={handleAdd}
-          onCancel={() => setShowAddForm(false)}
+          onUpdate={handleUpdate}
+          onCancel={closeForm}
           isPending={isPending}
           unmappedSuggestions={unmapped}
         />
@@ -129,13 +165,13 @@ export default function CustomFieldsPage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           {/* Desktop table header */}
           <div className="hidden md:block px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-[1fr_180px_120px_80px_80px_40px] gap-3 text-xs font-medium text-gray-500">
+            <div className="grid grid-cols-[1fr_180px_120px_80px_80px_80px] gap-3 text-xs font-medium text-gray-500">
               <span>Champ</span>
               <span>Champs formulaire mappés</span>
               <span>Type</span>
               <span className="text-center">Carte</span>
               <span className="text-center">Liste</span>
-              <span></span>
+              <span className="text-center">Actions</span>
             </div>
           </div>
 
@@ -149,15 +185,26 @@ export default function CustomFieldsPage() {
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
                         <p className="text-sm font-medium text-gray-900 truncate min-w-0">{field.label}</p>
                         <span className="badge badge-gray text-[10px] shrink-0">{field.type}</span>
+                        {field.target === "standard" && (
+                          <span className="badge badge-blue text-[10px] shrink-0">→ {field.standardField}</span>
+                        )}
                       </div>
                       <p className="text-[11px] text-gray-400 font-mono truncate">{field.key}</p>
                     </div>
-                    <button
-                      onClick={() => handleDelete(field.id, field.label)}
-                      className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openEditForm(field)}
+                        className="p-1.5 rounded hover:bg-brand-50 text-gray-400 hover:text-brand-600"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(field.id, field.label)}
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
 
                   {field.mappedFormFields.length > 0 && (
@@ -191,9 +238,14 @@ export default function CustomFieldsPage() {
                 </div>
 
                 {/* Desktop row */}
-                <div className="hidden md:grid grid-cols-[1fr_180px_120px_80px_80px_40px] gap-3 items-center px-4 py-3 hover:bg-gray-50/50">
+                <div className="hidden md:grid grid-cols-[1fr_180px_120px_80px_80px_80px] gap-3 items-center px-4 py-3 hover:bg-gray-50/50">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{field.label}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{field.label}</p>
+                      {field.target === "standard" && (
+                        <span className="badge badge-blue text-[10px]">→ {field.standardField}</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400 font-mono">{field.key}</p>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -218,12 +270,20 @@ export default function CustomFieldsPage() {
                       {field.showInList ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                   </div>
-                  <button
-                    onClick={() => handleDelete(field.id, field.label)}
-                    className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => openEditForm(field)}
+                      className="p-1.5 rounded hover:bg-brand-50 text-gray-300 hover:text-brand-600"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(field.id, field.label)}
+                      className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -238,7 +298,7 @@ export default function CustomFieldsPage() {
           <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto mb-6">
             Les champs personnalisés vous permettent de capturer des données spécifiques à votre école depuis les formulaires web (niveau d&apos;études, série du Bac, nationalité, etc.)
           </p>
-          <button onClick={() => setShowAddForm(true)} className="btn-primary">
+          <button onClick={() => openCreateForm()} className="btn-primary">
             <Plus size={16} /> Créer un champ
           </button>
         </div>
@@ -270,35 +330,25 @@ export default function CustomFieldsPage() {
   );
 }
 
-// ─── Add field form ───
-function AddFieldForm({
+// ─── Field form (création + édition) ───
+function FieldForm({
+  editingField,
+  prefillFormField,
   onAdd,
+  onUpdate,
   onCancel,
   isPending,
   unmappedSuggestions,
 }: {
+  editingField: CustomFieldConfig | null;
+  prefillFormField: string | null;
   onAdd: (field: Omit<CustomFieldConfig, "id" | "order">) => void;
+  onUpdate: (fieldId: string, updates: Partial<CustomFieldConfig>) => void;
   onCancel: () => void;
   isPending: boolean;
   unmappedSuggestions: { field: string; count: number; sampleValue: string }[];
 }) {
-  const [label, setLabel] = useState("");
-  const [key, setKey] = useState("");
-  const [type, setType] = useState<CustomFieldConfig["type"]>("text");
-  const [mappedFields, setMappedFields] = useState("");
-  const [options, setOptions] = useState("");
-  const [showInCard, setShowInCard] = useState(false);
-  const [showInList, setShowInList] = useState(true);
-  const [target, setTarget] = useState<"custom" | "standard">("custom");
-  const [standardField, setStandardField] = useState("");
-
-  // Auto-generate key from label
-  const handleLabelChange = (v: string) => {
-    setLabel(v);
-    if (!key || key === toKey(label)) {
-      setKey(toKey(v));
-    }
-  };
+  const isEditing = !!editingField;
 
   function toKey(s: string) {
     return s.toLowerCase()
@@ -307,10 +357,30 @@ function AddFieldForm({
       .replace(/^_|_$/g, "");
   }
 
+  const [label, setLabel] = useState(editingField?.label || "");
+  const [key, setKey] = useState(editingField?.key || "");
+  const [type, setType] = useState<CustomFieldConfig["type"]>(editingField?.type || "text");
+  const [mappedFields, setMappedFields] = useState(
+    editingField?.mappedFormFields?.join(", ") || prefillFormField || ""
+  );
+  const [options, setOptions] = useState(editingField?.options?.join(", ") || "");
+  const [showInCard, setShowInCard] = useState(editingField?.showInCard ?? false);
+  const [showInList, setShowInList] = useState(editingField?.showInList ?? true);
+  const [target, setTarget] = useState<"custom" | "standard">(editingField?.target || "custom");
+  const [standardField, setStandardField] = useState(editingField?.standardField || "");
+
+  // Auto-generate key from label (création uniquement — la clé est verrouillée en édition)
+  const handleLabelChange = (v: string) => {
+    setLabel(v);
+    if (!isEditing && (!key || key === toKey(label))) {
+      setKey(toKey(v));
+    }
+  };
+
   // Pre-fill from unmapped suggestion
-  const fillFromUnmapped = (field: string, sample: string) => {
+  const fillFromUnmapped = (field: string) => {
     setMappedFields((prev) => prev ? `${prev}, ${field}` : field);
-    if (!label) {
+    if (!isEditing && !label) {
       const nice = field.replace(/[_-]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
       setLabel(nice);
       setKey(toKey(nice));
@@ -326,9 +396,9 @@ function AddFieldForm({
       toast.error("Choisissez le champ standard de destination");
       return;
     }
-    onAdd({
+
+    const payload = {
       label: label.trim(),
-      key: key.trim(),
       type,
       mappedFormFields: mappedFields.split(",").map((s) => s.trim()).filter(Boolean),
       options: type === "select" ? options.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
@@ -337,12 +407,21 @@ function AddFieldForm({
       showInList,
       target,
       standardField: target === "standard" ? standardField : undefined,
-    });
+    };
+
+    if (isEditing && editingField) {
+      // La clé n'est PAS transmise → verrouillée
+      onUpdate(editingField.id, payload);
+    } else {
+      onAdd({ ...payload, key: key.trim() });
+    }
   };
 
   return (
     <div className="bg-white rounded-xl border border-brand-200 p-4 sm:p-6 mb-4 sm:mb-6 animate-scale-in">
-      <h3 className="font-semibold text-gray-900 mb-4">Nouveau champ personnalisé</h3>
+      <h3 className="font-semibold text-gray-900 mb-4">
+        {isEditing ? `Modifier le champ « ${editingField?.label} »` : "Nouveau champ personnalisé"}
+      </h3>
 
       {/* Suggestions from unmapped */}
       {unmappedSuggestions.length > 0 && (
@@ -352,7 +431,7 @@ function AddFieldForm({
             {unmappedSuggestions.map((u) => (
               <button
                 key={u.field}
-                onClick={() => fillFromUnmapped(u.field, u.sampleValue)}
+                onClick={() => fillFromUnmapped(u.field)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-50 rounded-lg text-xs text-brand-700 hover:bg-brand-100 transition-colors"
               >
                 <Zap size={11} />
@@ -382,9 +461,13 @@ function AddFieldForm({
           <input
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            className="input font-mono text-sm"
+            className="input font-mono text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
             placeholder="niveau_etudes"
+            disabled={isEditing}
           />
+          {isEditing && (
+            <p className="text-[11px] text-gray-400 mt-1">La clé interne ne peut pas être modifiée.</p>
+          )}
         </div>
 
         <div>
@@ -471,8 +554,9 @@ function AddFieldForm({
       <div className="flex justify-end gap-2 sm:gap-3 mt-5">
         <button onClick={onCancel} className="btn-secondary text-sm" disabled={isPending}>Annuler</button>
         <button onClick={handleSubmit} className="btn-primary text-sm" disabled={isPending}>
-          {isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-          <span className="hidden sm:inline">Ajouter le champ</span><span className="sm:hidden">Ajouter</span>
+          {isPending ? <Loader2 size={16} className="animate-spin" /> : (isEditing ? <Save size={16} /> : <Plus size={16} />)}
+          <span className="hidden sm:inline">{isEditing ? "Enregistrer" : "Ajouter le champ"}</span>
+          <span className="sm:hidden">{isEditing ? "Enregistrer" : "Ajouter"}</span>
         </button>
       </div>
     </div>
