@@ -80,7 +80,13 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
 
   const result: FormWithMapping[] = schemas.map((form) => {
     let unmapped = 0;
-    const fields: MappedField[] = (form.fields || []).map((field) => {
+    const fields: MappedField[] = (form.fields || [])
+      .filter((field) => {
+        if (field.type === "fieldset") return false;
+        if (/^field_/i.test(field.name)) return false;
+        return true;
+      })
+      .map((field) => {
       const nameLower = field.name.toLowerCase();
       const labelLower = (field.label || "").toLowerCase();
 
