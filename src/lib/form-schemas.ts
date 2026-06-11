@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCustomFields, addCustomField, updateCustomField } from "@/lib/custom-fields";
 
 export interface FormSchemaField {
   name: string;
@@ -167,4 +168,86 @@ export async function deleteFormSchema(formId: string) {
   });
 
   revalidatePath("/settings/forms");
+}
+
+// ─── Mapper un champ détecté vers un champ CRM (depuis la page Formulaires) ───
+// 3 cas : standard | nouveau custom | custom existant
+
+function toKey(s: string) {
+  return s.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+export type MapFieldInput =
+  | { mode: "standard"; fieldName: string; label: string; standardField: string }
+  | { mode: "new_custom"; fieldName: string; label: string }
+  | { mode: "existing_custom"; fieldName: string; customFieldId: string };
+
+export async function mapFieldFromForm(input: MapFieldInput) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée");
+  }
+
+  if (input.mode === "existing_custom") {
+    // Ajouter le name au champ perso existant (sans doublon)
+    const existing = await getCustomFields();
+    const target = existing.find((f) => f.id === input.customFieldId);
+    if (!target) throw new Error("Champ personnalisé introuvable");
+    const already = target.mappedFormFields.some(
+      (mf) => mf.toLowerCase() === input.fieldName.toLowerCase()
+    );
+    if (!already) {
+      await updateCustomField(input.customFieldId, {
+        mappedFormFields: [...target.mappedFormFields, input.fieldName],
+      });
+    }
+    revalidatePath("/settings/forms");
+    return;
+  }
+
+  if (input.mode === "standard") {
+    const label = (input.label || input.standardField).trim();
+    await addCustomField({
+      label,
+      key: toKey(label) || toKey(input.fieldName),
+      type: "text",
+      mappedFormFields: [input.fieldName],
+      required: false,
+      showInCard: false,
+      showInList: true,
+      target: "standard",
+      standardField: input.standardField,
+    });
+    revalidatePath("/settings/forms");
+    return;
+  }
+
+  // new_custom
+  const label = (input.label || input.fieldName).trim();
+  await addCustomField({
+    label,
+    key: toKey(label) || toKey(input.fieldName),
+    type: "text",
+    mappedFormFields: [input.fieldName],
+    required: false,
+    showInCard: false,
+    showInList: true,
+    target: "custom",
+  });
+  revalidatePath("/settings/forms");
+}
+
+// ─── Lister les champs personnalisés existants (pour le mapping vers un existant) ───
+export async function listCustomFieldsBrief(): Promise<{ id: string; label: string; target?: string; standardField?: string }[]> {
+  const fields = await getCustomFields();
+  return fields.map((f) => ({
+    id: f.id,
+    label: f.label,
+    target: f.target,
+    standardField: f.standardField,
+  }));
 }

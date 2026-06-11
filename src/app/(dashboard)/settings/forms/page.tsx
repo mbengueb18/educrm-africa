@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useTransition } from "react";
 import {
-  getFormsWithMapping, deleteFormSchema, renameForm,
+  getFormsWithMapping, deleteFormSchema, renameForm, mapFieldFromForm, listCustomFieldsBrief,
   type FormWithMapping, type MappedField,
 } from "@/lib/form-schemas";
+import { MAPPABLE_STANDARD_FIELDS } from "@/lib/custom-fields-constants";
 import { toast } from "sonner";
 import {
   ArrowLeft, ChevronDown, ChevronRight, FileText, CheckCircle2,
   AlertCircle, Calendar, Layers, Settings2, Trash2, Search, ExternalLink,
-  Loader2, Pencil, Check, X, Globe,
+  Loader2, Pencil, Check, X, Globe, Tag, Plus, Link2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -23,21 +24,29 @@ function formatDate(iso: string) {
   }
 }
 
+type BriefCustom = { id: string; label: string; target?: string; standardField?: string };
+
 export default function FormsManagementPage() {
   const [forms, setForms] = useState<FormWithMapping[]>([]);
+  const [customFields, setCustomFields] = useState<BriefCustom[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [mappingField, setMappingField] = useState<string | null>(null); // name du champ en cours de mapping
+
+  const reload = () => {
+    return Promise.all([getFormsWithMapping(), listCustomFieldsBrief()]).then(([f, c]) => {
+      setForms(f);
+      setCustomFields(c);
+      if (f.length > 0 && !openId) setOpenId(f[0].formId);
+    });
+  };
 
   useEffect(() => {
-    getFormsWithMapping()
-      .then((data) => {
-        setForms(data);
-        if (data.length > 0) setOpenId(data[0].formId);
-      })
+    reload()
       .catch(() => toast.error("Impossible de charger les formulaires"))
       .finally(() => setLoading(false));
   }, []);
@@ -76,6 +85,19 @@ export default function FormsManagementPage() {
     });
   };
 
+  const handleMap = (input: any) => {
+    startTransition(async () => {
+      try {
+        await mapFieldFromForm(input);
+        await reload();
+        setMappingField(null);
+        toast.success("Champ mappé");
+      } catch (e: any) {
+        toast.error(e.message);
+      }
+    });
+  };
+
   const filtered = forms.filter((f) => {
     if (!query) return true;
     const q = query.toLowerCase();
@@ -94,7 +116,7 @@ export default function FormsManagementPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Formulaires</h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-            Les formulaires détectés sur votre site et l&apos;état du mapping de leurs champs
+            Les formulaires détectés sur votre site et le mapping de leurs champs vers le CRM
           </p>
         </div>
         <Link href="/settings/custom-fields" className="btn-secondary text-sm shrink-0">
@@ -138,10 +160,7 @@ export default function FormsManagementPage() {
             return (
               <div key={form.formId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="flex items-center gap-2 px-3 sm:px-4 py-3.5 hover:bg-gray-50/70">
-                  <button
-                    onClick={() => setOpenId(isOpen ? null : form.formId)}
-                    className="text-gray-400 shrink-0"
-                  >
+                  <button onClick={() => setOpenId(isOpen ? null : form.formId)} className="text-gray-400 shrink-0">
                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
                   <span className="w-9 h-9 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
@@ -166,41 +185,26 @@ export default function FormsManagementPage() {
                           className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600">
                           <Check size={15} />
                         </button>
-                        <button onClick={() => setRenamingId(null)}
-                          className="p-1.5 rounded hover:bg-gray-100 text-gray-400">
+                        <button onClick={() => setRenamingId(null)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400">
                           <X size={15} />
                         </button>
                       </div>
                     ) : (
-                      <>
-                        <button onClick={() => setOpenId(isOpen ? null : form.formId)} className="block text-left w-full">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{form.name}</p>
-                            <span className="text-[11px] text-gray-400 font-mono">{form.formId}</span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400 flex-wrap">
-                            <span className="inline-flex items-center gap-1"><Layers size={11} /> {form.fields.length} champs</span>
-                            <span className="inline-flex items-center gap-1"><Calendar size={11} /> Vu le {formatDate(form.lastSeen)}</span>
-                            {form.pageTitle && (
-                              <span className="inline-flex items-center gap-1 truncate max-w-[200px]">
-                                <Globe size={11} /> {form.pageTitle}
-                              </span>
-                            )}
-                            {form.pageUrl && (
-                              <a
-                                href={form.pageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 text-brand-500 hover:text-brand-700 truncate max-w-[240px]"
-                                title={form.pageUrl}
-                              >
-                                <ExternalLink size={11} /> {form.pageUrl.replace(/^https?:\/\//, '')}
-                              </a>
-                            )}
-                          </div>
-                        </button>
-                      </>
+                      <button onClick={() => setOpenId(isOpen ? null : form.formId)} className="block text-left w-full">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{form.name}</p>
+                          <span className="text-[11px] text-gray-400 font-mono">{form.formId}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400 flex-wrap">
+                          <span className="inline-flex items-center gap-1"><Layers size={11} /> {form.fields.length} champs</span>
+                          <span className="inline-flex items-center gap-1"><Calendar size={11} /> Vu le {formatDate(form.lastSeen)}</span>
+                          {form.pageTitle && (
+                            <span className="inline-flex items-center gap-1 truncate max-w-[180px]">
+                              <Globe size={11} /> {form.pageTitle}
+                            </span>
+                          )}
+                        </div>
+                      </button>
                     )}
                   </div>
 
@@ -215,12 +219,10 @@ export default function FormsManagementPage() {
                           <CheckCircle2 size={11} /> Tout mappé
                         </span>
                       )}
-                      <button onClick={() => startRename(form)}
-                        className="shrink-0 p-1.5 rounded hover:bg-brand-50 text-gray-300 hover:text-brand-600" title="Renommer">
+                      <button onClick={() => startRename(form)} className="shrink-0 p-1.5 rounded hover:bg-brand-50 text-gray-300 hover:text-brand-600" title="Renommer">
                         <Pencil size={14} />
                       </button>
-                      <button onClick={() => handleDelete(form.formId, form.name)} disabled={isPending}
-                        className="shrink-0 p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500" title="Retirer">
+                      <button onClick={() => handleDelete(form.formId, form.name)} disabled={isPending} className="shrink-0 p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500" title="Retirer">
                         <Trash2 size={14} />
                       </button>
                     </>
@@ -230,16 +232,17 @@ export default function FormsManagementPage() {
                 {isOpen && (
                   <div className="border-t border-gray-100">
                     {form.fields.map((field) => (
-                      <FieldRow key={field.name} field={field} />
+                      <FieldRow
+                        key={field.name}
+                        field={field}
+                        isMapping={mappingField === form.formId + "::" + field.name}
+                        onStartMap={() => setMappingField(form.formId + "::" + field.name)}
+                        onCancelMap={() => setMappingField(null)}
+                        onMap={handleMap}
+                        customFields={customFields}
+                        isPending={isPending}
+                      />
                     ))}
-                    {form.unmappedCount > 0 && (
-                      <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-100">
-                        <Link href="/settings/custom-fields"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700">
-                          Mapper les champs manquants <ExternalLink size={12} />
-                        </Link>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -258,10 +261,10 @@ export default function FormsManagementPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800 mt-6">
           <p className="font-medium mb-1">Comment ça marche</p>
           <p>
-            Cette page liste les formulaires détectés sur votre site. Renommez chaque formulaire (icône crayon) pour
-            l&apos;identifier facilement. Les champs <strong>auto</strong> (prénom, nom, email, téléphone) sont reconnus
-            automatiquement. Pour mapper un champ non reconnu, allez sur la page{" "}
-            <Link href="/settings/custom-fields" className="underline">Champs personnalisés</Link>.
+            Renommez chaque formulaire (icône crayon) pour l&apos;identifier facilement. Les champs <strong>auto</strong>{" "}
+            (prénom, nom, email, téléphone) sont reconnus automatiquement. Pour les autres, cliquez sur <strong>Mapper</strong> :
+            vous pouvez les envoyer vers un champ standard, créer un champ personnalisé, ou les rattacher à un champ existant —
+            sans attendre qu&apos;un lead soit collecté.
           </p>
         </div>
       )}
@@ -269,41 +272,143 @@ export default function FormsManagementPage() {
   );
 }
 
-function FieldRow({ field }: { field: MappedField }) {
+function FieldRow({
+  field, isMapping, onStartMap, onCancelMap, onMap, customFields, isPending,
+}: {
+  field: MappedField;
+  isMapping: boolean;
+  onStartMap: () => void;
+  onCancelMap: () => void;
+  onMap: (input: any) => void;
+  customFields: BriefCustom[];
+  isPending: boolean;
+}) {
   const { mapping } = field;
   const isMapped = mapping.kind !== "none";
   const isAuto = mapping.kind === "auto";
 
-  const statusColor =
-    isAuto ? "bg-gray-300" :
-    isMapped ? "bg-emerald-400" :
-    "bg-amber-400";
+  const statusColor = isAuto ? "bg-gray-300" : isMapped ? "bg-emerald-400" : "bg-amber-400";
 
   let mappingText = "Non mappé";
   let mappingClass = "text-amber-600";
-  if (mapping.kind === "auto") {
-    mappingText = `${mapping.target} (auto)`;
-    mappingClass = "text-gray-400";
-  } else if (mapping.kind === "standard") {
-    mappingText = `→ ${mapping.label}`;
-    mappingClass = "text-emerald-700";
-  } else if (mapping.kind === "custom") {
-    mappingText = mapping.label;
-    mappingClass = "text-emerald-700";
-  }
+  if (mapping.kind === "auto") { mappingText = `${mapping.target} (auto)`; mappingClass = "text-gray-400"; }
+  else if (mapping.kind === "standard") { mappingText = `→ ${mapping.label}`; mappingClass = "text-emerald-700"; }
+  else if (mapping.kind === "custom") { mappingText = mapping.label; mappingClass = "text-emerald-700"; }
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0 ${isMapped ? "" : "bg-amber-50/30"}`}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} title={isMapped ? "Mappé" : "Non mappé"} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-gray-900 truncate">{field.label || field.name}</p>
-          <span className="text-[10px] text-gray-400 font-mono">{field.name}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{field.type}</span>
+    <div className={`border-b border-gray-50 last:border-0 ${isMapped ? "" : "bg-amber-50/30"}`}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} title={isMapped ? "Mappé" : "Non mappé"} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-gray-900 truncate">{field.label || field.name}</p>
+            <span className="text-[10px] text-gray-400 font-mono">{field.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{field.type}</span>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className={`text-xs font-medium ${mappingClass}`}>{mappingText}</span>
+          {mapping.kind === "none" && !isMapping && (
+            <button onClick={onStartMap} className="text-xs font-medium text-brand-600 hover:text-brand-700 border border-brand-200 rounded-lg px-2 py-1 hover:bg-brand-50">
+              Mapper
+            </button>
+          )}
         </div>
       </div>
-      <div className="shrink-0 text-right">
-        <span className={`text-xs font-medium ${mappingClass}`}>{mappingText}</span>
+
+      {isMapping && (
+        <MapZone field={field} customFields={customFields} onMap={onMap} onCancel={onCancelMap} isPending={isPending} />
+      )}
+    </div>
+  );
+}
+
+function MapZone({
+  field, customFields, onMap, onCancel, isPending,
+}: {
+  field: MappedField;
+  customFields: BriefCustom[];
+  onMap: (input: any) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [tab, setTab] = useState<"standard" | "new" | "existing">("new");
+  const [standardField, setStandardField] = useState("");
+  const [label, setLabel] = useState(field.label || field.name);
+  const [existingId, setExistingId] = useState("");
+
+  const submit = () => {
+    if (tab === "standard") {
+      if (!standardField) return toast.error("Choisissez un champ standard");
+      onMap({ mode: "standard", fieldName: field.name, label, standardField });
+    } else if (tab === "new") {
+      if (!label.trim()) return toast.error("Le label est requis");
+      onMap({ mode: "new_custom", fieldName: field.name, label });
+    } else {
+      if (!existingId) return toast.error("Choisissez un champ existant");
+      onMap({ mode: "existing_custom", fieldName: field.name, customFieldId: existingId });
+    }
+  };
+
+  const TabBtn = ({ id, icon, children }: any) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+        tab === id ? "bg-brand-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-brand-300"
+      }`}
+    >
+      {icon} {children}
+    </button>
+  );
+
+  return (
+    <div className="px-4 pb-4 pt-1 bg-gray-50/60 border-t border-gray-100">
+      <div className="flex flex-wrap gap-2 mb-3">
+        <TabBtn id="new" icon={<Plus size={13} />}>Nouveau champ</TabBtn>
+        <TabBtn id="existing" icon={<Link2 size={13} />}>Champ existant</TabBtn>
+        <TabBtn id="standard" icon={<Tag size={13} />}>Champ standard</TabBtn>
+      </div>
+
+      {tab === "standard" && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={standardField} onChange={(e) => setStandardField(e.target.value)} className="input flex-1">
+            <option value="">Sélectionner un champ standard…</option>
+            {MAPPABLE_STANDARD_FIELDS.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {tab === "new" && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className="input flex-1"
+            placeholder="Nom du champ (ex : Programme souhaité)"
+          />
+        </div>
+      )}
+
+      {tab === "existing" && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={existingId} onChange={(e) => setExistingId(e.target.value)} className="input flex-1">
+            <option value="">Sélectionner un champ existant…</option>
+            {customFields.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}{c.target === "standard" ? ` (→ ${c.standardField})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-3">
+        <button onClick={onCancel} className="btn-secondary text-xs" disabled={isPending}>Annuler</button>
+        <button onClick={submit} className="btn-primary text-xs" disabled={isPending}>
+          {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Mapper
+        </button>
       </div>
     </div>
   );
