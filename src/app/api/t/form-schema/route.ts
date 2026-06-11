@@ -27,6 +27,8 @@ function sanitizeForms(forms: IncomingForm[]) {
   return forms.slice(0, MAX_FORMS).map((f) => ({
     formId: String(f.formId || "").slice(0, 200),
     name: String(f.name || "").slice(0, 200),
+    pageUrl: String((f as any).pageUrl || "").slice(0, 500),
+    pageTitle: String((f as any).pageTitle || "").slice(0, 300),
     fields: Array.isArray(f.fields)
       ? f.fields.slice(0, MAX_FIELDS_PER_FORM).map((fld) => ({
           name: String(fld.name || "").slice(0, 200),
@@ -73,6 +75,9 @@ export async function POST(request: NextRequest) {
       byId[f.formId] = {
         formId: f.formId,
         name: f.name || prev?.name || f.formId,
+        customName: prev?.customName || null,   // ← préservé entre les mises à jour
+        pageUrl: (f as any).pageUrl || prev?.pageUrl || "",
+        pageTitle: (f as any).pageTitle || prev?.pageTitle || "",
         fields: f.fields,
         firstSeen: prev?.firstSeen || seenAt,
         lastSeen: seenAt,

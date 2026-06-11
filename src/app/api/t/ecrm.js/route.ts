@@ -247,6 +247,9 @@ export async function GET(request: NextRequest) {
 
       // Ignorer les champs techniques internes de Gravity Forms
       if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/.test(key)) continue;
+      // Ignorer les conteneurs fieldset et pseudo-champs de structure Gravity
+        if (el.type === 'fieldset' || (el.tagName && el.tagName.toLowerCase() === 'fieldset')) continue;
+        if (/^field_/i.test(nm)) continue;
 
       raw[key] = value;
 
@@ -615,7 +618,13 @@ export async function GET(request: NextRequest) {
         if (/^field_/i.test(nm)) continue;
       }
       if (fields.length > 0) {
-        result.push({ formId: formId, name: getFormName(form, formId), fields: fields });
+        result.push({
+          formId: formId,
+          name: getFormName(form, formId),
+          fields: fields,
+          pageUrl: window.location.href,
+          pageTitle: document.title,
+        });
       }
     }
     return result;
