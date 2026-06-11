@@ -240,6 +240,9 @@ export async function GET(request: NextRequest) {
       if (el.type === 'password' || el.type === 'file') continue;
       if (el.type === 'checkbox' && !el.checked) continue;
       if (el.type === 'radio' && !el.checked) continue;
+      // Ignorer les champs cachés : selects conditionnels Gravity non affichés
+      // (ils ont une valeur par défaut résiduelle qui pollue la capture)
+      if (el.offsetParent === null && el.type !== 'hidden') continue;
 
       var key = (el.name || el.id || '').toLowerCase().trim();
       var value = (el.value || '').trim();
