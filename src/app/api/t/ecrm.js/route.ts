@@ -516,15 +516,17 @@ export async function GET(request: NextRequest) {
     xhr.send(JSON.stringify(payload));
   }
 
-  // ─── Gravity Forms support (AJAX) ───
+// ─── Gravity Forms support (AJAX) ───
   // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
   // Stratégie : on ACCUMULE les valeurs des champs que l'utilisateur modifie
   // (input/change), sans jamais effacer une valeur déjà saisie. Cela résout :
   //   - les champs conditionnels cachés (un champ rempli reste, même s'il est masqué ensuite)
   //   - les valeurs résiduelles des selects jamais touchés (ils ne déclenchent pas de change)
+  // On mémorise aussi le LABEL de chaque champ (pour mapper input_1.3 → "Prénom").
   // Puis on envoie le lead quand Gravity confirme le succès (gform_confirmation_loaded).
-  var _gravityRaw = {};         // _gravityRaw[formId] = { input_37: "Ingénierie Électrique", ... }
-  var _gravityCheckbox = {};    // _gravityCheckbox[formId] = { input_31: { "Sciences": true, ... } }
+  var _gravityRaw = {};         // _gravityRaw[formId] = { "input_37": "Ingénierie Électrique", ... }
+  var _gravityCheckbox = {};    // _gravityCheckbox[formId] = { "input_31": { "Sciences": true, ... } }
+  var _gravityLabels = {};      // _gravityLabels[formId] = { "input_1.3": "prénom", ... }
 
   function isGravityForm(form) {
     return form && form.id && form.id.indexOf('gform_') === 0;
@@ -539,19 +541,18 @@ export async function GET(request: NextRequest) {
     if (el.type === 'submit' || el.type === 'button' || el.type === 'password' || el.type === 'file') return;
 
     if (!_gravityRaw[formId]) _gravityRaw[formId] = {};
+    if (!_gravityLabels[formId]) _gravityLabels[formId] = {};
 
     // ── Checkboxes : regrouper par champ parent (input_31.1, input_31.2 → input_31) ──
     if (el.type === 'checkbox') {
       var parentKey = key.indexOf('.') !== -1 ? key.substring(0, key.lastIndexOf('.')) : key;
       if (!_gravityCheckbox[formId]) _gravityCheckbox[formId] = {};
       if (!_gravityCheckbox[formId][parentKey]) _gravityCheckbox[formId][parentKey] = {};
-      // cocher = stocker la valeur, décocher = retirer
       if (el.checked && el.value) {
         _gravityCheckbox[formId][parentKey][el.value] = true;
       } else {
         delete _gravityCheckbox[formId][parentKey][el.value];
       }
-      // Reconstruire la valeur concaténée du groupe
       var vals = Object.keys(_gravityCheckbox[formId][parentKey]);
       if (vals.length > 0) {
         _gravityRaw[formId][parentKey] = vals.join(', ');
@@ -563,37 +564,50 @@ export async function GET(request: NextRequest) {
 
     // ── Radio : on prend la valeur cochée ──
     if (el.type === 'radio') {
-      if (el.checked && el.value) _gravityRaw[formId][key] = el.value.trim();
+      if (el.checked && el.value) {
+        _gravityRaw[formId][key] = el.value.trim();
+        var rlbl = getLabelText(el);
+        if (rlbl) _gravityLabels[formId][key] = rlbl;
+      }
       return;
     }
 
     // ── Texte, select, email, tel, textarea... ──
     var value = (el.value || '').trim();
     // On ne stocke QUE les valeurs non vides → un champ rempli n'est jamais effacé par du vide.
-    // Un select sur son option par défaut ("Sélectionnez...") a une valeur, mais l'utilisateur
-    // l'a forcément changé pour qu'un change se déclenche, donc c'est un vrai choix.
-    if (value) _gravityRaw[formId][key] = value;
+    if (value) {
+      _gravityRaw[formId][key] = value;
+      var lbl = getLabelText(el);
+      if (lbl) _gravityLabels[formId][key] = lbl;
+    }
   }
 
   // Construit l'objet lead à partir des valeurs brutes accumulées,
-  // en réutilisant la logique de mapping de extractFormData via un faux formulaire.
+  // en réutilisant la logique de mapping (clé → label → contenu).
   function buildLeadFromRaw(formId) {
     var raw = _gravityRaw[formId] || {};
+    var labels = _gravityLabels[formId] || {};
     var data = {};
-
-    // Appliquer le mapping standard (FIELD_MAP + findPartialMatch) sur chaque clé brute
     var mappedKeys = {};
+
     Object.keys(raw).forEach(function(key) {
       var value = raw[key];
       if (!value) return;
       var keyLower = key.toLowerCase();
 
+      // 1. Mapping direct par nom de champ
       var mapped = FIELD_MAP[keyLower];
       if (mapped) { if (!data[mapped]) { data[mapped] = value; mappedKeys[key] = true; } return; }
 
+      // 2. Correspondance partielle sur le nom
       var partialMatch = findPartialMatch(keyLower);
       if (partialMatch) { if (!data[partialMatch]) { data[partialMatch] = value; mappedKeys[key] = true; } return; }
 
+      // 3. Correspondance via le LABEL (cas Gravity : input_1.3 → "Prénom")
+      var labelMatch = findPartialMatch(labels[key] || '');
+      if (labelMatch) { if (!data[labelMatch]) { data[labelMatch] = value; mappedKeys[key] = true; } return; }
+
+      // 4. Détection par contenu (email / téléphone)
       if (!data.email && isEmail(value)) { data.email = value; mappedKeys[key] = true; return; }
       if (!data.phone && isPhone(value)) { data.phone = value; mappedKeys[key] = true; return; }
     });
@@ -643,9 +657,9 @@ export async function GET(request: NextRequest) {
       var data = buildLeadFromRaw(key);
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
       sendLead(data);
-      // Nettoyer pour la prochaine soumission
       delete _gravityRaw[key];
       delete _gravityCheckbox[key];
+      delete _gravityLabels[key];
     });
 
     log('info', 'Gravity Forms support activé');
