@@ -182,9 +182,21 @@ export default function FormsManagementPage() {
                             <span className="inline-flex items-center gap-1"><Layers size={11} /> {form.fields.length} champs</span>
                             <span className="inline-flex items-center gap-1"><Calendar size={11} /> Vu le {formatDate(form.lastSeen)}</span>
                             {form.pageTitle && (
-                              <span className="inline-flex items-center gap-1 truncate max-w-[200px]" title={form.pageUrl}>
+                              <span className="inline-flex items-center gap-1 truncate max-w-[200px]">
                                 <Globe size={11} /> {form.pageTitle}
                               </span>
+                            )}
+                            {form.pageUrl && (
+                              <a
+                                href={form.pageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-brand-500 hover:text-brand-700 truncate max-w-[240px]"
+                                title={form.pageUrl}
+                              >
+                                <ExternalLink size={11} /> {form.pageUrl.replace(/^https?:\/\//, '')}
+                              </a>
                             )}
                           </div>
                         </button>

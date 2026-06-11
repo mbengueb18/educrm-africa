@@ -594,6 +594,9 @@ export async function GET(request: NextRequest) {
     for (var i = 0; i < forms.length; i++) {
       var form = forms[i];
       if (!shouldCaptureSchema(form)) continue;
+      // Ne capturer que les formulaires visibles (ignorer popups fermées, forms cachés)
+      if (form.offsetParent === null) continue;
+    
 
       var formId = form.id || form.getAttribute('name') || ('form_' + i);
       var fields = [];
