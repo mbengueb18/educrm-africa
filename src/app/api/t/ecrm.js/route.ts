@@ -518,45 +518,134 @@ export async function GET(request: NextRequest) {
 
   // ─── Gravity Forms support (AJAX) ───
   // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
-  // Stratégie : on mémorise les valeurs en continu (input/change) par formulaire,
-  // puis on envoie le lead quand Gravity confirme le succès (gform_confirmation_loaded).
-  var _gravityData = {};
+  // Stratégie : on ACCUMULE les valeurs des champs que l'utilisateur modifie
+  // (input/change), sans jamais effacer une valeur déjà saisie. Cela résout :
+  //   - les champs conditionnels cachés (un champ rempli reste, même s'il est masqué ensuite)
+  //   - les valeurs résiduelles des selects jamais touchés (ils ne déclenchent pas de change)
+  // Puis on envoie le lead quand Gravity confirme le succès (gform_confirmation_loaded).
+  var _gravityRaw = {};         // _gravityRaw[formId] = { input_37: "Ingénierie Électrique", ... }
+  var _gravityCheckbox = {};    // _gravityCheckbox[formId] = { input_31: { "Sciences": true, ... } }
 
-  function readGravityForm(form) {
-    if (!form) return null;
-    return extractFormData(form);
+  function isGravityForm(form) {
+    return form && form.id && form.id.indexOf('gform_') === 0;
+  }
+
+  function accumulateField(form, el) {
+    var formId = form.id.replace('gform_', '');
+    var key = (el.name || el.id || '').trim();
+    if (!key) return;
+    // Ignorer les champs techniques Gravity et les conteneurs fieldset
+    if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save|field_)/i.test(key)) return;
+    if (el.type === 'submit' || el.type === 'button' || el.type === 'password' || el.type === 'file') return;
+
+    if (!_gravityRaw[formId]) _gravityRaw[formId] = {};
+
+    // ── Checkboxes : regrouper par champ parent (input_31.1, input_31.2 → input_31) ──
+    if (el.type === 'checkbox') {
+      var parentKey = key.indexOf('.') !== -1 ? key.substring(0, key.lastIndexOf('.')) : key;
+      if (!_gravityCheckbox[formId]) _gravityCheckbox[formId] = {};
+      if (!_gravityCheckbox[formId][parentKey]) _gravityCheckbox[formId][parentKey] = {};
+      // cocher = stocker la valeur, décocher = retirer
+      if (el.checked && el.value) {
+        _gravityCheckbox[formId][parentKey][el.value] = true;
+      } else {
+        delete _gravityCheckbox[formId][parentKey][el.value];
+      }
+      // Reconstruire la valeur concaténée du groupe
+      var vals = Object.keys(_gravityCheckbox[formId][parentKey]);
+      if (vals.length > 0) {
+        _gravityRaw[formId][parentKey] = vals.join(', ');
+      } else {
+        delete _gravityRaw[formId][parentKey];
+      }
+      return;
+    }
+
+    // ── Radio : on prend la valeur cochée ──
+    if (el.type === 'radio') {
+      if (el.checked && el.value) _gravityRaw[formId][key] = el.value.trim();
+      return;
+    }
+
+    // ── Texte, select, email, tel, textarea... ──
+    var value = (el.value || '').trim();
+    // On ne stocke QUE les valeurs non vides → un champ rempli n'est jamais effacé par du vide.
+    // Un select sur son option par défaut ("Sélectionnez...") a une valeur, mais l'utilisateur
+    // l'a forcément changé pour qu'un change se déclenche, donc c'est un vrai choix.
+    if (value) _gravityRaw[formId][key] = value;
+  }
+
+  // Construit l'objet lead à partir des valeurs brutes accumulées,
+  // en réutilisant la logique de mapping de extractFormData via un faux formulaire.
+  function buildLeadFromRaw(formId) {
+    var raw = _gravityRaw[formId] || {};
+    var data = {};
+
+    // Appliquer le mapping standard (FIELD_MAP + findPartialMatch) sur chaque clé brute
+    var mappedKeys = {};
+    Object.keys(raw).forEach(function(key) {
+      var value = raw[key];
+      if (!value) return;
+      var keyLower = key.toLowerCase();
+
+      var mapped = FIELD_MAP[keyLower];
+      if (mapped) { if (!data[mapped]) { data[mapped] = value; mappedKeys[key] = true; } return; }
+
+      var partialMatch = findPartialMatch(keyLower);
+      if (partialMatch) { if (!data[partialMatch]) { data[partialMatch] = value; mappedKeys[key] = true; } return; }
+
+      if (!data.email && isEmail(value)) { data.email = value; mappedKeys[key] = true; return; }
+      if (!data.phone && isPhone(value)) { data.phone = value; mappedKeys[key] = true; return; }
+    });
+
+    if (data._fullName && (!data.firstName || !data.lastName)) {
+      var parts = data._fullName.trim().split(/\s+/);
+      if (!data.firstName) data.firstName = parts[0] || '';
+      if (!data.lastName) data.lastName = parts.slice(1).join(' ') || parts[0] || '';
+      delete data._fullName;
+    }
+
+    // _raw = uniquement les clés non mappées vers un champ principal
+    var cleanRaw = {};
+    Object.keys(raw).forEach(function(k) {
+      if (!mappedKeys[k]) cleanRaw[k] = raw[k];
+    });
+
+    data._raw = cleanRaw;
+    data._formId = 'gform_' + formId;
+    data._pageUrl = window.location.href;
+    data._pageTitle = document.title;
+    return data;
   }
 
   function setupGravityForms() {
     if (typeof window.jQuery === 'undefined') return;
     var $ = window.jQuery;
 
-    // 1. Mémoriser les valeurs à chaque saisie dans un formulaire Gravity
-    document.addEventListener('input', function(e) {
-      var form = e.target && e.target.form;
-      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
-      var formId = form.id.replace('gform_', '');
-      _gravityData[formId] = readGravityForm(form);
-    }, true);
-
-    document.addEventListener('change', function(e) {
-      var form = e.target && e.target.form;
-      if (!form || !form.id || form.id.indexOf('gform_') !== 0) return;
-      var formId = form.id.replace('gform_', '');
-      _gravityData[formId] = readGravityForm(form);
-    }, true);
+    // 1. Accumuler la valeur du champ modifié (sans effacer les autres)
+    function onFieldEvent(e) {
+      var el = e.target;
+      var form = el && el.form;
+      if (!isGravityForm(form)) return;
+      accumulateField(form, el);
+    }
+    document.addEventListener('input', onFieldEvent, true);
+    document.addEventListener('change', onFieldEvent, true);
 
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
     $(document).on('gform_confirmation_loaded', function(event, formId) {
       var key = String(formId);
-      var data = _gravityData[key];
-      if (!data) {
+      var raw = _gravityRaw[key];
+      if (!raw || Object.keys(raw).length === 0) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
         return;
       }
+      var data = buildLeadFromRaw(key);
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
       sendLead(data);
-      delete _gravityData[key];
+      // Nettoyer pour la prochaine soumission
+      delete _gravityRaw[key];
+      delete _gravityCheckbox[key];
     });
 
     log('info', 'Gravity Forms support activé');
