@@ -248,8 +248,6 @@ export async function GET(request: NextRequest) {
       // Ignorer les champs techniques internes de Gravity Forms
       if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/.test(key)) continue;
       // Ignorer les conteneurs fieldset et pseudo-champs de structure Gravity
-        if (el.type === 'fieldset' || (el.tagName && el.tagName.toLowerCase() === 'fieldset')) continue;
-        if (/^field_/i.test(nm)) continue;
 
       raw[key] = value;
 
