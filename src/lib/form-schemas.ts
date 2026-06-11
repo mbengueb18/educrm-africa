@@ -23,8 +23,10 @@ export interface FormSchema {
 }
 
 const CORE_AUTO_PATTERNS: { test: RegExp; target: string }[] = [
-  { test: /prenom|first[\s_-]?name|fname/i, target: "Prénom" },
-  { test: /nom|last[\s_-]?name|lname|surname/i, target: "Nom" },
+  // Prénom AVANT Nom (car "prenom" contient "nom")
+  { test: /prenom|first[\s_-]?name|fname|given[\s_-]?name/i, target: "Prénom" },
+  // Nom : exclure "prénom" via une logique de priorité (voir plus bas)
+  { test: /\bnom\b|last[\s_-]?name|lname|surname|family[\s_-]?name/i, target: "Nom" },
   { test: /e[\s_-]?mail|courriel/i, target: "Email" },
   { test: /phone|tel|mobile|portable|telephone/i, target: "Téléphone" },
 ];
@@ -87,8 +89,10 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
         return true;
       })
       .map((field) => {
-      const nameLower = field.name.toLowerCase();
-      const labelLower = (field.label || "").toLowerCase();
+      const stripAccents = (s: string) =>
+        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const nameLower = stripAccents(field.name);
+      const labelLower = stripAccents(field.label || "");
 
       const cf = fieldToConfig[nameLower];
       if (cf) {
