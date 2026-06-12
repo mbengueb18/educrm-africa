@@ -646,6 +646,25 @@ export async function GET(request: NextRequest) {
     document.addEventListener('input', onFieldEvent, true);
     document.addEventListener('change', onFieldEvent, true);
 
+    // 1bis. Passe de capture au SUBMIT (le formulaire est encore présent et visible,
+    // AVANT que Gravity ne le remplace par le message de confirmation).
+    // C'est ici qu'on rattrape les selects conditionnels auto-remplis (input_37...)
+    // qui n'ont jamais déclenché d'événement 'change'.
+    document.addEventListener('submit', function(e) {
+      var form = e.target;
+      if (!isGravityForm(form)) return;
+      var els = form.elements;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (!el) continue;
+        // Au submit le form est affiché → seuls les champs conditionnels cachés
+        // (branches non choisies) ont offsetParent === null et sont ignorés.
+        if (el.offsetParent === null) continue;
+        accumulateField(form, el);
+      }
+      log('info', 'Gravity: capture au submit pour le formulaire', form.id);
+    }, true);
+
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
     $(document).on('gform_confirmation_loaded', function(event, formId) {
       var key = String(formId);
@@ -655,16 +674,6 @@ export async function GET(request: NextRequest) {
       // par défaut (aucun event 'change' déclenché). On ne lit QUE les champs visibles
       // (offsetParent !== null) → les selects cachés des branches non choisies sont ignorés,
       // ce qui évite les valeurs résiduelles.
-      var formEl = document.getElementById('gform_' + key);
-      if (formEl) {
-        var els = formEl.elements;
-        for (var i = 0; i < els.length; i++) {
-          var el = els[i];
-          if (!el) continue;
-          if (el.offsetParent === null) continue; // champ caché → on ignore
-          accumulateField(formEl, el);
-        }
-      }
 
       var raw = _gravityRaw[key];
       if (!raw || Object.keys(raw).length === 0) {
