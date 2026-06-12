@@ -603,9 +603,15 @@ export async function GET(request: NextRequest) {
       var partialMatch = findPartialMatch(keyLower);
       if (partialMatch) { if (!data[partialMatch]) { data[partialMatch] = value; mappedKeys[key] = true; } return; }
 
-      // 3. Correspondance via le LABEL (cas Gravity : input_1.3 → "Prénom")
+      // 3. Correspondance via le LABEL — UNIQUEMENT pour les champs d'identité
+      // (prénom/nom composites Gravity). Les champs métier (programme, formation...)
+      // doivent passer en brut pour être mappés côté serveur via les customFields.
       var labelMatch = findPartialMatch(labels[key] || '');
-      if (labelMatch) { if (!data[labelMatch]) { data[labelMatch] = value; mappedKeys[key] = true; } return; }
+      if (labelMatch === 'firstName' || labelMatch === 'lastName' || labelMatch === '_fullName' ||
+          labelMatch === 'email' || labelMatch === 'phone') {
+        if (!data[labelMatch]) { data[labelMatch] = value; mappedKeys[key] = true; }
+        return;
+      }
 
       // 4. Détection par contenu (email / téléphone)
       if (!data.email && isEmail(value)) { data.email = value; mappedKeys[key] = true; return; }
