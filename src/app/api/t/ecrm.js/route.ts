@@ -649,6 +649,23 @@ export async function GET(request: NextRequest) {
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
     $(document).on('gform_confirmation_loaded', function(event, formId) {
       var key = String(formId);
+
+      // ── Passe finale : capturer les champs VISIBLES non encore accumulés ──
+      // Rattrape les selects conditionnels auto-remplis ou laissés sur leur valeur
+      // par défaut (aucun event 'change' déclenché). On ne lit QUE les champs visibles
+      // (offsetParent !== null) → les selects cachés des branches non choisies sont ignorés,
+      // ce qui évite les valeurs résiduelles.
+      var formEl = document.getElementById('gform_' + key);
+      if (formEl) {
+        var els = formEl.elements;
+        for (var i = 0; i < els.length; i++) {
+          var el = els[i];
+          if (!el) continue;
+          if (el.offsetParent === null) continue; // champ caché → on ignore
+          accumulateField(formEl, el);
+        }
+      }
+
       var raw = _gravityRaw[key];
       if (!raw || Object.keys(raw).length === 0) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
