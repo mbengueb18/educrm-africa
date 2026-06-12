@@ -646,23 +646,28 @@ export async function GET(request: NextRequest) {
     document.addEventListener('input', onFieldEvent, true);
     document.addEventListener('change', onFieldEvent, true);
 
-    // 1bis. Passe de capture au SUBMIT (le formulaire est encore présent et visible,
-    // AVANT que Gravity ne le remplace par le message de confirmation).
-    // C'est ici qu'on rattrape les selects conditionnels auto-remplis (input_37...)
-    // qui n'ont jamais déclenché d'événement 'change'.
-    document.addEventListener('submit', function(e) {
-      var form = e.target;
+    // 1bis. Passe de capture au CLIC du bouton d'envoi.
+    // Gravity AJAX ne déclenche PAS d'événement 'submit' natif, mais le clic sur le
+    // bouton "Envoyer" se produit toujours, AVANT la soumission AJAX (formulaire encore
+    // présent et visible). On rattrape ici les selects conditionnels auto-remplis.
+    document.addEventListener('click', function(e) {
+      var btn = e.target;
+      if (!btn) return;
+      var realBtn = (btn.tagName === 'BUTTON' || btn.tagName === 'INPUT') ? btn
+                    : (btn.closest ? btn.closest('button, input[type="submit"]') : null);
+      if (!realBtn) return;
+      var form = realBtn.form || (realBtn.closest && realBtn.closest('form'));
       if (!isGravityForm(form)) return;
+      var isSubmit = realBtn.type === 'submit' || /gform_button|gform-button|gform_next_button/i.test(realBtn.className || '');
+      if (!isSubmit) return;
       var els = form.elements;
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
         if (!el) continue;
-        // Au submit le form est affiché → seuls les champs conditionnels cachés
-        // (branches non choisies) ont offsetParent === null et sont ignorés.
         if (el.offsetParent === null) continue;
         accumulateField(form, el);
       }
-      log('info', 'Gravity: capture au submit pour le formulaire', form.id);
+      log('info', 'Gravity: capture au clic du bouton pour', form.id);
     }, true);
 
     // 2. Envoyer quand Gravity confirme le succès de la soumission AJAX
