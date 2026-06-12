@@ -629,6 +629,7 @@ export async function GET(request: NextRequest) {
     data._formId = 'gform_' + formId;
     data._pageUrl = window.location.href;
     data._pageTitle = document.title;
+    log('info', 'Gravity DEBUG lead construit:', JSON.stringify(data));
     return data;
   }
 
@@ -681,6 +682,7 @@ export async function GET(request: NextRequest) {
       // ce qui évite les valeurs résiduelles.
 
       var raw = _gravityRaw[key];
+      log('info', 'Gravity DEBUG raw accumulé:', JSON.stringify(raw));
       if (!raw || Object.keys(raw).length === 0) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
         return;
