@@ -586,7 +586,6 @@ export async function GET(request: NextRequest) {
   // en réutilisant la logique de mapping (clé → label → contenu).
   function buildLeadFromRaw(formId) {
     var raw = _gravityRaw[formId] || {};
-    console.log('[ECRM DEBUG] raw input_19:', raw['input_19'], '| all raw keys:', Object.keys(raw));
     var labels = _gravityLabels[formId] || {};
     var data = {};
     var mappedKeys = {};
@@ -667,11 +666,15 @@ export async function GET(request: NextRequest) {
       if (!isGravityForm(form)) return;
       var isSubmit = realBtn.type === 'submit' || /gform_button|gform-button|gform_next_button/i.test(realBtn.className || '');
       if (!isSubmit) return;
+      // TinyMCE (éditeur riche WordPress) garde le texte dans une iframe ;
+      // triggerSave() recopie le contenu vers les textarea sous-jacents.
+      try { if (window.tinymce && window.tinymce.triggerSave) window.tinymce.triggerSave(); } catch(e) {}
       var els = form.elements;
       for (var i = 0; i < els.length; i++) {
         var el = els[i];
         if (!el) continue;
-        if (el.offsetParent === null) continue;
+        // Les textarea d'éditeurs riches sont display:none (offsetParent null) mais valides
+        if (el.offsetParent === null && el.tagName !== 'TEXTAREA') continue;
         accumulateField(form, el);
       }
       log('info', 'Gravity: capture au clic du bouton pour', form.id);
