@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
 import { getAttachmentBuffer } from "@/lib/supabase-storage";
+import { sendViaGmail, getGmailIntegration } from "@/lib/gmail-send";
 
 interface AttachmentInput {
   path: string;          // Supabase Storage path
@@ -20,6 +21,7 @@ interface SendEmailParams {
   replyTo?: string;
   attachments?: AttachmentInput[];
   isHtml?: boolean;
+  preferUserMailbox?: boolean;
 }
 
 interface EmailResult {
@@ -96,6 +98,97 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   if (!finalReplyTo && leadId && inboundDomain) {
     finalReplyTo = "reply+" + leadId + "@" + inboundDomain;
   }
+
+  // ─── Envoi 1-to-1 via la boîte Gmail de l'utilisateur (si connectée) ───
+    if (params.preferUserMailbox && sentById) {
+      var gmailIntegration = await getGmailIntegration(sentById);
+      if (gmailIntegration && gmailIntegration.isActive) {
+        // Nom d'expéditeur = nom de l'utilisateur
+        var sender = await prisma.user.findUnique({
+          where: { id: sentById },
+          select: { name: true },
+        });
+  
+        var gHtml = params.isHtml ? body : formatEmailHtml(body, subject, sender?.name || "TalibCRM");
+        var gText = params.isHtml ? stripHtmlForText(body) : body;
+  
+        var gmailResult = await sendViaGmail({
+          userId: sentById,
+          to,
+          subject,
+          htmlBody: gHtml,
+          textBody: gText,
+          fromName: sender?.name || undefined,
+          replyTo: finalReplyTo,
+          attachments: params.attachments?.map(function(a) {
+            return { path: a.path, filename: a.filename, contentType: a.contentType };
+          }),
+        });
+  
+        if (gmailResult.success) {
+          var gMsg = await prisma.message.create({
+            data: {
+              leadId: leadId || null,
+              channel: "EMAIL",
+              direction: "OUTBOUND",
+              content: JSON.stringify({ subject, body }),
+              status: "SENT",
+              externalId: gmailResult.messageId,
+              sentById: sentById || null,
+              organizationId,
+              deliveredAt: new Date(),
+            },
+          });
+  
+          if (params.attachments && params.attachments.length > 0) {
+            await prisma.messageAttachment.createMany({
+              data: params.attachments.map(function(att) {
+                return {
+                  messageId: gMsg.id,
+                  filename: att.filename,
+                  contentType: att.contentType || null,
+                  storagePath: att.path,
+                  size: att.size || 0,
+                };
+              }),
+            });
+          }
+  
+          if (leadId) {
+            await prisma.activity.create({
+              data: {
+                type: "MESSAGE_SENT",
+                description: "Email envoyé via Gmail (" + (gmailResult.fromEmail || "") + "): " + subject,
+                userId: sentById || null,
+                leadId,
+                organizationId,
+              },
+            });
+          }
+  
+          return { success: true, messageId: gmailResult.messageId, dbMessageId: gMsg.id };
+        } else {
+          // Échec Gmail → on N'utilise PAS Resend en fallback (éviter l'envoi trompeur depuis noreply)
+          var gFailMsg = await prisma.message.create({
+            data: {
+              leadId: leadId || null,
+              channel: "EMAIL",
+              direction: "OUTBOUND",
+              content: JSON.stringify({ subject, body }),
+              status: "FAILED",
+              sentById: sentById || null,
+              organizationId,
+            },
+          });
+          return {
+            success: false,
+            dbMessageId: gFailMsg.id,
+            error: gmailResult.error || "Échec de l'envoi via votre boîte Gmail. Reconnectez-la dans les réglages.",
+          };
+        }
+      }
+      // Pas d'intégration Gmail active → on continue vers Resend (comportement normal)
+    }
 
   try {
     const resend = new Resend(apiKey);

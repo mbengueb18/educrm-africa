@@ -34,6 +34,7 @@ export async function sendEmailToLead(
     sentById: session.user.id,
     attachments,
     isHtml,
+    preferUserMailbox: true,
   });
 
   revalidatePath("/pipeline");
