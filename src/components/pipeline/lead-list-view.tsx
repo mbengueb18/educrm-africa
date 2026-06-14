@@ -740,11 +740,15 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
                       className="w-3.5 h-3.5 rounded border-gray-300 text-brand-600"
                     />
                   </td>
-                  {visibleColumns.map((colKey) => (
-                    <td key={colKey} className="px-3 py-2.5">
-                      {renderCellValue(lead, colKey)}
-                    </td>
-                  ))}
+                  {visibleColumns.map((colKey) => {
+                    // Ignorer les colonnes obsolètes (ex. custom supprimé) — comme l'en-tête
+                    if (!allAvailableColumns.find((c) => c.key === colKey)) return null;
+                    return (
+                      <td key={colKey} className="px-3 py-2.5">
+                        {renderCellValue(lead, colKey)}
+                      </td>
+                    );
+                  })}
                   <td className="px-3 py-2.5">
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                   </td>
