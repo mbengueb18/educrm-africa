@@ -53,6 +53,7 @@ function normalizeFields(data: Record<string, any>) {
     programCode: data.programCode || data.program_code || data.filière || data.filière || data.formation || data.programme || "",
     campusCity: data.campusCity || data.campus_city || data.campus || data.campus_choix || "",
     message: data.message || data.comments || data.commentaire || data.motivation || "",
+    subject: data.subject || data.objet || data.motif || "",
     civility: data.civility || "",
     country: data.country || "SN",
   };
@@ -78,7 +79,7 @@ function mapSource(source: string): string {
 // ─── Extract standard-field overrides from configured mappings ───
 // Retourne { city: "...", whatsapp: "..." } pour les champs formulaire
 // mappés vers une propriété standard du Lead.
-var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city", "civility", "country"]);
+var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city", "civility", "country", "message", "subject"]);
 
 // ─── Extract standard-field overrides from standardMappings config ───
 // standardMappings = { "input_3": "civility", "input_42": "city", ... }
@@ -303,6 +304,51 @@ function mapSocialToSource(social: string): string {
   return map[social] || "WEBSITE";
 }
 
+// ─── Crée un Message INBOUND dans l'Inbox si le formulaire contient un message ───
+// Le message (champ natif lead.message) devient une conversation entrante visible
+// dans l'Inbox, à laquelle le commercial peut répondre. Aligné sur la convention
+// des webhooks resend-inbound / brevo-inbound (channel EMAIL, status DELIVERED,
+// content JSON {subject, body}, + Activity MESSAGE_RECEIVED).
+async function createInboundMessageIfPresent(
+  organizationId: string,
+  leadId: string,
+  leadFirstName: string,
+  leadLastName: string,
+  message: string | null | undefined,
+  subject: string | null | undefined
+) {
+  if (!message || typeof message !== "string" || !message.trim()) return;
+
+  var subj = (subject && subject.trim()) ? subject.trim() : "Message depuis le formulaire de contact";
+
+  try {
+    var newMessage = await prisma.message.create({
+      data: {
+        organizationId: organizationId,
+        leadId: leadId,
+        channel: "EMAIL",
+        direction: "INBOUND",
+        content: JSON.stringify({ subject: subj, body: message.trim() }),
+        status: "DELIVERED", // != READ → compté comme non lu dans l'Inbox
+        sentAt: new Date(),
+        deliveredAt: new Date(),
+      },
+    });
+
+    // Activity (cohérent avec les webhooks inbound)
+    await prisma.activity.create({
+      data: {
+        type: "MESSAGE_RECEIVED" as any,
+        description: "Message reçu via formulaire de " + leadFirstName + " " + leadLastName + (subj ? ": " + subj : ""),
+        leadId: leadId,
+        organizationId: organizationId,
+      },
+    });
+  } catch (e) {
+    console.error("[Lead Ingest] Inbound message creation failed", e);
+  }
+}
+
 // ─── POST: Ingest lead ───
 export async function POST(request: NextRequest) {
   try {
@@ -381,6 +427,8 @@ export async function POST(request: NextRequest) {
     if (standardOverrides.whatsapp) fields.whatsapp = standardOverrides.whatsapp;
     if (standardOverrides.civility) fields.civility = standardOverrides.civility;
     if (standardOverrides.country) fields.country = standardOverrides.country;
+    if (standardOverrides.message) fields.message = standardOverrides.message;
+    if (standardOverrides.subject) fields.subject = standardOverrides.subject;
 
     // ─── Classify traffic source ───
     var trafficSource = classifyTrafficSource(parsed.data);
@@ -464,14 +512,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      // Update custom fields on existing lead if new data
-      if (Object.keys(allCustomFields).length > 0) {
-        var existingCustom = (existing.customFields as any) || {};
-        await prisma.lead.update({
-          where: { id: existing.id },
-          data: { customFields: { ...existingCustom, ...allCustomFields } },
-        });
-      }
+      // Update custom fields + champs natifs message/subject sur le lead existant
+      var existingCustom = (existing.customFields as any) || {};
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: {
+          ...(Object.keys(allCustomFields).length > 0 ? { customFields: { ...existingCustom, ...allCustomFields } } : {}),
+          ...(fields.message ? { message: fields.message } : {}),
+          ...(fields.subject ? { subject: fields.subject } : {}),
+        },
+      });
+
+      // Nouveau message éventuel → l'ajouter à l'Inbox
+      await createInboundMessageIfPresent(organizationId, existing.id, fields.firstName, fields.lastName, fields.message, fields.subject);
 
       return corsResponse(
         {
@@ -496,6 +549,8 @@ export async function POST(request: NextRequest) {
         city: fields.city || null,
         civility: fields.civility || null,
         country: fields.country || "SN",
+        message: fields.message || null,
+        subject: fields.subject || null,
         source: fields.source as any,
         sourceDetail: fields.sourceDetail || null,
         stageId: routing.stageId,
@@ -537,6 +592,8 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    await createInboundMessageIfPresent(organizationId, lead.id, fields.firstName, fields.lastName, fields.message, fields.subject);
 
     return corsResponse(
       {

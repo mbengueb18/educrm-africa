@@ -277,6 +277,8 @@ model Lead {
   dateOfBirth DateTime?
   city        String? // City of origin
   country     String    @default("SN")
+  message     String? // Message libre du formulaire de contact
+  subject     String? // Objet / motif du message
 
   // Pipeline
   stageId      String

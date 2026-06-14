@@ -6,4 +6,6 @@ export const MAPPABLE_STANDARD_FIELDS: { value: string; label: string }[] = [
   { value: "city", label: "Ville" },
   { value: "civility", label: "Civilité" },
   { value: "country", label: "Pays" },
+  { value: "message", label: "Message" },
+  { value: "subject", label: "Objet / Motif" },
 ];

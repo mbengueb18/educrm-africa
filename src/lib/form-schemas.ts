@@ -27,6 +27,8 @@ const NATIVE_LABELS: Record<string, string> = {
   city: "Ville",
   civility: "Civilité",
   country: "Pays",
+  message: "Message",
+  subject: "Objet / Motif",
 };
 
 const CORE_AUTO_PATTERNS: { test: RegExp; target: string }[] = [
