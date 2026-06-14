@@ -586,6 +586,7 @@ export async function GET(request: NextRequest) {
   // en réutilisant la logique de mapping (clé → label → contenu).
   function buildLeadFromRaw(formId) {
     var raw = _gravityRaw[formId] || {};
+    console.log('[ECRM DEBUG] raw input_19:', raw['input_19'], '| all raw keys:', Object.keys(raw));
     var labels = _gravityLabels[formId] || {};
     var data = {};
     var mappedKeys = {};
