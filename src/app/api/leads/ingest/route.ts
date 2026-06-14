@@ -53,6 +53,8 @@ function normalizeFields(data: Record<string, any>) {
     programCode: data.programCode || data.program_code || data.filière || data.filière || data.formation || data.programme || "",
     campusCity: data.campusCity || data.campus_city || data.campus || data.campus_choix || "",
     message: data.message || data.comments || data.commentaire || data.motivation || "",
+    civility: data.civility || "",
+    country: data.country || "SN",
   };
 }
 
@@ -76,41 +78,54 @@ function mapSource(source: string): string {
 // ─── Extract standard-field overrides from configured mappings ───
 // Retourne { city: "...", whatsapp: "..." } pour les champs formulaire
 // mappés vers une propriété standard du Lead.
-var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city"]);
+var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city", "civility", "country"]);
 
+// ─── Extract standard-field overrides from standardMappings config ───
+// standardMappings = { "input_3": "civility", "input_42": "city", ... }
+// Mappe les champs de formulaire vers les colonnes natives du Lead.
 function extractStandardOverrides(
   rawData: Record<string, any>,
-  orgCustomFieldsConfig: any[]
+  standardMappings: Record<string, string>
 ): Record<string, string> {
   var overrides: Record<string, string> = {};
+  if (!standardMappings) return overrides;
+
+  // Index insensible à la casse : "input_3" → "civility"
+  var lowerMap: Record<string, string> = {};
+  for (var [formField, nativeCol] of Object.entries(standardMappings)) {
+    if (nativeCol && ALLOWED_STANDARD_FIELDS.has(nativeCol)) {
+      lowerMap[formField.toLowerCase()] = nativeCol;
+    }
+  }
 
   for (var [key, value] of Object.entries(rawData)) {
     if (!value || typeof value !== "string" || !value.trim()) continue;
     if (key.startsWith("_")) continue;
 
-    var keyLower = key.toLowerCase();
-
-    var configMatch = orgCustomFieldsConfig.find(function(cf: any) {
-      return cf.target === "standard"
-        && cf.standardField
-        && ALLOWED_STANDARD_FIELDS.has(cf.standardField)
-        && cf.mappedFormFields.some(function(mf: string) { return mf.toLowerCase() === keyLower; });
-    });
-
-    if (configMatch) {
-      overrides[configMatch.standardField] = value.trim();
+    var nativeCol2 = lowerMap[key.toLowerCase()];
+    if (nativeCol2) {
+      overrides[nativeCol2] = value.trim();
     }
   }
 
   return overrides;
 }
 
-// ─── Extract custom fields (anything not in CORE_FIELDS) ───
+// ─── Extract custom fields (anything not in CORE_FIELDS, not in standardMappings) ───
 function extractCustomFields(
   rawData: Record<string, any>,
-  orgCustomFieldsConfig: any[]
+  orgCustomFieldsConfig: any[],
+  standardMappings: Record<string, string>
 ): Record<string, any> {
   var custom: Record<string, any> = {};
+
+  // Set des champs de formulaire routés vers une colonne native (à exclure du custom)
+  var standardFormFields = new Set<string>();
+  if (standardMappings) {
+    for (var sf of Object.keys(standardMappings)) {
+      standardFormFields.add(sf.toLowerCase());
+    }
+  }
 
   for (var [key, value] of Object.entries(rawData)) {
     if (!value || typeof value !== "string" || !value.trim()) continue;
@@ -119,14 +134,14 @@ function extractCustomFields(
     var keyLower = key.toLowerCase();
 
     if (CORE_FIELDS.has(key) || CORE_FIELDS.has(keyLower)) continue;
+    // Si ce champ est mappé vers une colonne native, il ne va PAS en custom
+    if (standardFormFields.has(keyLower)) continue;
 
     var configMatch = orgCustomFieldsConfig.find(function(cf: any) {
       return cf.mappedFormFields.some(function(mf: string) { return mf.toLowerCase() === keyLower; });
     });
 
     if (configMatch) {
-      // Si ce champ est mappé vers une propriété STANDARD, il ne va pas en custom
-      if (configMatch.target === "standard") continue;
       custom[configMatch.key] = value.trim();
     } else {
       custom[key] = value.trim();
@@ -356,13 +371,16 @@ export async function POST(request: NextRequest) {
     });
     var orgSettings = (org?.settings as any) || {};
     var customFieldsConfig = orgSettings.customFields || [];
+    var standardMappings = orgSettings.standardMappings || {};
 
     // ─── Extract custom fields ───
-    var customFields = extractCustomFields(parsed.data, customFieldsConfig);
-    // ─── Champs mappés vers des propriétés standard (ville, whatsapp...) ───
-    var standardOverrides = extractStandardOverrides(parsed.data, customFieldsConfig);
+    var customFields = extractCustomFields(parsed.data, customFieldsConfig, standardMappings);
+    // ─── Champs mappés vers des colonnes natives (ville, whatsapp, civilité, pays) ───
+    var standardOverrides = extractStandardOverrides(parsed.data, standardMappings);
     if (standardOverrides.city && !fields.city) fields.city = standardOverrides.city;
     if (standardOverrides.whatsapp) fields.whatsapp = standardOverrides.whatsapp;
+    if (standardOverrides.civility) fields.civility = standardOverrides.civility;
+    if (standardOverrides.country) fields.country = standardOverrides.country;
 
     // ─── Classify traffic source ───
     var trafficSource = classifyTrafficSource(parsed.data);
@@ -476,6 +494,8 @@ export async function POST(request: NextRequest) {
         whatsapp: fields.whatsapp || null,
         email: fields.email || null,
         city: fields.city || null,
+        civility: fields.civility || null,
+        country: fields.country || "SN",
         source: fields.source as any,
         sourceDetail: fields.sourceDetail || null,
         stageId: routing.stageId,
