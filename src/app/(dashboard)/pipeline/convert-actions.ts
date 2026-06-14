@@ -40,7 +40,7 @@ export async function convertLeadToStudent(data: {
   phone?: string;
   email?: string;
   whatsapp?: string;
-  gender?: string;
+  civility?: string;
   dateOfBirth?: string;
   address?: string;
   emergencyContact?: string;
@@ -87,7 +87,7 @@ export async function convertLeadToStudent(data: {
       phone: data.phone || lead.phone,
       whatsapp: data.whatsapp || lead.whatsapp,
       email: data.email || lead.email,
-      gender: (data.gender || lead.gender) as any || null,
+      civility: (data.civility || lead.civility) || null,
       dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : lead.dateOfBirth,
       address: data.address || null,
       emergencyContact: data.emergencyContact || null,

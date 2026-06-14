@@ -184,7 +184,7 @@ function buildLeadContext(lead: any): string {
   if (lead.email) lines.push("Email : " + lead.email);
   if (lead.whatsapp) lines.push("WhatsApp : " + lead.whatsapp);
   if (lead.city) lines.push("Ville : " + lead.city);
-  if (lead.gender) lines.push("Genre : " + lead.gender);
+  if (lead.civility) lines.push("Civilité : " + lead.civility);
   if (lead.dateOfBirth) lines.push("Né(e) le : " + new Date(lead.dateOfBirth).toLocaleDateString("fr-FR"));
 
   lines.push("\n=== PIPELINE ===");

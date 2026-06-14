@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       email: { header: "Email", getValue: function(l) { return l.email || ""; } },
       whatsapp: { header: "WhatsApp", getValue: function(l) { return l.whatsapp || ""; } },
       city: { header: "Ville", getValue: function(l) { return l.city || ""; } },
-      gender: { header: "Genre", getValue: function(l) { return l.gender === "MALE" ? "Homme" : l.gender === "FEMALE" ? "Femme" : l.gender || ""; } },
+      civility: { header: "Civilité", getValue: function(l) { return l.civility || ""; } },
       dateOfBirth: { header: "Date de naissance", getValue: function(l) { return l.dateOfBirth ? new Date(l.dateOfBirth).toISOString().split("T")[0] : ""; } },
       source: { header: "Source", getValue: function(l) { return l.source; } },
       sourceDetail: { header: "Detail source", getValue: function(l) { return l.sourceDetail || ""; } },

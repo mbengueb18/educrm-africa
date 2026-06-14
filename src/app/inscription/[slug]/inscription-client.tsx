@@ -77,7 +77,7 @@ export function InscriptionClient({ slug, organization }: { slug: string; organi
   const [phone, setPhone] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [city, setCity] = useState("");
-  const [gender, setGender] = useState<"MALE" | "FEMALE" | "OTHER" | "">("");
+  const [civility, setCivility] = useState<string>("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [programId, setProgramId] = useState("");
   const [campusId, setCampusId] = useState("");
@@ -163,7 +163,7 @@ export function InscriptionClient({ slug, organization }: { slug: string; organi
       try {
         const result = await submitInscription(slug, {
           firstName, lastName, email, phone, whatsapp: whatsapp || phone, city,
-          gender: gender || undefined,
+          civility: civility || undefined,
           dateOfBirth: dateOfBirth || undefined,
           programId, campusId,
           educationLevel: educationLevel || undefined,
@@ -293,24 +293,14 @@ export function InscriptionClient({ slug, organization }: { slug: string; organi
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Genre</label>
-                <div className="flex gap-2">
-                  {[
-                    { value: "MALE", label: "Homme" },
-                    { value: "FEMALE", label: "Femme" },
-                    { value: "OTHER", label: "Autre" },
-                  ].map(function(g) {
-                    return (
-                      <button key={g.value} type="button" onClick={function() { setGender(g.value as any); }}
-                        className={cn(
-                          "flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors",
-                          gender === g.value ? "bg-brand-50 border-brand-300 text-brand-700" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                        )}>
-                        {g.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Civilité</label>
+                <input
+                  type="text"
+                  value={civility}
+                  onChange={function(e) { setCivility(e.target.value); }}
+                  placeholder="Ex : Monsieur, Madame"
+                  className="w-full py-2 px-3 rounded-lg border border-gray-200 text-sm focus:border-brand-300 focus:outline-none transition-colors"
+                />
               </div>
             </div>
           )}

@@ -376,7 +376,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
             email: lead.email,
             whatsapp: lead.whatsapp,
             city: lead.city,
-            gender: lead.gender,
+            civility: lead.civility,
             dateOfBirth: lead.dateOfBirth,
             programId: lead.programId || null,
             campusId: lead.campusId || null,
@@ -547,7 +547,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, programs, campuses, 
             )}
             {lead.email && <InfoRow icon={Mail} label="Email" value={lead.email} />}
             {lead.city && <InfoRow icon={MapPin} label="Ville" value={lead.city} />}
-            {lead.gender && <InfoRow icon={UserIcon} label="Genre" value={lead.gender === "MALE" ? "Homme" : lead.gender === "FEMALE" ? "Femme" : "Autre"} />}
+            {lead.civility && <InfoRow icon={UserIcon} label="Civilité" value={lead.civility} />}
             {lead.dateOfBirth && <InfoRow icon={Calendar} label="Date de naissance" value={formatDate(lead.dateOfBirth)} />}
           </>
         )}

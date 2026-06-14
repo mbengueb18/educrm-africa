@@ -109,7 +109,7 @@ export async function updateStudent(studentId: string, data: {
   phone?: string;
   email?: string;
   whatsapp?: string;
-  gender?: string;
+  civility?: string;
   dateOfBirth?: string | null;
   address?: string;
   emergencyContact?: string;
@@ -127,7 +127,7 @@ export async function updateStudent(studentId: string, data: {
   if (data.phone !== undefined) updateData.phone = data.phone;
   if (data.email !== undefined) updateData.email = data.email || null;
   if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp || null;
-  if (data.gender !== undefined) updateData.gender = data.gender || null;
+  if (data.civility !== undefined) updateData.civility = data.civility || null;
   if (data.dateOfBirth !== undefined) updateData.dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
   if (data.address !== undefined) updateData.address = data.address || null;
   if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact || null;

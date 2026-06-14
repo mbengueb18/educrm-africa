@@ -273,7 +273,7 @@ model Lead {
   phone       String
   whatsapp    String? // May differ from phone
   email       String?
-  gender      Gender?
+  civility    String?
   dateOfBirth DateTime?
   city        String? // City of origin
   country     String    @default("SN")
@@ -330,12 +330,6 @@ model Lead {
   @@index([assignedToId])
   @@index([organizationId, createdAt])
   @@map("leads")
-}
-
-enum Gender {
-  MALE
-  FEMALE
-  OTHER
 }
 
 enum LeadSource {
@@ -403,7 +397,6 @@ model Student {
   phone            String
   whatsapp         String?
   email            String?
-  gender           Gender?
   dateOfBirth      DateTime?
   address          String?
   emergencyContact String?

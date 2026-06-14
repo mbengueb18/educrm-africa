@@ -86,12 +86,6 @@ const SOURCE_OPTIONS = [
   { value: "PARTNER", label: "Partenaire" },
 ];
 
-const GENDER_OPTIONS = [
-  { value: "MALE", label: "Homme" },
-  { value: "FEMALE", label: "Femme" },
-  { value: "OTHER", label: "Autre" },
-];
-
 interface FieldDef {
   key: string;
   label: string;
@@ -151,7 +145,6 @@ export function LeadFiltersBuilder({
 
   const getValueOptions = (fieldKey: string): { value: string; label: string }[] => {
     if (fieldKey === "source") return SOURCE_OPTIONS;
-    if (fieldKey === "gender") return GENDER_OPTIONS;
     if (fieldKey === "programId") return programs.map((p) => ({ value: p.id, label: p.name }));
     if (fieldKey === "campusId") return campuses.map((c) => ({ value: c.id, label: c.name }));
     if (fieldKey === "stageId") return stages.map((s) => ({ value: s.id, label: s.name }));
@@ -169,7 +162,7 @@ export function LeadFiltersBuilder({
   const getInputType = (fieldKey: string): string => {
     const fieldDef = fields.find((f) => f.key === fieldKey);
     if (!fieldDef) return "text";
-    if (fieldKey === "source" || fieldKey === "gender" || fieldKey === "programId" || fieldKey === "campusId" || fieldKey === "stageId" || fieldKey === "assignedToId") {
+    if (fieldKey === "source" || fieldKey === "programId" || fieldKey === "campusId" || fieldKey === "stageId" || fieldKey === "assignedToId") {
       return "select";
     }
     if (fieldDef.type === "number") return "number";

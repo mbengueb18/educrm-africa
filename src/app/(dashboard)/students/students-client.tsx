@@ -20,7 +20,7 @@ type Student = {
   phone: string;
   whatsapp: string | null;
   email: string | null;
-  gender: string | null;
+  civility: string | null;
   dateOfBirth: Date | null;
   address: string | null;
   status: string;
@@ -338,7 +338,7 @@ function StudentSlideOver({ studentId, onClose, programs, campuses }: {
             phone: data.phone,
             email: data.email || "",
             whatsapp: data.whatsapp || "",
-            gender: data.gender || "",
+            civility: data.civility || "",
             dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split("T")[0] : "",
             address: data.address || "",
             emergencyContact: data.emergencyContact || "",
@@ -523,12 +523,8 @@ function StudentSlideOver({ studentId, onClose, programs, campuses }: {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs text-gray-500 mb-1 block">Genre</label>
-                            <select value={editData.gender} onChange={function(e) { setEditData({ ...editData, gender: e.target.value }); }} className="input text-sm py-1.5 w-full">
-                              <option value="">Non spécifié</option>
-                              <option value="MALE">Homme</option>
-                              <option value="FEMALE">Femme</option>
-                            </select>
+                            <label className="text-xs text-gray-500 mb-1 block">Civilité</label>
+                            <input type="text" value={editData.civility} onChange={function(e) { setEditData({ ...editData, civility: e.target.value }); }} className="input text-sm py-1.5 w-full" placeholder="Civilité" />
                           </div>
                           <EditField label="Date de naissance" value={editData.dateOfBirth} onChange={function(v) { setEditData({ ...editData, dateOfBirth: v }); }} type="date" />
                         </div>
@@ -536,7 +532,7 @@ function StudentSlideOver({ studentId, onClose, programs, campuses }: {
                       </div>
                     ) : (
                       <>
-                        {student.gender && <InfoRow icon={UserIcon} label="Genre" value={student.gender === "MALE" ? "Homme" : student.gender === "FEMALE" ? "Femme" : "Autre"} />}
+                        {student.civility && <InfoRow icon={UserIcon} label="Civilité" value={student.civility} />}
                         {student.dateOfBirth && <InfoRow icon={Calendar} label="Naissance" value={formatDate(student.dateOfBirth)} />}
                         {student.address && <InfoRow icon={MapPin} label="Adresse" value={student.address} />}
                       </>

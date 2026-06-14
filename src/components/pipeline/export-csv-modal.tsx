@@ -21,7 +21,7 @@ var DEFAULT_FIELDS = [
   { key: "email", label: "Email", group: "Contact", checked: true },
   { key: "whatsapp", label: "WhatsApp", group: "Contact", checked: false },
   { key: "city", label: "Ville", group: "Contact", checked: true },
-  { key: "gender", label: "Genre", group: "Contact", checked: false },
+  { key: "civility", label: "Civilité", group: "Contact", checked: false },
   { key: "dateOfBirth", label: "Date de naissance", group: "Contact", checked: false },
   { key: "source", label: "Source", group: "Acquisition", checked: true },
   { key: "sourceDetail", label: "Detail source", group: "Acquisition", checked: false },

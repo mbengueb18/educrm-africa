@@ -23,10 +23,8 @@ export interface FormSchema {
 }
 
 const CORE_AUTO_PATTERNS: { test: RegExp; target: string }[] = [
-  // Prénom AVANT Nom (car "prenom" contient "nom")
-  { test: /prenom|first[\s_-]?name|fname|given[\s_-]?name/i, target: "Prénom" },
-  // Nom : exclure "prénom" via une logique de priorité (voir plus bas)
-  { test: /\bnom\b|last[\s_-]?name|lname|surname|family[\s_-]?name/i, target: "Nom" },
+  { test: /prenom|first[\s_-]?name|fname/i, target: "Prénom" },
+  { test: /nom|last[\s_-]?name|lname|surname/i, target: "Nom" },
   { test: /e[\s_-]?mail|courriel/i, target: "Email" },
   { test: /phone|tel|mobile|portable|telephone/i, target: "Téléphone" },
 ];
@@ -82,17 +80,9 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
 
   const result: FormWithMapping[] = schemas.map((form) => {
     let unmapped = 0;
-    const fields: MappedField[] = (form.fields || [])
-      .filter((field) => {
-        if (field.type === "fieldset") return false;
-        if (/^field_/i.test(field.name)) return false;
-        return true;
-      })
-      .map((field) => {
-      const stripAccents = (s: string) =>
-        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const nameLower = stripAccents(field.name);
-      const labelLower = stripAccents(field.label || "");
+    const fields: MappedField[] = (form.fields || []).map((field) => {
+      const nameLower = field.name.toLowerCase();
+      const labelLower = (field.label || "").toLowerCase();
 
       const cf = fieldToConfig[nameLower];
       if (cf) {
@@ -192,7 +182,7 @@ function toKey(s: string) {
 
 export type MapFieldInput =
   | { mode: "standard"; fieldName: string; label: string; standardField: string }
-  | { mode: "new_custom"; fieldName: string; label: string }
+  | { mode: "new_custom"; fieldName: string; label: string; type?: "text" | "select" | "number" | "date" | "email" | "phone" }
   | { mode: "existing_custom"; fieldName: string; customFieldId: string };
 
 export async function mapFieldFromForm(input: MapFieldInput) {
@@ -241,7 +231,7 @@ export async function mapFieldFromForm(input: MapFieldInput) {
   await addCustomField({
     label,
     key: toKey(label) || toKey(input.fieldName),
-    type: "text",
+    type: input.type || "text",
     mappedFormFields: [input.fieldName],
     required: false,
     showInCard: false,

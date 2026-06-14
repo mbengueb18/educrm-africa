@@ -28,7 +28,7 @@ const SYSTEM_FIELDS: Omit<FieldProperty, "fillCount" | "totalLeads" | "fillRate"
   { key: "email", label: "Email", group: "contact", type: "email", source: "system", isEditable: false, showInCard: false, showInList: true, mappedFormFields: ["email", "mail", "courriel"] },
   { key: "whatsapp", label: "WhatsApp", group: "contact", type: "phone", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: ["whatsapp"] },
   { key: "city", label: "Ville", group: "contact", type: "text", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["city", "ville", "town", "adresse"] },
-  { key: "gender", label: "Genre", group: "contact", type: "select", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: [] },
+  { key: "civility", label: "Civilité", group: "contact", type: "text", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: [] },
   { key: "dateOfBirth", label: "Date de naissance", group: "contact", type: "date", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: [] },
   { key: "source", label: "Source", group: "acquisition", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: ["source"] },
   { key: "sourceDetail", label: "Detail source", group: "acquisition", type: "text", source: "system", isEditable: false, showInCard: false, showInList: false, mappedFormFields: ["sourceDetail", "source_detail", "formName"] },
@@ -54,7 +54,7 @@ export async function getAllFieldProperties(): Promise<{
     where: { organizationId },
     select: {
       firstName: true, lastName: true, phone: true, email: true,
-      whatsapp: true, city: true, gender: true, dateOfBirth: true,
+      whatsapp: true, city: true, civility: true, dateOfBirth: true,
       source: true, sourceDetail: true, campaignId: true,
       programId: true, campusId: true, stageId: true, score: true,
       assignedToId: true, customFields: true,

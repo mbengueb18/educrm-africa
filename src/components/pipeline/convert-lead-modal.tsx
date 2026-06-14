@@ -20,7 +20,7 @@ interface ConvertLeadModalProps {
     email: string | null;
     whatsapp: string | null;
     city: string | null;
-    gender: string | null;
+    civility: string | null;
     dateOfBirth: Date | null;
     programId: string | null;
     campusId: string | null;
@@ -41,7 +41,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
   var [phone, setPhone] = useState(lead.phone);
   var [email, setEmail] = useState(lead.email || "");
   var [whatsapp, setWhatsapp] = useState(lead.whatsapp || "");
-  var [gender, setGender] = useState(lead.gender || "");
+  var [civility, setCivility] = useState(lead.civility || "");
   var [dateOfBirth, setDateOfBirth] = useState(
     lead.dateOfBirth ? new Date(lead.dateOfBirth).toISOString().split("T")[0] : ""
   );
@@ -97,7 +97,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
         phone: phone.trim(),
         email: email.trim() || undefined,
         whatsapp: whatsapp.trim() || undefined,
-        gender: gender || undefined,
+        civility: civility || undefined,
         dateOfBirth: dateOfBirth || undefined,
         address: address.trim() || undefined,
         emergencyContact: emergencyContact.trim() || undefined,
@@ -212,12 +212,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">Genre</label>
-                    <select value={gender} onChange={function(e) { setGender(e.target.value); }} className="input text-sm">
-                      <option value="">Non spécifié</option>
-                      <option value="MALE">Homme</option>
-                      <option value="FEMALE">Femme</option>
-                      <option value="OTHER">Autre</option>
-                    </select>
+                    <input type="text" value={civility} onChange={function(e) { setCivility(e.target.value); }} className="input text-sm" placeholder="Civilité" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">Date de naissance</label>

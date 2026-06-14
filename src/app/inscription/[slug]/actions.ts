@@ -31,7 +31,7 @@ interface InscriptionData {
   phone: string;
   whatsapp?: string;
   city?: string;
-  gender?: "MALE" | "FEMALE" | "OTHER";
+  civility?: string;
   dateOfBirth?: string;
   // Step 2
   programId?: string;
@@ -87,7 +87,7 @@ export async function submitInscription(slug: string, data: InscriptionData) {
     if (!existing.city && data.city) updates.city = data.city;
     if (!existing.programId && data.programId) updates.programId = data.programId;
     if (!existing.campusId && data.campusId) updates.campusId = data.campusId;
-    if (!existing.gender && data.gender) updates.gender = data.gender;
+    if (!existing.civility && data.civility) updates.civility = data.civility;
     if (!existing.dateOfBirth && data.dateOfBirth) updates.dateOfBirth = new Date(data.dateOfBirth);
 
     if (Object.keys(updates).length > 0) {
@@ -122,7 +122,7 @@ export async function submitInscription(slug: string, data: InscriptionData) {
         phone: data.phone.trim(),
         whatsapp: data.whatsapp?.trim() || data.phone.trim(),
         city: data.city?.trim() || null,
-        gender: data.gender || null,
+        civility: data.civility || null,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
         source: "WEBSITE",
         sourceDetail: "Inscription en ligne",

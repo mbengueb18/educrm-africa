@@ -335,7 +335,15 @@ function MapZone({
   const [tab, setTab] = useState<"standard" | "new" | "existing">("new");
   const [standardField, setStandardField] = useState("");
   const [label, setLabel] = useState(field.label || field.name);
+  const [fieldType, setFieldType] = useState<"text" | "select" | "number" | "date" | "email" | "phone">("text");
   const [existingId, setExistingId] = useState("");
+
+  // Aperçu de la clé générée (même logique que toKey côté serveur)
+  const previewKey = (label || field.name)
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 
   const submit = () => {
     if (tab === "standard") {
@@ -343,7 +351,7 @@ function MapZone({
       onMap({ mode: "standard", fieldName: field.name, label, standardField });
     } else if (tab === "new") {
       if (!label.trim()) return toast.error("Le label est requis");
-      onMap({ mode: "new_custom", fieldName: field.name, label });
+      onMap({ mode: "new_custom", fieldName: field.name, label, type: fieldType });
     } else {
       if (!existingId) return toast.error("Choisissez un champ existant");
       onMap({ mode: "existing_custom", fieldName: field.name, customFieldId: existingId });
@@ -381,13 +389,33 @@ function MapZone({
       )}
 
       {tab === "new" && (
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="input flex-1"
-            placeholder="Nom du champ (ex : Programme souhaité)"
-          />
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="input flex-1"
+              placeholder="Nom du champ (ex : Programme souhaité)"
+            />
+            <select
+              value={fieldType}
+              onChange={(e) => setFieldType(e.target.value as any)}
+              className="input sm:w-44"
+              title="Type de champ"
+            >
+              <option value="text">Texte</option>
+              <option value="select">Liste de choix</option>
+              <option value="number">Nombre</option>
+              <option value="date">Date</option>
+              <option value="email">Email</option>
+              <option value="phone">Téléphone</option>
+            </select>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Clé interne : <span className="font-mono text-gray-500">{previewKey || "—"}</span>
+            {" · "}Alimenté par <span className="font-mono text-gray-500">{field.name}</span>
+            <span className="block mt-0.5">Vous pourrez ajuster la clé et les options sur la page Champs personnalisés.</span>
+          </p>
         </div>
       )}
 
