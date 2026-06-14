@@ -750,16 +750,22 @@ export async function GET(request: NextRequest) {
         if (el.type === 'submit' || el.type === 'button' || el.type === 'hidden' || el.type === 'password' || el.type === 'file') continue;
         // Ignorer les champs techniques Gravity
         if (/^(gform_|is_submit_|state_|gform_target|gform_source|gform_field_values|gform_unique_id|gform_resume|gform_save)/i.test(nm)) continue;
-        if (seen[nm]) continue;
-        seen[nm] = true;
-        fields.push({
-          name: nm,
-          type: el.type || el.tagName.toLowerCase(),
-          label: getLabelTextRaw(el),
-        });
         // Ignorer les conteneurs (fieldset) et pseudo-champs de structure Gravity
         if (el.type === 'fieldset' || el.tagName.toLowerCase() === 'fieldset') continue;
         if (/^field_/i.test(nm)) continue;
+        // Pour les checkboxes Gravity (input_14.1, input_31.2...), utiliser le name PARENT
+        // (input_14, input_31) — cohérent avec ce que le tracker envoie à la soumission.
+        var effectiveName = nm;
+        if (el.type === 'checkbox' && nm.indexOf('.') !== -1) {
+          effectiveName = nm.substring(0, nm.lastIndexOf('.'));
+        }
+        if (seen[effectiveName]) continue;
+        seen[effectiveName] = true;
+        fields.push({
+          name: effectiveName,
+          type: el.type || el.tagName.toLowerCase(),
+          label: getLabelTextRaw(el),
+        });
       }
       if (fields.length > 0) {
         result.push({
