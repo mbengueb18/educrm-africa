@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, ProgramLevel, LeadSource, Gender } from "@prisma/client";
+import { PrismaClient, UserRole, ProgramLevel, LeadSource } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -210,24 +210,24 @@ async function main() {
 
   // ─── Leads ───
   const leadData = [
-    { firstName: "Amadou", lastName: "Diallo", phone: "+221 77 123 45 01", city: "Dakar", source: LeadSource.FACEBOOK, score: 85, stageIdx: 4, programIdx: 1, assignedTo: commercial1.id, gender: Gender.MALE },
-    { firstName: "Mariama", lastName: "Bah", phone: "+221 76 234 56 02", city: "Thiès", source: LeadSource.SALON, score: 72, stageIdx: 3, programIdx: 0, assignedTo: commercial2.id, gender: Gender.FEMALE },
-    { firstName: "Ousmane", lastName: "Seck", phone: "+221 78 345 67 03", city: "Saint-Louis", source: LeadSource.WEBSITE, score: 65, stageIdx: 2, programIdx: 2, assignedTo: commercial1.id, gender: Gender.MALE },
-    { firstName: "Aïssatou", lastName: "Ndiaye", phone: "+221 77 456 78 04", city: "Dakar", source: LeadSource.INSTAGRAM, score: 58, stageIdx: 1, programIdx: 1, assignedTo: commercial2.id, gender: Gender.FEMALE },
-    { firstName: "Ibrahima", lastName: "Fall", phone: "+221 76 567 89 05", city: "Kaolack", source: LeadSource.REFERRAL, score: 90, stageIdx: 4, programIdx: 4, assignedTo: commercial1.id, gender: Gender.MALE },
-    { firstName: "Khadija", lastName: "Touré", phone: "+221 77 678 90 06", city: "Ziguinchor", source: LeadSource.RADIO, score: 35, stageIdx: 0, programIdx: 0, gender: Gender.FEMALE },
-    { firstName: "Cheikh", lastName: "Mbaye", phone: "+221 78 789 01 07", city: "Dakar", source: LeadSource.WALK_IN, score: 78, stageIdx: 3, programIdx: 2, assignedTo: commercial2.id, gender: Gender.MALE },
-    { firstName: "Rokhaya", lastName: "Gueye", phone: "+221 77 890 12 08", city: "Mbour", source: LeadSource.WHATSAPP, score: 42, stageIdx: 1, programIdx: 3, gender: Gender.FEMALE },
-    { firstName: "Mamadou", lastName: "Diop", phone: "+221 76 901 23 09", city: "Dakar", source: LeadSource.FACEBOOK, score: 68, stageIdx: 2, programIdx: 4, assignedTo: commercial1.id, gender: Gender.MALE },
-    { firstName: "Fatimata", lastName: "Sy", phone: "+221 77 012 34 10", city: "Tambacounda", source: LeadSource.PARTNER, score: 55, stageIdx: 1, programIdx: 1, gender: Gender.FEMALE },
-    { firstName: "Abdou", lastName: "Kane", phone: "+221 78 111 22 11", city: "Dakar", source: LeadSource.WEBSITE, score: 82, stageIdx: 4, programIdx: 2, assignedTo: commercial2.id, gender: Gender.MALE },
-    { firstName: "Dienaba", lastName: "Cissé", phone: "+221 77 222 33 12", city: "Rufisque", source: LeadSource.SALON, score: 47, stageIdx: 0, programIdx: 0, gender: Gender.FEMALE },
-    { firstName: "Modou", lastName: "Faye", phone: "+221 76 333 44 13", city: "Louga", source: LeadSource.PHONE_CALL, score: 60, stageIdx: 2, programIdx: 3, assignedTo: commercial1.id, gender: Gender.MALE },
-    { firstName: "Yacine", lastName: "Sarr", phone: "+221 77 444 55 14", city: "Dakar", source: LeadSource.INSTAGRAM, score: 38, stageIdx: 0, programIdx: 1, gender: Gender.FEMALE },
-    { firstName: "Papa", lastName: "Dieng", phone: "+221 78 555 66 15", city: "Diourbel", source: LeadSource.REFERRAL, score: 73, stageIdx: 3, programIdx: 4, assignedTo: commercial2.id, gender: Gender.MALE },
-    { firstName: "Coumba", lastName: "Thiam", phone: "+225 07 88 11 22", city: "Abidjan", source: LeadSource.FACEBOOK, score: 66, stageIdx: 2, programIdx: 3, assignedTo: commercial1.id, gender: Gender.FEMALE },
-    { firstName: "Sékou", lastName: "Konaté", phone: "+225 05 77 33 44", city: "Abidjan", source: LeadSource.WEBSITE, score: 51, stageIdx: 1, programIdx: 3, gender: Gender.MALE },
-    { firstName: "Aminata", lastName: "Traoré", phone: "+225 01 66 55 77", city: "Bouaké", source: LeadSource.SALON, score: 44, stageIdx: 0, programIdx: 3, gender: Gender.FEMALE },
+    { firstName: "Amadou", lastName: "Diallo", phone: "+221 77 123 45 01", city: "Dakar", source: LeadSource.FACEBOOK, score: 85, stageIdx: 4, programIdx: 1, assignedTo: commercial1.id, civility: "Monsieur" },
+    { firstName: "Mariama", lastName: "Bah", phone: "+221 76 234 56 02", city: "Thiès", source: LeadSource.SALON, score: 72, stageIdx: 3, programIdx: 0, assignedTo: commercial2.id, civility: "Madame" },
+    { firstName: "Ousmane", lastName: "Seck", phone: "+221 78 345 67 03", city: "Saint-Louis", source: LeadSource.WEBSITE, score: 65, stageIdx: 2, programIdx: 2, assignedTo: commercial1.id, civility: "Monsieur" },
+    { firstName: "Aïssatou", lastName: "Ndiaye", phone: "+221 77 456 78 04", city: "Dakar", source: LeadSource.INSTAGRAM, score: 58, stageIdx: 1, programIdx: 1, assignedTo: commercial2.id, civility: "Madame" },
+    { firstName: "Ibrahima", lastName: "Fall", phone: "+221 76 567 89 05", city: "Kaolack", source: LeadSource.REFERRAL, score: 90, stageIdx: 4, programIdx: 4, assignedTo: commercial1.id, civility: "Monsieur" },
+    { firstName: "Khadija", lastName: "Touré", phone: "+221 77 678 90 06", city: "Ziguinchor", source: LeadSource.RADIO, score: 35, stageIdx: 0, programIdx: 0, civility: "Madame" },
+    { firstName: "Cheikh", lastName: "Mbaye", phone: "+221 78 789 01 07", city: "Dakar", source: LeadSource.WALK_IN, score: 78, stageIdx: 3, programIdx: 2, assignedTo: commercial2.id, civility: "Monsieur" },
+    { firstName: "Rokhaya", lastName: "Gueye", phone: "+221 77 890 12 08", city: "Mbour", source: LeadSource.WHATSAPP, score: 42, stageIdx: 1, programIdx: 3, civility: "Madame" },
+    { firstName: "Mamadou", lastName: "Diop", phone: "+221 76 901 23 09", city: "Dakar", source: LeadSource.FACEBOOK, score: 68, stageIdx: 2, programIdx: 4, assignedTo: commercial1.id, civility: "Monsieur" },
+    { firstName: "Fatimata", lastName: "Sy", phone: "+221 77 012 34 10", city: "Tambacounda", source: LeadSource.PARTNER, score: 55, stageIdx: 1, programIdx: 1, civility: "Madame" },
+    { firstName: "Abdou", lastName: "Kane", phone: "+221 78 111 22 11", city: "Dakar", source: LeadSource.WEBSITE, score: 82, stageIdx: 4, programIdx: 2, assignedTo: commercial2.id, civility: "Monsieur" },
+    { firstName: "Dienaba", lastName: "Cissé", phone: "+221 77 222 33 12", city: "Rufisque", source: LeadSource.SALON, score: 47, stageIdx: 0, programIdx: 0, civility: "Madame" },
+    { firstName: "Modou", lastName: "Faye", phone: "+221 76 333 44 13", city: "Louga", source: LeadSource.PHONE_CALL, score: 60, stageIdx: 2, programIdx: 3, assignedTo: commercial1.id, civility: "Monsieur" },
+    { firstName: "Yacine", lastName: "Sarr", phone: "+221 77 444 55 14", city: "Dakar", source: LeadSource.INSTAGRAM, score: 38, stageIdx: 0, programIdx: 1, civility: "Madame" },
+    { firstName: "Papa", lastName: "Dieng", phone: "+221 78 555 66 15", city: "Diourbel", source: LeadSource.REFERRAL, score: 73, stageIdx: 3, programIdx: 4, assignedTo: commercial2.id, civility: "Monsieur" },
+    { firstName: "Coumba", lastName: "Thiam", phone: "+225 07 88 11 22", city: "Abidjan", source: LeadSource.FACEBOOK, score: 66, stageIdx: 2, programIdx: 3, assignedTo: commercial1.id, civility: "Madame" },
+    { firstName: "Sékou", lastName: "Konaté", phone: "+225 05 77 33 44", city: "Abidjan", source: LeadSource.WEBSITE, score: 51, stageIdx: 1, programIdx: 3, civility: "Monsieur" },
+    { firstName: "Aminata", lastName: "Traoré", phone: "+225 01 66 55 77", city: "Bouaké", source: LeadSource.SALON, score: 44, stageIdx: 0, programIdx: 3, civility: "Madame" },
   ];
 
   const leads = await Promise.all(
@@ -240,7 +240,7 @@ async function main() {
           whatsapp: ld.phone,
           email: `${ld.firstName.toLowerCase()}.${ld.lastName.toLowerCase()}@email.com`,
           city: ld.city,
-          gender: ld.gender,
+          civility: ld.civility,
           source: ld.source,
           score: ld.score,
           stageId: stages[ld.stageIdx].id,
