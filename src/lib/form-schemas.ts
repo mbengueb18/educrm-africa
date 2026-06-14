@@ -230,17 +230,19 @@ export async function mapFieldFromForm(input: MapFieldInput) {
   }
 
   if (input.mode === "standard") {
-    const label = (input.label || input.standardField).trim();
-    await addCustomField({
-      label,
-      key: toKey(label) || toKey(input.fieldName),
-      type: "text",
-      mappedFormFields: [input.fieldName],
-      required: false,
-      showInCard: false,
-      showInList: true,
-      target: "standard",
-      standardField: input.standardField,
+    // Écrire dans org.settings.standardMappings : { "input_3": "civility", ... }
+    // (PAS de customField — le routage standard est séparé des champs personnalisés)
+    const org = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as any) || {};
+    const standardMappings: Record<string, string> = { ...(settings.standardMappings || {}) };
+    standardMappings[input.fieldName] = input.standardField;
+
+    await prisma.organization.update({
+      where: { id: session.user.organizationId },
+      data: { settings: { ...settings, standardMappings } },
     });
     revalidatePath("/settings/forms");
     return;

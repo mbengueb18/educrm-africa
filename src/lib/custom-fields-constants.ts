@@ -4,4 +4,6 @@
 export const MAPPABLE_STANDARD_FIELDS: { value: string; label: string }[] = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "city", label: "Ville" },
+  { value: "civility", label: "Civilité" },
+  { value: "country", label: "Pays" },
 ];
