@@ -22,6 +22,13 @@ export interface FormSchema {
   lastSeen: string;
 }
 
+const NATIVE_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  city: "Ville",
+  civility: "Civilité",
+  country: "Pays",
+};
+
 const CORE_AUTO_PATTERNS: { test: RegExp; target: string }[] = [
   { test: /prenom|first[\s_-]?name|fname/i, target: "Prénom" },
   { test: /nom|last[\s_-]?name|lname|surname/i, target: "Nom" },
@@ -70,6 +77,13 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
   const settings = (org?.settings as any) || {};
   const schemas: FormSchema[] = settings.formSchemas || [];
   const customFields: any[] = settings.customFields || [];
+  const standardMappings: Record<string, string> = settings.standardMappings || {};
+
+  // Index insensible à la casse : "input_3" → "civility"
+  const standardByField: Record<string, string> = {};
+  for (const [formField, nativeCol] of Object.entries(standardMappings)) {
+    standardByField[formField.toLowerCase()] = nativeCol;
+  }
 
   const fieldToConfig: Record<string, any> = {};
   for (const cf of customFields) {
@@ -83,6 +97,12 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
     const fields: MappedField[] = (form.fields || []).map((field) => {
       const nameLower = field.name.toLowerCase();
       const labelLower = (field.label || "").toLowerCase();
+      
+      // 0. Mappé vers une colonne native via standardMappings ?
+      const nativeCol = standardByField[nameLower];
+      if (nativeCol) {
+        return { ...field, mapping: { kind: "standard" as const, target: nativeCol, label: NATIVE_LABELS[nativeCol] || nativeCol } };
+      }
 
       const cf = fieldToConfig[nameLower];
       if (cf) {
