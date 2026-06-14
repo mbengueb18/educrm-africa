@@ -394,6 +394,7 @@ model Student {
   // Personal info (copied from lead, can be updated)
   firstName        String
   lastName         String
+  civility    String?
   phone            String
   whatsapp         String?
   email            String?
