@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLeadRouting } from "@/lib/pipeline-routing";
+import { getCustomFields } from "@/lib/custom-fields";
 
 // ─── Rôles autorisés à assigner/réassigner un lead ───
 function canAssignLeads(role: string): boolean {
@@ -492,32 +493,70 @@ export async function deleteLeads(leadIds: string[]) {
   return { success: true, count: leadIds.length };
 }
 
-// ─── Import leads from CSV data ───
-export async function importLeadsFromCSV(rows: {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email?: string;
-  whatsapp?: string;
-  city?: string;
-  source?: string;
-  sourceDetail?: string;
-  programCode?: string;
-}[]) {
+// ─── Import leads from CSV data (optimisé) ───
+export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
   var { organizationId } = session.user;
+
+  // Champs système gérés nativement (tout le reste = custom field)
+  var SYSTEM_KEYS = new Set([
+    "firstName", "lastName", "phone", "email", "whatsapp",
+    "city", "source", "sourceDetail", "programCode", "programId", "campusId",
+    "civility", "country", "message", "subject",
+  ]);
+
+  // Config custom fields (non utilisé directement ici mais conservé pour cohérence)
+  await getCustomFields();
 
   var programs = await prisma.program.findMany({
     where: { organizationId },
     select: { id: true, code: true, name: true },
   });
 
+  // ── OPTIM 1 : charger TOUS les doublons existants en UNE requête ──
+  var existingLeads = await prisma.lead.findMany({
+    where: { organizationId },
+    select: { phone: true, email: true },
+  });
+  var existingPhones = new Set<string>();
+  var existingEmails = new Set<string>();
+  existingLeads.forEach(function(l) {
+    if (l.phone) existingPhones.add(l.phone.trim());
+    if (l.email) existingEmails.add(l.email.trim().toLowerCase());
+  });
+
+  // ── OPTIM 2 : cache du routing par programId ──
+  var routingCache: Record<string, { stageId: string | null; pipelineId: string | null }> = {};
+  async function resolveRouting(programId: string | null) {
+    var cacheKey = programId || "__none__";
+    if (routingCache[cacheKey]) return routingCache[cacheKey];
+    var r = await getLeadRouting(organizationId, programId);
+    routingCache[cacheKey] = r;
+    return r;
+  }
+
+  var sourceMap: Record<string, string> = {
+    "site web": "WEBSITE", "website": "WEBSITE", "web": "WEBSITE",
+    "facebook": "FACEBOOK", "fb": "FACEBOOK",
+    "instagram": "INSTAGRAM", "insta": "INSTAGRAM",
+    "whatsapp": "WHATSAPP", "wa": "WHATSAPP",
+    "salon": "SALON", "forum": "SALON",
+    "parrainage": "REFERRAL", "referral": "REFERRAL",
+    "import": "IMPORT",
+  };
+
   var created = 0;
   var skipped = 0;
   var errors: string[] = [];
-  var createdLeadIds: string[] = [];   // ← AJOUT
+
+  // Doublons DANS le fichier lui-même (deux lignes même tel/email)
+  var seenPhones = new Set<string>();
+  var seenEmails = new Set<string>();
+
+  // Accumulateur pour insertion par lots
+  var toInsert: any[] = [];
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
@@ -532,18 +571,14 @@ export async function importLeadsFromCSV(rows: {
       continue;
     }
 
-    // Check duplicate
-    var existing = await prisma.lead.findFirst({
-      where: {
-        organizationId,
-        OR: [
-          ...(row.phone ? [{ phone: row.phone }] : []),
-          ...(row.email ? [{ email: row.email }] : []),
-        ],
-      },
-    });
+    var phoneTrim = row.phone ? row.phone.trim() : "";
+    var emailTrim = row.email ? row.email.trim().toLowerCase() : "";
 
-    if (existing) {
+    // ── Doublon (base existante OU déjà vu dans ce fichier) ──
+    var isDup =
+      (phoneTrim && (existingPhones.has(phoneTrim) || seenPhones.has(phoneTrim))) ||
+      (emailTrim && (existingEmails.has(emailTrim) || seenEmails.has(emailTrim)));
+    if (isDup) {
       skipped++;
       continue;
     }
@@ -558,56 +593,86 @@ export async function importLeadsFromCSV(rows: {
       if (match) programId = match.id;
     }
 
-    // Map source
-    var sourceMap: Record<string, string> = {
-      "site web": "WEBSITE", "website": "WEBSITE", "web": "WEBSITE",
-      "facebook": "FACEBOOK", "fb": "FACEBOOK",
-      "instagram": "INSTAGRAM", "insta": "INSTAGRAM",
-      "whatsapp": "WHATSAPP", "wa": "WHATSAPP",
-      "salon": "SALON", "forum": "SALON",
-      "parrainage": "REFERRAL", "referral": "REFERRAL",
-      "import": "IMPORT",
-    };
+    // Source
     var source = "IMPORT";
     if (row.source) {
       source = sourceMap[row.source.toLowerCase()] || "IMPORT";
     }
 
-    try {
-      // Routing automatique pipeline + stage selon programId
-      var routing = await getLeadRouting(organizationId, programId);
-      if (!routing.stageId) {
-        errors.push("Ligne " + (i + 2) + ": Aucune étape configurée");
-        skipped++;
-        continue;
+    // Custom fields
+    var rowCustomFields: Record<string, string> = {};
+    for (var fieldKey in row) {
+      if (!row.hasOwnProperty(fieldKey)) continue;
+      var fieldVal = row[fieldKey];
+      if (!fieldVal || !String(fieldVal).trim()) continue;
+      if (!SYSTEM_KEYS.has(fieldKey)) {
+        rowCustomFields[fieldKey] = String(fieldVal).trim();
       }
+    }
 
-      var newLead = await prisma.lead.create({         // ← MODIF : capture du résultat
-        data: {
-          firstName: row.firstName.trim(),
-          lastName: row.lastName.trim(),
-          phone: row.phone?.trim() || "N/A",
-          email: row.email?.trim() || null,
-          whatsapp: row.whatsapp?.trim() || row.phone?.trim() || null,
-          city: row.city?.trim() || null,
-          source: source as any,
-          sourceDetail: row.sourceDetail?.trim() || "Import CSV",
-          stageId: routing.stageId,
-          pipelineId: routing.pipelineId,
-          programId,
-          organizationId,
-        },
-      });
-      createdLeadIds.push(newLead.id);                 // ← AJOUT
-      created++;
-    } catch (err: any) {
-      errors.push("Ligne " + (i + 2) + ": " + (err.message || "Erreur"));
+    // Routing (depuis le cache)
+    var routing = await resolveRouting(programId);
+    if (!routing.stageId) {
+      errors.push("Ligne " + (i + 2) + ": Aucune étape configurée");
       skipped++;
+      continue;
+    }
+
+    // Marquer comme vu (anti-doublon intra-fichier)
+    if (phoneTrim) seenPhones.add(phoneTrim);
+    if (emailTrim) seenEmails.add(emailTrim);
+
+    toInsert.push({
+      firstName: row.firstName.trim(),
+      lastName: row.lastName.trim(),
+      phone: phoneTrim || "N/A",
+      email: row.email ? row.email.trim() : null,
+      whatsapp: row.whatsapp?.trim() || phoneTrim || null,
+      city: row.city?.trim() || null,
+      source: source as any,
+      sourceDetail: row.sourceDetail?.trim() || "Import CSV",
+      stageId: routing.stageId,
+      pipelineId: routing.pipelineId,
+      programId,
+      organizationId,
+      customFields: Object.keys(rowCustomFields).length > 0 ? rowCustomFields : undefined,
+    });
+  }
+
+  // ── OPTIM 3 : insertion par lots ──
+  var BATCH = 100;
+  for (var b = 0; b < toInsert.length; b += BATCH) {
+    var slice = toInsert.slice(b, b + BATCH);
+    try {
+      var res = await prisma.lead.createMany({ data: slice });
+      created += res.count;
+    } catch (err: any) {
+      errors.push("Lot " + (b / BATCH + 1) + ": " + (err.message || "Erreur insertion"));
+      skipped += slice.length;
     }
   }
 
+  // Récupérer les IDs des leads créés (pour l'audience)
+  // On retrouve les leads importés via leurs téléphones/emails (sur cette org)
+  var insertedPhones = toInsert.map(function(l) { return l.phone; }).filter(function(p) { return p && p !== "N/A"; });
+  var insertedEmails = toInsert.map(function(l) { return l.email; }).filter(Boolean) as string[];
+  var createdLeadIds: string[] = [];
+  if (insertedPhones.length > 0 || insertedEmails.length > 0) {
+    var createdLeads = await prisma.lead.findMany({
+      where: {
+        organizationId,
+        OR: [
+          insertedPhones.length > 0 ? { phone: { in: insertedPhones } } : undefined,
+          insertedEmails.length > 0 ? { email: { in: insertedEmails } } : undefined,
+        ].filter(Boolean) as any,
+      },
+      select: { id: true },
+    });
+    createdLeadIds = createdLeads.map(function(l) { return l.id; });
+  }
+
   revalidatePath("/pipeline");
-  return { created, skipped, errors, total: rows.length, createdLeadIds };  // ← MODIF
+  return { created, skipped, errors, total: rows.length, createdLeadIds };
 }
 
 // ─── Export leads as CSV string ───

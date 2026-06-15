@@ -5,10 +5,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   X, Upload, FileSpreadsheet, ArrowRight, ArrowLeft,
-  Check, AlertCircle, Loader2, Zap, Eye, Users,
+  Check, AlertCircle, Loader2, Zap, Eye, Users, Plus,
 } from "lucide-react";
 import { importLeadsFromCSV } from "@/app/(dashboard)/pipeline/actions";
 import { createAudienceFromImport } from "@/app/(dashboard)/audiences/actions";
+import { addCustomField } from "@/lib/custom-fields";
 
 interface ImportCSVModalProps {
   open: boolean;
@@ -22,6 +23,70 @@ interface CSVColumn {
   samples: string[];
   mappedTo: string | null;
   autoMapped: boolean;
+}
+
+// Parseur CSV robuste : gère les guillemets, séparateurs et sauts de ligne dans les cellules
+function parseCSVText(text: string, sep: string): string[][] {
+  var rows: string[][] = [];
+  var field = "";
+  var row: string[] = [];
+  var inQuotes = false;
+  var i = 0;
+  // Normalise les fins de ligne Windows/Mac
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  while (i < text.length) {
+    var char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'; // guillemet échappé ("")
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += char;
+      i++;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (char === sep) {
+      row.push(field);
+      field = "";
+      i++;
+      continue;
+    }
+    if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+      continue;
+    }
+    field += char;
+    i++;
+  }
+
+  // Dernier champ / dernière ligne
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  // Retire les lignes entièrement vides
+  return rows.filter(function(r) {
+    return r.some(function(c) { return c.trim() !== ""; });
+  });
 }
 
 export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSVModalProps) {
@@ -60,8 +125,12 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
     ];
   }
 
+  // Champs custom créés à la volée pendant cet import (ajoutés à la liste des cibles)
+  var [extraFields, setExtraFields] = useState<any[]>([]);
+  var ALL_FIELDS = CRM_FIELDS.concat(extraFields);
+
   var fieldGroups: string[] = [];
-  CRM_FIELDS.forEach(function(f: any) {
+  ALL_FIELDS.forEach(function(f: any) {
     if (fieldGroups.indexOf(f.group) === -1) fieldGroups.push(f.group);
   });
 
@@ -88,7 +157,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   // ─── State ───
   var [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   var [file, setFile] = useState<File | null>(null);
-  var [rawLines, setRawLines] = useState<string[]>([]);
+  var [rawText, setRawText] = useState<string>("");
   var [separator, setSeparator] = useState(";");
   var [columns, setColumns] = useState<CSVColumn[]>([]);
   var [dataRows, setDataRows] = useState<string[][]>([]);
@@ -102,6 +171,10 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   } | null>(null);
   var [createAudience, setCreateAudience] = useState(false);
   var [audienceName, setAudienceName] = useState("");
+  var [creatingForCol, setCreatingForCol] = useState<number | null>(null);
+  var [newFieldLabel, setNewFieldLabel] = useState("");
+  var [newFieldType, setNewFieldType] = useState<"text" | "number" | "date" | "email" | "phone" | "select">("text");
+  var [creatingField, setCreatingField] = useState(false);
   var fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Step 1: File upload ───
@@ -109,33 +182,33 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
     var f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    // Pré-remplir le nom de l'audience à partir du nom du fichier (sans extension)
     var fileNameWithoutExt = f.name.replace(/\.[^.]+$/, "");
     setAudienceName("Import — " + fileNameWithoutExt);
     var reader = new FileReader();
     reader.onload = function(ev) {
       var text = ev.target?.result as string;
-      var lines = text.split("\n").filter(function(l) { return l.trim(); });
-      if (lines.length < 2) {
-        toast.error("Le fichier doit contenir au moins un en-tete et une ligne de données");
-        return;
-      }
-      setRawLines(lines);
-      var firstLine = lines[0];
+      // Détecte le séparateur sur la première ligne (avant le premier saut de ligne)
+      var firstLine = text.split("\n")[0] || "";
       var sepDetected = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
       setSeparator(sepDetected);
-      parseCSV(lines, sepDetected);
+      // Stocke le texte brut complet pour re-parser si on change de séparateur
+      setRawText(text);
+      parseWithSeparator(text, sepDetected);
     };
     reader.readAsText(f);
   };
 
-  var parseCSV = function(lines: string[], sep: string) {
-    var headerCells = lines[0].split(sep).map(function(h) { return h.trim().replace(/^"|"$/g, ""); });
-    var rows: string[][] = [];
-    for (var i = 1; i < Math.min(lines.length, 201); i++) {
-      var cells = lines[i].split(sep).map(function(c) { return c.trim().replace(/^"|"$/g, ""); });
-      rows.push(cells);
+  var parseWithSeparator = function(text: string, sep: string) {
+    var allRows = parseCSVText(text, sep);
+    if (allRows.length < 2) {
+      toast.error("Le fichier doit contenir au moins un en-tete et une ligne de données");
+      return;
     }
+
+    var headerCells = allRows[0].map(function(h) { return h.trim(); });
+    var rows = allRows.slice(1).map(function(r) {
+      return r.map(function(c) { return c.trim(); });
+    });
     setDataRows(rows);
 
     var usedFields = new Set<string>();
@@ -153,8 +226,9 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
 
   var handleSeparatorChange = function(newSep: string) {
     setSeparator(newSep);
-    if (rawLines.length > 0) parseCSV(rawLines, newSep);
+    if (rawText) parseWithSeparator(rawText, newSep);
   };
+  
 
   // ─── Step 2: Field mapping ───
   var handleMapField = function(colIndex: number, fieldKey: string | null) {
@@ -165,6 +239,50 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
       }
       return { ...col, mappedTo: fieldKey, autoMapped: false };
     }));
+  };
+
+  var handleCreateField = async function(colIndex: number) {
+    if (!newFieldLabel.trim()) { toast.error("Donnez un nom au champ"); return; }
+    setCreatingField(true);
+    try {
+      // key générée à partir du label (slug simple)
+      var key = newFieldLabel.trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+
+      var created = await addCustomField({
+        label: newFieldLabel.trim(),
+        key: key,
+        type: newFieldType,
+        mappedFormFields: [],
+        required: false,
+        showInCard: false,
+        showInList: true,
+        target: "custom",
+      });
+
+      // Ajoute le champ à la liste des cibles (groupe Personnalisés)
+      setExtraFields(function(prev) {
+        return prev.concat([{
+          key: created.key,
+          label: created.label,
+          group: "Personnalisés",
+          required: false,
+          source: "custom",
+        }]);
+      });
+
+      // Mappe automatiquement la colonne vers ce nouveau champ
+      handleMapField(colIndex, created.key);
+
+      toast.success('Champ "' + created.label + '" créé');
+      setCreatingForCol(null);
+      setNewFieldLabel("");
+      setNewFieldType("text");
+    } catch (e: any) {
+      toast.error(e?.message || "Erreur lors de la création du champ");
+    }
+    setCreatingField(false);
   };
 
   var mappedCount = columns.filter(function(c) { return c.mappedTo; }).length;
@@ -228,7 +346,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   };
 
   var resetAndClose = function(imported?: boolean) {
-    setStep(1); setFile(null); setRawLines([]); setColumns([]); setDataRows([]); setResult(null);
+    setStep(1); setFile(null); setRawText(""); setColumns([]); setDataRows([]); setResult(null);
     setCreateAudience(false); setAudienceName("");
     onClose(imported);
   };
@@ -371,15 +489,23 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                           <td className="px-4 py-3">
                             <select
                               value={col.mappedTo || ""}
-                              onChange={function(e) { handleMapField(idx, e.target.value || null); }}
+                              onChange={function(e) {
+                                if (e.target.value === "__create__") {
+                                  setCreatingForCol(idx);
+                                  setNewFieldLabel(col.name); // pré-remplir avec le nom de la colonne
+                                } else {
+                                  handleMapField(idx, e.target.value || null);
+                                }
+                              }}
                               className={cn(
                                 "w-full text-sm border rounded-lg px-3 py-2 outline-none transition-colors",
                                 col.mappedTo ? "border-brand-300 bg-brand-50 text-brand-800 font-medium" : "border-gray-200 bg-white text-gray-500"
                               )}
                             >
                               <option value="">— Ne pas importer —</option>
+                              <option value="__create__">➕ Créer un champ personnalisé</option>
                               {fieldGroups.map(function(group) {
-                                var groupFields = CRM_FIELDS.filter(function(f: any) { return f.group === group; });
+                                var groupFields = ALL_FIELDS.filter(function(f: any) { return f.group === group; });
                                 return (
                                   <optgroup key={group} label={group}>
                                     {groupFields.map(function(f: any) {
@@ -396,6 +522,48 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                             </select>
                             {col.autoMapped && (
                               <span className="text-[10px] text-emerald-600 flex items-center gap-0.5 mt-1"><Zap size={9} /> Auto-détecté</span>
+                            )}
+                            {creatingForCol === idx && (
+                              <div className="mt-2 p-2.5 bg-brand-50 border border-brand-200 rounded-lg space-y-2">
+                                <input
+                                  type="text"
+                                  value={newFieldLabel}
+                                  onChange={function(e) { setNewFieldLabel(e.target.value); }}
+                                  placeholder="Nom du champ"
+                                  className="w-full text-sm border border-gray-200 rounded px-2 py-1.5"
+                                  autoFocus
+                                />
+                                <select
+                                  value={newFieldType}
+                                  onChange={function(e) { setNewFieldType(e.target.value as any); }}
+                                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5"
+                                >
+                                  <option value="text">Texte</option>
+                                  <option value="number">Nombre</option>
+                                  <option value="date">Date</option>
+                                  <option value="email">Email</option>
+                                  <option value="phone">Téléphone</option>
+                                  <option value="select">Liste</option>
+                                </select>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={function() { handleCreateField(idx); }}
+                                    disabled={creatingField || !newFieldLabel.trim()}
+                                    className="btn-primary py-1.5 px-3 text-xs flex-1 justify-center"
+                                  >
+                                    {creatingField ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                                    Créer et mapper
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={function() { setCreatingForCol(null); setNewFieldLabel(""); }}
+                                    className="btn-secondary py-1.5 px-3 text-xs"
+                                  >
+                                    Annuler
+                                  </button>
+                                </div>
+                              </div>
                             )}
                           </td>
                           <td className="px-4 py-3">
@@ -431,7 +599,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                     <tr className="bg-gray-50">
                       <th className="text-left text-xs font-semibold text-gray-600 px-3 py-2.5">#</th>
                       {columns.filter(function(c) { return c.mappedTo; }).map(function(col) {
-                        var fieldDef = CRM_FIELDS.find(function(f: any) { return f.key === col.mappedTo; });
+                        var fieldDef = ALL_FIELDS.find(function(f: any) { return f.key === col.mappedTo; });
                         return <th key={col.mappedTo} className="text-left text-xs font-semibold text-gray-600 px-3 py-2.5">{fieldDef?.label || col.mappedTo}</th>;
                       })}
                     </tr>

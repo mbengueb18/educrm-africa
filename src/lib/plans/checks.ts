@@ -30,11 +30,24 @@ async function getOrgPlanInfo(orgId: string) {
     where: { id: orgId },
     select: {
       plan: true,
+      planLockedUntil: true,
       aiAddonEnabled: true,
       extraUsersCount: true,
     },
   });
-  return org;
+
+  // Rétrogradation automatique : si le plan a une date de validité dépassée,
+  // le plan effectif retombe à ESSENTIEL (offres promotionnelles, essais...).
+  let effectivePlan = org.plan;
+  if (org.planLockedUntil && org.planLockedUntil.getTime() < Date.now()) {
+    effectivePlan = "ESSENTIEL";
+  }
+
+  return {
+    plan: effectivePlan,
+    aiAddonEnabled: org.aiAddonEnabled,
+    extraUsersCount: org.extraUsersCount,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
