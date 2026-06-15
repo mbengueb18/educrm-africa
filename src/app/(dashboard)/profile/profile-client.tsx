@@ -57,6 +57,10 @@ export function ProfileClient({ user }: ProfileClientProps) {
   var [googleConnected, setGoogleConnected] = useState(false);
   var [googleEmail, setGoogleEmail] = useState<string | null>(null);
   var [disconnecting, setDisconnecting] = useState(false);
+  // Gmail
+  var [gmailConnected, setGmailConnected] = useState(false);
+  var [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  var [disconnectingGmail, setDisconnectingGmail] = useState(false);
 
   useEffect(function() {
     fetch("/api/integrations/google/status").then(function(r) { return r.json(); }).then(function(data) {
@@ -70,6 +74,23 @@ export function ProfileClient({ user }: ProfileClientProps) {
         toast.success("Google Calendar connecté avec succès !");
         setGoogleConnected(true);
       }, 500);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    fetch("/api/integrations/gmail/status").then(function(r) { return r.json(); }).then(function(data) {
+      setGmailConnected(data.connected);
+      if (data.email) setGmailEmail(data.email);
+    }).catch(function() {});
+
+    if (params.get("gmail") === "success") {
+      setTimeout(function() {
+        toast.success("Boîte Gmail connectée avec succès !");
+        setGmailConnected(true);
+      }, 500);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("gmail") === "error") {
+      var gmailReason = params.get("reason") || "inconnu";
+      toast.error("Erreur de connexion Gmail : " + gmailReason);
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
@@ -86,6 +107,20 @@ export function ProfileClient({ user }: ProfileClientProps) {
       toast.error("Erreur lors de la déconnexion");
     }
     setDisconnecting(false);
+  };
+
+  var handleDisconnectGmail = async function() {
+    if (!confirm("Déconnecter votre boîte Gmail ? Vous ne pourrez plus envoyer d'emails depuis votre adresse.")) return;
+    setDisconnectingGmail(true);
+    try {
+      await fetch("/api/integrations/gmail/disconnect", { method: "POST" });
+      setGmailConnected(false);
+      setGmailEmail(null);
+      toast.success("Boîte Gmail déconnectée");
+    } catch {
+      toast.error("Erreur lors de la déconnexion");
+    }
+    setDisconnectingGmail(false);
   };
 
   var handleSave = async function() {
@@ -332,6 +367,32 @@ export function ProfileClient({ user }: ProfileClientProps) {
                 </button>
               ) : (
                 <a href="/api/integrations/google/connect?returnTo=/profile" className="btn-primary py-2 text-xs shrink-0 self-start sm:self-auto">
+                  Connecter
+                </a>
+              )}
+            </div>
+
+            {/* ─── Carte Gmail ─── */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <Mail size={28} className="text-red-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-700">Boîte Gmail</p>
+                  {gmailConnected ? (
+                    <p className="text-xs text-emerald-600 break-all">Connectée — {gmailEmail}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400">Envoyez vos emails depuis votre propre adresse</p>
+                  )}
+                </div>
+              </div>
+              {gmailConnected ? (
+                <button onClick={handleDisconnectGmail} disabled={disconnectingGmail}
+                  className="btn-secondary py-2 text-xs text-red-600 border-red-200 hover:bg-red-50 shrink-0 self-start sm:self-auto">
+                  {disconnectingGmail ? <Loader2 size={13} className="animate-spin" /> : null}
+                  Déconnecter
+                </button>
+              ) : (
+                <a href="/api/integrations/gmail/connect?returnTo=/profile" className="btn-primary py-2 text-xs shrink-0 self-start sm:self-auto">
                   Connecter
                 </a>
               )}
