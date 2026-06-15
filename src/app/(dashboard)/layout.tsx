@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PermissionProvider } from "@/components/permission-provider";
+import { SupportBubble } from "@/components/support/support-bubble";
 
 export default async function DashboardLayout({
   children,
@@ -62,6 +63,7 @@ export default async function DashboardLayout({
       >
         {children}
       </DashboardShell>
+      <SupportBubble />
     </PermissionProvider>
   );
 }

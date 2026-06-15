@@ -64,6 +64,7 @@ model Organization {
   audiences           Audience[]
   whatsappTemplates   WhatsAppTemplate[]
   whatsappCampaigns   WhatsAppCampaign[]
+  supportTickets SupportTicket[]
 
   @@map("organizations")
 }
@@ -77,6 +78,25 @@ enum Plan {
 enum BillingCycle {
   MONTHLY
   YEARLY
+}
+
+enum SupportTicketType {
+  BUG
+  IMPROVEMENT
+  QUESTION
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
 
 // ─── CAMPUS & PROGRAMS ───
@@ -204,6 +224,7 @@ model User {
   audienceMembersAdded     AudienceMember[]   @relation("AudienceMembersAdded")
   whatsappTemplatesCreated WhatsAppTemplate[] @relation("WhatsAppTemplatesCreated")
   whatsappCampaignsCreated WhatsAppCampaign[] @relation("WhatsAppCampaignsCreated")
+  supportTickets SupportTicket[]
 
   @@index([organizationId])
   @@index([email])
@@ -1534,4 +1555,26 @@ model WhatsAppCampaignRecipient {
   @@unique([campaignId, leadId])
   @@index([metaMessageId])
   @@map("whatsapp_campaign_recipients")
+}
+
+model SupportTicket {
+  id             String                 @id @default(cuid())
+  type           SupportTicketType      @default(BUG)
+  priority       SupportTicketPriority  @default(MEDIUM)
+  status         SupportTicketStatus    @default(OPEN)
+  title          String
+  description    String
+  screenshotPath String?
+  pageUrl        String?
+  organizationId String
+  submittedById  String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  submittedBy  User?        @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("support_tickets")
 }
