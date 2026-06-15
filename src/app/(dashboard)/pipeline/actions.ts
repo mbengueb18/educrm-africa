@@ -6,6 +6,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLeadRouting } from "@/lib/pipeline-routing";
 
+// ─── Rôles autorisés à assigner/réassigner un lead ───
+function canAssignLeads(role: string): boolean {
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}
+
 // ─── Get all pipelines of the organization ───
 export async function getOrgPipelines() {
   const session = await auth();
@@ -254,9 +259,13 @@ const routing = await getLeadRouting(organizationId, data.programId || null);
 
 if (!routing.stageId) throw new Error("Aucune étape par défaut configurée");
 
+// Un non-admin ne peut pas définir l'assigné à la création
+var assignedToIdSafe = canAssignLeads(session.user.role) ? (data.assignedToId || null) : null;
+
 const lead = await prisma.lead.create({
   data: {
     ...data,
+    assignedToId: assignedToIdSafe,
     email: data.email || null,
     whatsapp: data.whatsapp || data.phone,
     stageId: routing.stageId,
@@ -293,9 +302,23 @@ export async function updateLeadScore(leadId: string, score: number) {
 }
 
 // ─── Assign lead ───
-export async function assignLead(leadId: string, userId: string | null) {
+export async function assignLead(leadId: string, userId: string | null): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // Seuls ADMIN/SUPER_ADMIN peuvent (ré)assigner un lead
+  if (!canAssignLeads(session.user.role)) {
+    return { success: false, error: "Seul un administrateur peut assigner les leads" };
+  }
+
+  // Sécurité multi-tenant : le lead doit appartenir à l'organisation
+  var target = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!target) {
+    return { success: false, error: "Lead introuvable" };
+  }
 
   await prisma.lead.update({
     where: { id: leadId },
@@ -313,6 +336,7 @@ export async function assignLead(leadId: string, userId: string | null) {
   });
 
   revalidatePath("/pipeline");
+  return { success: true };
 }
 
 // ─── Get pipeline stats ───
@@ -391,8 +415,12 @@ export async function updateLead(leadId: string, data: {
     sourceDetail: data.sourceDetail,
     programId: data.programId,
     campusId: data.campusId,
-    assignedToId: data.assignedToId,
   };
+
+  // Seul un admin peut modifier l'assignation via l'édition du lead
+  if (canAssignLeads(session.user.role) && data.assignedToId !== undefined) {
+    updateData.assignedToId = data.assignedToId;
+  }
 
   // ─── Re-routing automatique si la filière change ───
   var programChanged = data.programId !== undefined && data.programId !== currentLead.programId;

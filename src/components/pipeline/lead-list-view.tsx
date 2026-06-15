@@ -49,6 +49,7 @@ interface LeadListViewProps {
   programs?: { id: string; name: string }[];
   campuses?: { id: string; name: string; city: string }[];
   onOpenLead?: (leadId: string) => void;
+  currentUserRole?: string;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -96,7 +97,7 @@ const MOBILE_SORT_OPTIONS: { value: string; dir: "asc" | "desc"; label: string }
   { value: "lastContact", dir: "desc", label: "Dernier contact" },
 ];
 
-export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead }: LeadListViewProps) {
+export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, currentUserRole }: LeadListViewProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -115,6 +116,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   var [assigning, setAssigning] = useState(false);
   var [showAssignMenu, setShowAssignMenu] = useState(false);
   var router = useRouter();
+  var canAssign = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
 
   useEffect(() => {
     getCustomFields().then(setCustomFieldsConfig).catch(() => {});
@@ -236,7 +238,12 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
     try {
       var ids = Array.from(selectedLeads);
       for (var i = 0; i < ids.length; i++) {
-        await assignLead(ids[i], userId);
+        var res = await assignLead(ids[i], userId);
+        if (res && !res.success) {
+          toast.error(res.error || "Erreur lors de l'assignation");
+          setAssigning(false);
+          return;
+        }
       }
       var userName = userId ? users.find(function(u) { return u.id === userId; })?.name || "utilisateur" : "personne";
       toast.success(ids.length + " lead(s) assigné(s) a " + userName);
@@ -423,6 +430,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
                 Envoyer un email
               </button>
 
+            {canAssign && (
               <div className="relative">
                 <button
                   onClick={function() { setShowAssignMenu(!showAssignMenu); }}
@@ -461,6 +469,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
                   </>
                 )}
               </div>
+            )}
 
               <button
                 onClick={handleBulkDelete}

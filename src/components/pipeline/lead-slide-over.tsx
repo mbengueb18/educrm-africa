@@ -34,6 +34,7 @@ interface LeadSlideOverProps {
   users: { id: string; name: string }[];
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string; city: string }[];
+  currentUserRole?: string;
 }
 
 var sourceLabels: Record<string, string> = {
@@ -63,7 +64,7 @@ var activityIcons: Record<string, typeof Activity> = {
   DOCUMENT_UPLOADED: FileText,
 };
 
-export function LeadSlideOver({ leadId, onClose, stages, users, programs, campuses }: LeadSlideOverProps) {
+export function LeadSlideOver({ leadId, onClose, stages, users, programs, campuses, currentUserRole }: LeadSlideOverProps) {
   var [lead, setLead] = useState<LeadDetail | null>(null);
   var [loading, setLoading] = useState(false);
   var [activeTab, setActiveTab] = useState<"info" | "history" | "notes">("info");
@@ -77,6 +78,7 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
   var [canUseWhatsAppAPI, setCanUseWhatsAppAPI] = useState(false);
   var [currentPlanName, setCurrentPlanName] = useState("Essentiel");
   var router = useRouter();
+  var canAssign = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
 
   useEffect(function() {
     if (!leadId) {
@@ -134,7 +136,11 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
     var leadId = lead.id;
     startTransition(async function() {
       try {
-        await assignLead(leadId, userId || null);
+        var res = await assignLead(leadId, userId || null);
+        if (res && !res.success) {
+          toast.error(res.error || "Erreur lors de l'assignation");
+          return;
+        }
         var user = users.find(function(u) { return u.id === userId; });
         setLead(function(prev) { return prev ? { ...prev, assignedToId: userId || null, assignedTo: user ? { ...user, avatar: null, email: "" } : null } as any : null; });
         toast.success(userId ? "Lead assigné" : "Lead désassigné");
@@ -322,10 +328,16 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
               </div>
               <div className="flex-1 min-w-0">
                 <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Assigné à</label>
-                <select value={lead.assignedToId || ""} onChange={function(e) { handleAssign(e.target.value); }} disabled={isPending} className="input py-1.5 text-xs mt-0.5">
-                  <option value="">Non assigné</option>
-                  {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
-                </select>
+                {canAssign ? (
+                  <select value={lead.assignedToId || ""} onChange={function(e) { handleAssign(e.target.value); }} disabled={isPending} className="input py-1.5 text-xs mt-0.5">
+                    <option value="">Non assigné</option>
+                    {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
+                  </select>
+                ) : (
+                  <p className="text-xs text-gray-700 mt-1.5 py-1">
+                    {lead.assignedTo ? lead.assignedTo.name : "Non assigné"}
+                  </p>
+                )}
               </div>
             </div>
 

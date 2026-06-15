@@ -23,6 +23,7 @@ interface PipelineClientProps {
   leads: any[];
   users: any[];
   currentUserId: string;
+  currentUserRole: string;
   stats: {
     totalLeads: number;
     newLeadsWeek: number;
@@ -41,6 +42,7 @@ export function PipelineClient({
   leads,
   users,
   currentUserId,
+  currentUserRole,
   stats,
   programs,
   campuses,
@@ -423,6 +425,7 @@ export function PipelineClient({
           programs={programs}
           campuses={campuses}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
+          currentUserRole={currentUserRole}
         />
       )}
 
@@ -441,6 +444,7 @@ export function PipelineClient({
         users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
         programs={programs}
         campuses={campuses}
+        currentUserRole={currentUserRole}
       />
 
       <ImportCSVModal

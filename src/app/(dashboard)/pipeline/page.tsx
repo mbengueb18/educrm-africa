@@ -47,6 +47,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
       campuses={campuses}
       crmFields={fieldProps.fields}
       currentUserId={session.user.id}
+      currentUserRole={session.user.role}
       pipelines={pipelines}
       currentPipelineId={pipelineData.currentPipelineId}
     />
