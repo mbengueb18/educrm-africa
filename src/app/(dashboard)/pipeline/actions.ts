@@ -104,8 +104,9 @@ export async function getPipelineData(pipelineId?: string) {
     }),
   ]);
 
-  // Auto-calculate lead scores
-  await calculateLeadScores(organizationId);
+  // Auto-calculate lead scores — RETIRÉ du chargement de page (trop coûteux avec gros volumes)
+  // Le score est désormais recalculé à la demande / à la création, pas à chaque rendu.
+  // await calculateLeadScores(organizationId);
 
   // Calculate last contact date for each lead
   var leadIds = leads.map(function(l) { return l.id; });
@@ -806,13 +807,17 @@ export async function calculateLeadScores(orgId: string) {
     }
   }
 
-  // Batch update scores
+  // Batch update scores — par paquets pour ne pas saturer le pool de connexions
   if (updates.length > 0) {
-    await Promise.all(
-      updates.map(function(u) {
-        return prisma.lead.update({ where: { id: u.id }, data: { score: u.score } });
-      })
-    );
+    var BATCH = 4; // <= connection limit (5)
+    for (var b = 0; b < updates.length; b += BATCH) {
+      var slice = updates.slice(b, b + BATCH);
+      await Promise.all(
+        slice.map(function(u) {
+          return prisma.lead.update({ where: { id: u.id }, data: { score: u.score } });
+        })
+      );
+    }
   }
 
   return { updated: updates.length };
