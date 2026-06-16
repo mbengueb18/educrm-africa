@@ -25,6 +25,24 @@ interface CSVColumn {
   autoMapped: boolean;
 }
 
+// Charge SheetJS depuis le CDN à la demande (évite npm install)
+var xlsxLoaderPromise: Promise<any> | null = null;
+function loadXLSX(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).XLSX) {
+    return Promise.resolve((window as any).XLSX);
+  }
+  if (xlsxLoaderPromise) return xlsxLoaderPromise;
+  xlsxLoaderPromise = new Promise(function(resolve, reject) {
+    var script = document.createElement("script");
+    script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+    script.async = true;
+    script.onload = function() { resolve((window as any).XLSX); };
+    script.onerror = function() { reject(new Error("Impossible de charger le lecteur Excel")); };
+    document.head.appendChild(script);
+  });
+  return xlsxLoaderPromise;
+}
+
 // Parseur CSV robuste : gère les guillemets, séparateurs et sauts de ligne dans les cellules
 function parseCSVText(text: string, sep: string): string[][] {
   var rows: string[][] = [];
@@ -175,7 +193,38 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   var [newFieldLabel, setNewFieldLabel] = useState("");
   var [newFieldType, setNewFieldType] = useState<"text" | "number" | "date" | "email" | "phone" | "select">("text");
   var [creatingField, setCreatingField] = useState(false);
+  var [isExcelFile, setIsExcelFile] = useState(false);
   var fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Traitement commun : transforme allRows (headers + données) en colonnes mappables
+  var processParsedRows = function(allRows: string[][]) {
+    if (allRows.length < 2) {
+      toast.error("Le fichier doit contenir au moins un en-tete et une ligne de données");
+      return;
+    }
+    var headerCells = allRows[0].map(function(h) { return h.trim(); });
+    var rows = allRows.slice(1).map(function(r) {
+      return r.map(function(c) { return c.trim(); });
+    });
+    setDataRows(rows);
+
+    var usedFields = new Set<string>();
+    var cols: CSVColumn[] = headerCells.map(function(name, idx) {
+      var samples = rows.slice(0, 5).map(function(r) { return r[idx] || ""; }).filter(function(s) { return s; });
+      var normalized = name.toLowerCase().trim();
+      var autoField = AUTO_MAP[normalized] || null;
+      if (autoField && usedFields.has(autoField)) autoField = null;
+      if (autoField) usedFields.add(autoField);
+      return { name: name, samples: samples, mappedTo: autoField, autoMapped: autoField !== null };
+    });
+    setColumns(cols);
+    setStep(2);
+  };
+
+  var parseWithSeparator = function(text: string, sep: string) {
+    var allRows = parseCSVText(text, sep);
+    processParsedRows(allRows);
+  };
 
   // ─── Step 1: File upload ───
   var handleFileSelect = function(e: React.ChangeEvent<HTMLInputElement>) {
@@ -184,18 +233,61 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
     setFile(f);
     var fileNameWithoutExt = f.name.replace(/\.[^.]+$/, "");
     setAudienceName("Import — " + fileNameWithoutExt);
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      var text = ev.target?.result as string;
-      // Détecte le séparateur sur la première ligne (avant le premier saut de ligne)
-      var firstLine = text.split("\n")[0] || "";
-      var sepDetected = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
-      setSeparator(sepDetected);
-      // Stocke le texte brut complet pour re-parser si on change de séparateur
-      setRawText(text);
-      parseWithSeparator(text, sepDetected);
-    };
-    reader.readAsText(f);
+
+    var ext = (f.name.split(".").pop() || "").toLowerCase();
+    var isExcel = ext === "xlsx" || ext === "xls";
+    setIsExcelFile(isExcel);
+
+    if (isExcel) {
+      // ── Lecture Excel via SheetJS (CDN) ──
+      var readerX = new FileReader();
+      readerX.onload = async function(ev) {
+        try {
+          var XLSX = await loadXLSX();
+          var data = new Uint8Array(ev.target?.result as ArrayBuffer);
+          // raw:true pour récupérer les valeurs brutes, puis on formate nous-mêmes
+          var workbook = XLSX.read(data, { type: "array" });
+          var firstSheetName = workbook.SheetNames[0];
+          var sheet = workbook.Sheets[firstSheetName];
+
+          var aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+
+          var allRows: string[][] = aoa
+            .map(function(r) {
+              return r.map(function(c: any) {
+                if (c == null) return "";
+                // Nombre → éviter la notation scientifique
+                if (typeof c === "number") {
+                  // Entier (téléphone, etc.) → représentation complète sans exposant
+                  if (Number.isInteger(c)) {
+                    return c.toLocaleString("fullwide", { useGrouping: false });
+                  }
+                  return String(c);
+                }
+                return String(c).trim();
+              });
+            })
+            .filter(function(r) { return r.some(function(c) { return c !== ""; }); });
+
+          processParsedRows(allRows);
+        } catch (err: any) {
+          toast.error(err?.message || "Erreur de lecture du fichier Excel");
+        }
+      };
+      readerX.readAsArrayBuffer(f);
+    } else {
+      // ── Lecture CSV/TXT via le parseur maison ──
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var text = ev.target?.result as string;
+        var firstLine = text.split("\n")[0] || "";
+        var sepDetected = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+        setSeparator(sepDetected);
+        setRawText(text);
+        parseWithSeparator(text, sepDetected);
+      };
+      reader.readAsText(f);
+    }
   };
 
   var parseWithSeparator = function(text: string, sep: string) {
@@ -315,6 +407,10 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
         return mapped;
       }).filter(function(r) { return r.firstName || r.lastName; });
 
+      console.log("[IMPORT] Lignes envoyées au serveur:", rows.length);
+      console.log("[IMPORT] 3 premières lignes:", rows.slice(0, 3));
+      console.log("[IMPORT] Téléphones des 10 premières:", rows.slice(0, 10).map(function(r) { return r.phone; }));
+
       var res: any = await importLeadsFromCSV(rows);
 
       // Création optionnelle d'une audience à partir des leads importés
@@ -406,10 +502,10 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                   onClick={function() { fileInputRef.current?.click(); }}
                 >
                   <Upload size={40} className="text-gray-300 mx-auto mb-4" />
-                  <p className="text-sm font-medium text-gray-700 mb-1">Glissez votre fichier CSV ici</p>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Glissez votre fichier CSV ou Excel ici</p>
                   <p className="text-xs text-gray-400 mb-4">ou cliquez pour parcourir</p>
                   <button className="btn-primary py-2 px-4 text-sm mx-auto">Choisir un fichier</button>
-                  <input ref={fileInputRef} type="file" accept=".csv,.txt,.tsv" className="hidden" onChange={handleFileSelect} />
+                  <input ref={fileInputRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" className="hidden" onChange={handleFileSelect} />
                 </div>
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                   <p className="text-xs font-medium text-gray-600 mb-2">Format attendu :</p>
@@ -435,6 +531,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                   <span className="text-sm font-medium text-gray-700">{file?.name}</span>
                   <span className="text-xs text-gray-400">{dataRows.length} lignes</span>
                 </div>
+                {!isExcelFile && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">Séparateur :</span>
                   <select value={separator} onChange={function(e) { handleSeparatorChange(e.target.value); }} className="text-xs border border-gray-200 rounded px-2 py-1">
@@ -443,6 +540,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                     <option value={"\t"}>Tabulation</option>
                   </select>
                 </div>
+                )}
               </div>
 
               {columns.some(function(c) { return c.autoMapped; }) && (
