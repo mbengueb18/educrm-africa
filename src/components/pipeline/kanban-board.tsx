@@ -79,10 +79,27 @@ export function KanbanBoard({
   const [filterProgram, setFilterProgram] = useState("");
   const [filterCampus, setFilterCampus] = useState("");
   const [sortKey, setSortKey] = useState<"score" | "createdAt" | "updatedAt">("score");
+  const COLUMN_PAGE_SIZE = 50;
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+
+  const getVisibleCount = (stageId: string) => visibleCounts[stageId] || COLUMN_PAGE_SIZE;
+  const showMore = (stageId: string) => {
+    setVisibleCounts(function(prev) {
+      var current = prev[stageId] || COLUMN_PAGE_SIZE;
+      var next: Record<string, number> = {};
+      for (var k in prev) next[k] = prev[k];
+      next[stageId] = current + COLUMN_PAGE_SIZE;
+      return next;
+    });
+  };
 
   useEffect(() => {
     setLeads(initialLeads);
   }, [initialLeads]);
+
+  useEffect(() => {
+    setVisibleCounts({});
+  }, [search, filterSource, filterAssigned, filterProgram, filterCampus, sortKey]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -258,6 +275,10 @@ export function KanbanBoard({
              style={{ scrollbarWidth: 'auto' }}>
           {stages.map((stage) => {
             const stageLeads = getLeadsForStage(stage.id);
+            const totalInStage = stageLeads.length;
+            const visibleCount = getVisibleCount(stage.id);
+            const displayedLeads = stageLeads.slice(0, visibleCount);
+            const hasMore = totalInStage > visibleCount;
 
             return (
               <div key={stage.id} className="kanban-column snap-start shrink-0">
@@ -288,11 +309,12 @@ export function KanbanBoard({
                       ref={provided.innerRef}
                       {...provided.droppableProps}
                       className={cn(
-                        "flex-1 space-y-2.5 min-h-[120px] rounded-lg p-1 transition-colors duration-200",
+                        "space-y-2.5 rounded-lg p-1 transition-colors duration-200 overflow-y-auto",
                         snapshot.isDraggingOver && "bg-brand-50/60 ring-2 ring-brand-200/50 ring-dashed"
                       )}
+                      style={{ maxHeight: "600px", minHeight: "120px" }}
                     >
-                      {stageLeads.map((lead, index) => (
+                      {displayedLeads.map((lead, index) => (
                         <Draggable
                           key={lead.id}
                           draggableId={lead.id}
@@ -317,6 +339,15 @@ export function KanbanBoard({
                         </Draggable>
                       ))}
                       {provided.placeholder}
+
+                      {hasMore && (
+                        <button
+                          onClick={function() { showMore(stage.id); }}
+                          className="w-full py-2 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors"
+                        >
+                          Voir plus ({totalInStage - visibleCount})
+                        </button>
+                      )}
 
                       {stageLeads.length === 0 && !snapshot.isDraggingOver && (
                         <div className="flex flex-col items-center justify-center py-6 text-center">

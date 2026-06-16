@@ -111,6 +111,8 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
   const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   var [deleting, setDeleting] = useState(false);
   var [assigning, setAssigning] = useState(false);
@@ -126,6 +128,10 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
       if (saved) setVisibleColumns(JSON.parse(saved));
     } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterStage, filterSource, filterAssigned, filterProgram, filterCampus, sortKey, sortDir]);
 
   // Save columns preference
   const updateColumns = (cols: string[]) => {
@@ -194,6 +200,12 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
       return 0;
     });
   }, [filtered, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = useMemo(() => {
+    var start = (currentPage - 1) * PAGE_SIZE;
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, currentPage]);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -591,13 +603,13 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
           </div>
         )}
 
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-y-auto" style={{ maxHeight: "560px" }}>
           {sorted.length === 0 && (
             <div className="py-16 text-center">
               <p className="text-sm text-gray-400">Aucun lead ne correspond aux filtres</p>
             </div>
           )}
-          {sorted.map((lead) => {
+          {paginated.map((lead) => {
             var stage = stages.find((s) => s.id === lead.stageId);
             var isSelected = selectedLeads.has(lead.id);
             return (
@@ -694,9 +706,9 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
 
       {/* ─── Desktop table view (>= md) ─── */}
       <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto" style={{ maxHeight: "560px" }}>
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50/80 border-b border-gray-200">
                 <th className="w-10 px-3 py-2.5">
                   <input
@@ -732,7 +744,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sorted.map((lead) => (
+              {paginated.map((lead) => (
                 <tr
                   key={lead.id}
                   className={cn(
@@ -773,6 +785,36 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
           )}
         </div>
       </div>
+
+      {/* Pagination */}
+      {sorted.length > PAGE_SIZE && (
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-4 mb-2">
+          <button
+            onClick={function() { setCurrentPage(Math.max(1, currentPage - 1)); }}
+            disabled={currentPage === 1}
+            className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Précédent
+          </button>
+          <span className="text-xs text-gray-600">
+            Page {currentPage} / {totalPages}
+          </span>
+          <button
+            onClick={function() { setCurrentPage(Math.min(totalPages, currentPage + 1)); }}
+            disabled={currentPage === totalPages}
+            className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Suivant
+          </button>
+          <span className="text-xs text-gray-400">
+            {((currentPage - 1) * PAGE_SIZE) + 1}
+            {" – "}
+            {Math.min(currentPage * PAGE_SIZE, sorted.length)}
+            {" sur "}
+            {sorted.length}
+          </span>
+        </div>
+      )}
 
       <BulkEmailModal
         open={bulkEmailOpen}
