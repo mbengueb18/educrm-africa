@@ -65,6 +65,7 @@ model Organization {
   whatsappTemplates   WhatsAppTemplate[]
   whatsappCampaigns   WhatsAppCampaign[]
   supportTickets SupportTicket[]
+  metaLeadsIntegration MetaLeadsIntegration?
 
   @@map("organizations")
 }
@@ -1577,4 +1578,34 @@ model SupportTicket {
   @@index([organizationId])
   @@index([status])
   @@map("support_tickets")
+}
+
+model MetaLeadsIntegration {
+  id             String @id @default(cuid())
+  organizationId String @unique
+
+  // Credentials Meta
+  pageId          String  // ID de la Page Facebook
+  pageAccessToken String  @db.Text // Page Access Token longue durée (pour appeler l'API Graph)
+  verifyToken     String  // Pour la vérification webhook (chaîne choisie)
+  appSecret       String  @db.Text // App Secret pour vérifier les signatures
+
+  // Métadonnées
+  pageName String? // Nom lisible de la page (ex: "BEM Tech Dakar")
+
+  // Config de mapping & attribution (JSON, comme tes settings)
+  // Ex: { "field_mapping": {...}, "default_source": "FACEBOOK", "default_program_id": "..." }
+  config Json @default("{}")
+
+  // État
+  isActive     Boolean   @default(true)
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("meta_leads_integrations")
 }
