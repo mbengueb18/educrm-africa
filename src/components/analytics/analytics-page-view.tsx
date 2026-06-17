@@ -7,6 +7,7 @@ import { getPageInfo } from "@/lib/page-info";
 
 interface AnalyticsPageViewProps {
   orgId: string;
+  userId: string;
   userRole: string;
   plan?: string;
 }
