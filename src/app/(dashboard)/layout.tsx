@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PermissionProvider } from "@/components/permission-provider";
 import { SupportBubble } from "@/components/support/support-bubble";
+import { AnalyticsPageView } from "@/components/analytics/analytics-page-view";
 
 export default async function DashboardLayout({
   children,
@@ -49,8 +50,19 @@ export default async function DashboardLayout({
     }),
   ]);
 
+  var org = await prisma.organization.findUnique({
+    where: { id: session.user.organizationId },
+    select: { plan: true },
+  });
+
   return (
     <PermissionProvider role={session.user.role} userId={session.user.id}>
+      <AnalyticsPageView
+        orgId={session.user.organizationId}
+        userId={session.user.id}
+        userRole={session.user.role}
+        plan={org?.plan}
+      />
       <DashboardShell
         user={{
           name: session.user.name,

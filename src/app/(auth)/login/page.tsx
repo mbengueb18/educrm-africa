@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { School, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { trackEvent } from "@/lib/analytics";
 
 function LoginForm() {
   const router = useRouter();
@@ -30,6 +31,9 @@ function LoginForm() {
           toast.error("Email ou mot de passe incorrect");
           return;
         }
+
+        // Login réussi → tracking
+        trackEvent("login", { method: "email_password" });
 
         router.push(callbackUrl);
         router.refresh();
