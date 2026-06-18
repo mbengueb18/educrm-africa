@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
-import { createEmailTemplate, updateEmailTemplate, deleteEmailTemplate, duplicateEmailTemplate } from "./actions";
+import { blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
+import { deleteEmailTemplate, duplicateEmailTemplate } from "./actions";
 import {
   ArrowLeft, Plus, Mail, Copy, Trash2, Edit3, X, Loader2, Check, Search,
 } from "lucide-react";
@@ -98,8 +98,6 @@ const STARTER_TEMPLATES = [
 ];
 
 export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
-  const [editing, setEditing] = useState<Template | null>(null);
-  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [showStarter, setShowStarter] = useState(false);
   const router = useRouter();
@@ -132,17 +130,18 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
 
   const handleUseStarter = (starter: typeof STARTER_TEMPLATES[0]) => {
     setShowStarter(false);
-    setEditing({
-      id: "",
-      name: starter.name,
-      subject: starter.subject,
-      body: blocksToHtml(starter.blocks, "#1B4F72"),
-      blocks: starter.blocks,
-      brandColor: "#1B4F72",
-      category: starter.category,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    try {
+      var starterData = {
+        name: starter.name,
+        subject: starter.subject,
+        body: blocksToHtml(starter.blocks, "#1B4F72"),
+        blocks: starter.blocks,
+        brandColor: "#1B4F72",
+        category: starter.category,
+      };
+      sessionStorage.setItem("talibcrm_template_starter", JSON.stringify(starterData));
+    } catch (e) {}
+    router.push("/settings/email-templates/new");
   };
 
   return (
@@ -160,9 +159,9 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
           <button onClick={() => setShowStarter(true)} className="btn-secondary py-2 px-3 text-xs flex-1 sm:flex-initial">
             <Mail size={13} /> Bibliothèque
           </button>
-          <button onClick={() => setCreating(true)} className="btn-primary py-2 px-3 text-xs flex-1 sm:flex-initial">
+          <Link href="/settings/email-templates/new" className="btn-primary py-2 px-3 text-xs flex-1 sm:flex-initial">
             <Plus size={13} /> <span className="sm:hidden">Nouveau</span><span className="hidden sm:inline">Nouveau template</span>
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -191,9 +190,9 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
                 {t.subject && <p className="text-xs text-gray-500 truncate mt-0.5">{t.subject}</p>}
               </div>
               <div className="p-3 flex items-center gap-1.5">
-                <button onClick={() => setEditing(t)} className="btn-secondary py-1.5 px-2 text-xs flex-1">
+                <Link href={"/settings/email-templates/" + t.id} className="btn-secondary py-1.5 px-2 text-xs flex-1">
                   <Edit3 size={12} /> Modifier
-                </button>
+                </Link>
                 <button onClick={() => handleDuplicate(t.id)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0" title="Dupliquer">
                   <Copy size={14} />
                 </button>
@@ -206,14 +205,6 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
         </div>
       )}
 
-      {/* Edit/Create modal */}
-      {(editing || creating) && (
-        <TemplateEditorModal
-          template={editing}
-          onClose={() => { setEditing(null); setCreating(false); router.refresh(); }}
-        />
-      )}
-
       {/* Starter library modal */}
       {showStarter && (
         <StarterLibraryModal
@@ -222,115 +213,6 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
           onClose={() => setShowStarter(false)}
         />
       )}
-    </div>
-  );
-}
-
-// ─── Template editor modal ───
-function TemplateEditorModal({ template, onClose }: { template: Template | null; onClose: () => void }) {
-  const [name, setName] = useState(template?.name || "");
-  const [subject, setSubject] = useState(template?.subject || "");
-  const [category, setCategory] = useState(template?.category || "RECRUITMENT");
-  const [brandColor, setBrandColor] = useState(template?.brandColor || "#1B4F72");
-  const [blocks, setBlocks] = useState<EmailBlock[]>(template?.blocks || []);
-  const [html, setHtml] = useState(template?.body || "");
-  const [saving, setSaving] = useState(false);
-
-  const isEdit = template && template.id;
-
-  const handleSave = async () => {
-    if (!name.trim()) { toast.error("Nom requis"); return; }
-    if (!subject.trim()) { toast.error("Objet requis"); return; }
-
-    setSaving(true);
-    try {
-      if (isEdit) {
-        await updateEmailTemplate(template!.id, { name, subject, body: html, blocks, brandColor, category });
-        toast.success("Template mis à jour");
-      } else {
-        await createEmailTemplate({ name, subject, body: html, blocks, brandColor, category });
-        toast.success("Template créé");
-      }
-      onClose();
-    } catch (e: any) {
-      toast.error(e.message || "Erreur");
-    }
-    setSaving(false);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Mobile/tablet blocker — editor is desktop-only */}
-      <div className="lg:hidden relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-        <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-5">
-          <Mail size={40} className="text-brand-500" />
-        </div>
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Éditeur réservé au desktop</h2>
-        <p className="text-sm text-gray-600 mb-1">
-          L'éditeur de template email nécessite un grand écran pour manipuler les blocs et les styles confortablement.
-        </p>
-        <p className="text-xs text-gray-400 mb-6">
-          Connectez-vous depuis un ordinateur (1024px minimum) pour créer et modifier vos templates.
-        </p>
-        <button onClick={onClose} className="btn-primary text-sm">
-          <ArrowLeft size={14} /> Retour aux templates
-        </button>
-      </div>
-
-      {/* Desktop editor */}
-      <div className="hidden lg:flex relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex-col">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">{isEdit ? "Modifier le template" : "Nouveau template"}</h2>
-            <p className="text-[10px] sm:text-xs text-gray-500 truncate">Variables disponibles : {"{{prenom}}"}, {"{{nom}}"}, {"{{email}}"}</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Form fields */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className="md:col-span-5">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nom du template</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="input text-sm" placeholder="Ex: Bienvenue nouveau lead" />
-          </div>
-          <div className="md:col-span-4">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Catégorie</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="input text-sm">
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div className="md:col-span-3">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Couleur principale</label>
-            <div className="flex items-center gap-2">
-              <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="w-9 h-9 rounded border border-gray-200 cursor-pointer shrink-0" />
-              <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="input text-xs font-mono flex-1 min-w-0" />
-            </div>
-          </div>
-          <div className="md:col-span-12">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Objet de l'email</label>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} className="input text-sm" placeholder="Ex: Bienvenue {{prenom}}, votre demande..." />
-          </div>
-        </div>
-
-        {/* Editor */}
-        <div className="flex-1 overflow-auto p-2 sm:p-4 bg-gray-50">
-          <EmailEditor initialBlocks={blocks} brandColor={brandColor} onChange={(newBlocks, newHtml) => { setBlocks(newBlocks); setHtml(newHtml); }} />
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-gray-200 bg-white flex justify-end gap-2">
-          <button onClick={onClose} className="btn-secondary py-2 px-3 sm:px-4 text-sm">Annuler</button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary py-2 px-3 sm:px-4 text-sm">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {isEdit ? "Enregistrer" : "Créer"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

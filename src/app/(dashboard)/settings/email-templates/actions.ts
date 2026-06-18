@@ -97,3 +97,17 @@ export async function duplicateEmailTemplate(id: string) {
   revalidatePath("/settings/email-templates");
   return { success: true, template: copy };
 }
+
+export async function getEmailTemplate(id: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const template = await prisma.messageTemplate.findFirst({
+    where: { id, organizationId: session.user.organizationId, channel: "EMAIL" as any },
+    select: {
+      id: true, name: true, subject: true, body: true, blocks: true,
+      brandColor: true, category: true, createdAt: true, updatedAt: true,
+    },
+  });
+  return template;
+}
