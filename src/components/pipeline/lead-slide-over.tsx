@@ -24,6 +24,7 @@ import { stripHtml } from "@/lib/email-blocks";
 import { WhatsAppUpgradeModal } from "@/components/lead/whatsapp-upgrade-modal";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
+import { startCallTracking } from "@/lib/call-tracking";
 
 type LeadDetail = Awaited<ReturnType<typeof getLeadDetail>>;
 
@@ -208,7 +209,19 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
 
                 {/* Action buttons — flat list with flex-wrap, dividers desktop only */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3">
-                  <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs" title="Appeler">
+                  <a
+                  href={"tel:" + lead.phone}
+                    onClick={function() {
+                      if (!lead) return;
+                      startCallTracking({
+                        id: lead.id,
+                        name: lead.firstName + " " + lead.lastName,
+                        phone: lead.phone,
+                      });
+                    }}
+                    className="btn-secondary py-1.5 px-2.5 sm:px-3 text-xs"
+                    title="Appeler"
+                  >
                     <Phone size={13} /> Appeler
                   </a>
                   {(lead.whatsapp || lead.phone) && (

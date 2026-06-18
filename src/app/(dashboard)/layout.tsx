@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { PermissionProvider } from "@/components/permission-provider";
 import { SupportBubble } from "@/components/support/support-bubble";
 import { AnalyticsPageView } from "@/components/analytics/analytics-page-view";
+import { CallReturnPrompt } from "@/components/calls/call-return-prompt";
 
 export default async function DashboardLayout({
   children,
@@ -76,6 +77,7 @@ export default async function DashboardLayout({
         {children}
       </DashboardShell>
       <SupportBubble />
+      <CallReturnPrompt />
     </PermissionProvider>
   );
 }
