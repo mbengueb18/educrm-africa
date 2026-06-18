@@ -52,7 +52,7 @@ export function PipelineClient({
 }: PipelineClientProps) {
   var [modalOpen, setModalOpen] = useState(false);
   var [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  var [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  var [viewMode, setViewMode] = useState<"kanban" | "list">("list");
   var [importOpen, setImportOpen] = useState(false);
   var [exportOpen, setExportOpen] = useState(false);
   var [filterMine, setFilterMine] = useState(false);
@@ -313,18 +313,6 @@ export function PipelineClient({
           {/* View toggle */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <button
-              onClick={function() { setViewMode("kanban"); }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-                viewMode === "kanban"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              )}
-            >
-              <Kanban size={14} />
-              Kanban
-            </button>
-            <button
               onClick={function() { setViewMode("list"); }}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
@@ -335,6 +323,18 @@ export function PipelineClient({
             >
               <List size={14} />
               Liste
+            </button>
+            <button
+              onClick={function() { setViewMode("kanban"); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                viewMode === "kanban"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <Kanban size={14} />
+              Kanban
             </button>
           </div>
         </div>
@@ -425,6 +425,7 @@ export function PipelineClient({
           programs={programs}
           campuses={campuses}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
+          onAddLead={function() { setModalOpen(true); }}
           currentUserRole={currentUserRole}
         />
       )}

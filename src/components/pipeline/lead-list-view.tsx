@@ -49,6 +49,7 @@ interface LeadListViewProps {
   programs?: { id: string; name: string }[];
   campuses?: { id: string; name: string; city: string }[];
   onOpenLead?: (leadId: string) => void;
+  onAddLead?: () => void;
   currentUserRole?: string;
 }
 
@@ -97,7 +98,7 @@ const MOBILE_SORT_OPTIONS: { value: string; dir: "asc" | "desc"; label: string }
   { value: "lastContact", dir: "desc", label: "Dernier contact" },
 ];
 
-export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, currentUserRole }: LeadListViewProps) {
+export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, onAddLead, currentUserRole }: LeadListViewProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -494,6 +495,12 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
             </>
           )}
           <span className="text-sm text-gray-500">{filtered.length} lead{filtered.length > 1 ? "s" : ""}</span>
+          {onAddLead && (
+            <button onClick={onAddLead} className="btn-primary py-1.5 px-3 text-xs">
+              <UserPlus size={13} />
+              Nouveau lead
+            </button>
+          )}
         </div>
       </div>
 

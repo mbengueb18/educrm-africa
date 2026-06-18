@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
   BarChart3, Repeat, Users, GraduationCap, CreditCard,
-  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight, Zap, Globe2
+  TrendingUp, Phone, CalendarDays, MessageSquare, Megaphone, ArrowUpRight, Zap, Globe2, MessageCircle, FileText
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -94,14 +94,16 @@ export default async function DashboardPage() {
   ];
 
   const quickAccess = [
-    { title: "Pipeline", description: "Gérer les leads", icon: Users, href: "/pipeline", color: "text-emerald-600" },
+    { title: "Prospects", description: "Gérer les leads", icon: Users, href: "/pipeline", color: "text-emerald-600" },
     { title: "Tâches", description: "Voir mes tâches du jour", icon: CalendarDays, href: "/tasks", color: "text-amber-600" },
-    { title: "Inbox", description: "Messages reçus", icon: MessageSquare, href: "/inbox", color: "text-blue-600" },
+    { title: "Boîte de réception", description: "Messages reçus", icon: MessageSquare, href: "/inbox", color: "text-blue-600" },
     { title: "Appels", description: "Journal d'appels", icon: Phone, href: "/calls", color: "text-purple-600" },
     { title: "Rendez-vous", description: "Planifier un RDV", icon: CalendarDays, href: "/appointments", color: "text-indigo-600" },
-    { title: "Campagnes", description: "Lancer une campagne", icon: Megaphone, href: "/campaigns", color: "text-rose-600" },
+    { title: "Templates Email", description: "Modèles d'emails", icon: FileText, href: "/settings/email-templates", color: "text-cyan-600" },
+    { title: "Campagnes Emailing", description: "Lancer une campagne email", icon: Megaphone, href: "/campaigns", color: "text-rose-600" },
+    { title: "Campagnes WhatsApp", description: "Lancer une campagne WhatsApp", icon: MessageCircle, href: "/whatsapp-campaigns", color: "text-emerald-600" },
+    { title: "Audiences", description: "Segments de prospects", icon: Users, href: "/audiences", color: "text-sky-600" },
     { title: "Étudiants", description: "Liste des inscrits", icon: GraduationCap, href: "/students", color: "text-teal-600" },
-    { title: "Paiements", description: "Suivi financier", icon: CreditCard, href: "/payments", color: "text-orange-600" },
     { title: "Workflows", description: "Automatisations", icon: Zap, href: "/workflows", color: "text-violet-600" },
   ];
 

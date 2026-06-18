@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
     permission: "analytics:view" as Permission,
   },
   {
-    label: "Pipeline",
+    label: "Prospects",
     href: "/pipeline",
     icon: Kanban,
     permission: "leads:view" as Permission,
