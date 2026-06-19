@@ -12,11 +12,12 @@ import {
   createCampaignFromAudience,
   createWhatsAppCampaignFromAudience,
   getAudienceCampaignStats,
+  assignAudienceMembers,
 } from "../actions";
 import {
   ArrowLeft, Users, Sparkles, Upload, Pencil, Trash2, Plus,
   Search, X, Loader2, Mail, Phone, MoreVertical, Filter,
-  FileText, Calendar, ChevronLeft, ChevronRight, Settings, Send, MessageCircle,
+  FileText, Calendar, ChevronLeft, ChevronRight, Settings, Send, MessageCircle, UserPlus,
 } from "lucide-react";
 import { RuleBuilder, type FilterGroup } from "@/components/audiences/rule-builder";
 import { AddLeadsModal } from "@/components/audiences/add-leads-modal";
@@ -55,6 +56,8 @@ interface AudienceDetailClientProps {
   total: number;
   page: number;
   pageSize: number;
+  users: { id: string; name: string }[];
+  currentUserRole?: string;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -81,6 +84,8 @@ export function AudienceDetailClient({
   total,
   page,
   pageSize,
+  users,
+  currentUserRole,
 }: AudienceDetailClientProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -97,6 +102,9 @@ export function AudienceDetailClient({
   const [creatingEmailCampaign, setCreatingEmailCampaign] = useState(false);
   const [creatingWhatsAppCampaign, setCreatingWhatsAppCampaign] = useState(false);
   const [showAddLeads, setShowAddLeads] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const canAssign = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
 
   const TypeIcon = TYPE_ICON[audience.type] || Users;
   const totalPages = Math.ceil(total / pageSize);
@@ -233,6 +241,40 @@ export function AudienceDetailClient({
       toast.error(err.message || "Erreur");
     }
     setRemoving(false);
+  };
+
+  // Assigner les leads sélectionnés à un commercial
+  const handleAssignSelected = async (userId: string | null) => {
+    setShowAssignMenu(false);
+    if (selectedLeadIds.size === 0) return;
+    setAssigning(true);
+    try {
+      const res = await assignAudienceMembers(audience.id, userId, Array.from(selectedLeadIds));
+      const who = userId ? (users.find(u => u.id === userId)?.name || "le commercial") : "personne (désassigné)";
+      toast.success(`${res.count} lead(s) assigné(s) à ${who}`);
+      setSelectedLeadIds(new Set());
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de l'assignation");
+    }
+    setAssigning(false);
+  };
+
+  // Assigner TOUTE l'audience à un commercial
+  const handleAssignAll = async (userId: string | null) => {
+    setShowAssignMenu(false);
+    if (!confirm(`Assigner les ${audience.memberCount} lead(s) de cette audience ?`)) return;
+    setAssigning(true);
+    try {
+      const res = await assignAudienceMembers(audience.id, userId); // pas de leadIds = toute l'audience
+      const who = userId ? (users.find(u => u.id === userId)?.name || "le commercial") : "personne (désassigné)";
+      toast.success(`${res.count} lead(s) assigné(s) à ${who}`);
+      setSelectedLeadIds(new Set());
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de l'assignation");
+    }
+    setAssigning(false);
   };
 
   const isStatic = audience.type === "STATIC" || audience.type === "IMPORTED";
@@ -487,6 +529,51 @@ export function AudienceDetailClient({
             )}
           </p>
           <div className="flex items-center gap-2">
+            {canAssign && isStatic && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAssignMenu(!showAssignMenu)}
+                  disabled={assigning}
+                  className="btn-secondary py-1.5 px-3 text-xs"
+                  title={selectedLeadIds.size > 0 ? "Assigner la sélection" : "Assigner toute l'audience"}
+                >
+                  {assigning ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                  {selectedLeadIds.size > 0 ? `Assigner (${selectedLeadIds.size})` : "Assigner tout"}
+                </button>
+                {showAssignMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowAssignMenu(false)} />
+                    <div className="absolute top-full right-0 mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-56 animate-scale-in max-h-72 overflow-y-auto">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                        {selectedLeadIds.size > 0
+                          ? `Assigner ${selectedLeadIds.size} sélectionné(s) à`
+                          : `Assigner toute l'audience à`}
+                      </div>
+                      <button
+                        onClick={() => selectedLeadIds.size > 0 ? handleAssignSelected(null) : handleAssignAll(null)}
+                        className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 font-medium flex items-center gap-2"
+                      >
+                        <X size={12} />
+                        Désassigner
+                      </button>
+                      <div className="h-px bg-gray-100 my-1" />
+                      {users.map(u => (
+                        <button
+                          key={u.id}
+                          onClick={() => selectedLeadIds.size > 0 ? handleAssignSelected(u.id) : handleAssignAll(u.id)}
+                          className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-brand-50 hover:text-brand-700 flex items-center gap-2"
+                        >
+                          <div className="w-5 h-5 rounded-full bg-brand-100 text-brand-700 text-[9px] font-bold flex items-center justify-center shrink-0">
+                            {getInitials(u.name)}
+                          </div>
+                          {u.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {selectedLeadIds.size > 0 && audience.type === "STATIC" && (
               <button
                 onClick={handleRemoveSelected}

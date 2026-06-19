@@ -926,3 +926,76 @@ export async function getAudienceCampaignStats(audienceId: string) {
 
   return { total, withEmail, withWhatsApp };
 }
+
+// ─── ASSIGN audience members to a user (bulk) ───
+export async function assignAudienceMembers(
+  audienceId: string,
+  userId: string | null,
+  leadIds?: string[] // si fourni : assigne cette sélection ; sinon : toute l'audience
+) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  // Garde-fou rôle : seuls ADMIN/SUPER_ADMIN peuvent assigner
+  const role = session.user.role;
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    throw new Error("Seuls les administrateurs peuvent assigner des leads");
+  }
+
+  const orgId = session.user.organizationId;
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true, type: true },
+  });
+  if (!audience) throw new Error("Audience introuvable");
+
+  // Si un user est ciblé, vérifier qu'il appartient à l'org
+  if (userId) {
+    const targetUser = await prisma.user.findFirst({
+      where: { id: userId, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!targetUser) throw new Error("Utilisateur introuvable");
+  }
+
+  // Déterminer les leads à assigner
+  let targetLeadIds: string[];
+
+  if (leadIds && leadIds.length > 0) {
+    // Sélection explicite — on vérifie que ces leads sont bien membres de l'audience
+    if (audience.type === "DYNAMIC") {
+      // Pour DYNAMIC, on fait confiance aux IDs passés (déjà affichés), filtrés par org plus bas
+      targetLeadIds = leadIds;
+    } else {
+      const members = await prisma.audienceMember.findMany({
+        where: { audienceId, leadId: { in: leadIds } },
+        select: { leadId: true },
+      });
+      targetLeadIds = members.map(m => m.leadId);
+    }
+  } else {
+    // Toute l'audience
+    if (audience.type === "DYNAMIC") {
+      throw new Error("L'assignation de toute l'audience n'est pas disponible pour les audiences dynamiques");
+    }
+    const members = await prisma.audienceMember.findMany({
+      where: { audienceId },
+      select: { leadId: true },
+    });
+    targetLeadIds = members.map(m => m.leadId);
+  }
+
+  if (targetLeadIds.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  // Assignation en masse (une seule requête), bornée à l'org pour la sécurité
+  const result = await prisma.lead.updateMany({
+    where: { id: { in: targetLeadIds }, organizationId: orgId },
+    data: { assignedToId: userId },
+  });
+
+  revalidatePath(`/audiences/${audienceId}`);
+  return { success: true, count: result.count };
+}

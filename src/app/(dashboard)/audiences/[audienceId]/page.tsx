@@ -1,5 +1,7 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getAudience, getAudienceLeads } from "../actions";
 import { AudienceDetailClient } from "./audience-detail-client";
 
@@ -19,10 +21,18 @@ export default async function AudienceDetailPage({ params, searchParams }: PageP
   const { page } = await searchParams;
   const pageNum = page ? parseInt(page, 10) || 1 : 1;
 
+  const session = await auth();
+  if (!session?.user) notFound();
+
   try {
-    const [audience, leadsData] = await Promise.all([
+    const [audience, leadsData, users] = await Promise.all([
       getAudience(audienceId),
       getAudienceLeads(audienceId, pageNum, 25),
+      prisma.user.findMany({
+        where: { organizationId: session.user.organizationId, isActive: true, role: { in: ["ADMIN", "COMMERCIAL"] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
     ]);
 
     return (
@@ -32,6 +42,8 @@ export default async function AudienceDetailPage({ params, searchParams }: PageP
         total={leadsData.total}
         page={leadsData.page}
         pageSize={leadsData.pageSize}
+        users={users}
+        currentUserRole={session.user.role}
       />
     );
   } catch {
