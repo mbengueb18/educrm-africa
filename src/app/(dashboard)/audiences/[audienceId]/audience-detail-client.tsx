@@ -54,8 +54,6 @@ interface AudienceDetailClientProps {
   audience: Audience;
   leads: Lead[];
   total: number;
-  page: number;
-  pageSize: number;
   users: { id: string; name: string }[];
   currentUserRole?: string;
 }
@@ -82,8 +80,6 @@ export function AudienceDetailClient({
   audience,
   leads,
   total,
-  page,
-  pageSize,
   users,
   currentUserRole,
 }: AudienceDetailClientProps) {
@@ -104,10 +100,14 @@ export function AudienceDetailClient({
   const [showAddLeads, setShowAddLeads] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const PAGE_SIZE = 100;
+  const [currentPage, setCurrentPage] = useState(1);
+  const paginatedLeads = leads.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const totalPages = Math.ceil(leads.length / PAGE_SIZE);
   const canAssign = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
 
   const TypeIcon = TYPE_ICON[audience.type] || Users;
-  const totalPages = Math.ceil(total / pageSize);
+   
 
   // ─── Édition nom + description ───
   const handleSaveEdit = async () => {
@@ -206,11 +206,19 @@ export function AudienceDetailClient({
   };
 
   const toggleSelectAll = () => {
-    if (selectedLeadIds.size === leads.length) {
-      setSelectedLeadIds(new Set());
-    } else {
-      setSelectedLeadIds(new Set(leads.map(l => l.id)));
-    }
+    const pageIds = paginatedLeads.map(l => l.id);
+    const allPageSelected = pageIds.every(id => selectedLeadIds.has(id)) && pageIds.length > 0;
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        // décocher la page visible
+        pageIds.forEach(id => next.delete(id));
+      } else {
+        // cocher la page visible (sans toucher aux autres pages déjà sélectionnées)
+        pageIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
   };
 
   // ─── Sauvegarde des règles dynamiques ───
@@ -613,11 +621,11 @@ export function AudienceDetailClient({
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {audience.type === "STATIC" && (
+                  {isStatic && (
                     <th className="px-3 py-2.5 text-left w-10">
                       <input
                         type="checkbox"
-                        checked={selectedLeadIds.size === leads.length && leads.length > 0}
+                        checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedLeadIds.has(l.id))}
                         onChange={toggleSelectAll}
                         className="rounded border-gray-300"
                       />
@@ -632,9 +640,9 @@ export function AudienceDetailClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {leads.map(lead => (
+                {paginatedLeads.map(lead => (
                   <tr key={lead.id} className="hover:bg-gray-50/50 transition-colors">
-                    {audience.type === "STATIC" && (
+                    {isStatic && (
                       <td className="px-3 py-3">
                         <input
                           type="checkbox"
@@ -714,35 +722,40 @@ export function AudienceDetailClient({
             </table>
           </div>
 
-          {/* Pagination */}
+          {/* Pagination client */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-center gap-4 px-4 py-3 border-t border-gray-100 bg-gray-50/50">
               <p className="text-xs text-gray-500">
-                Page {page} sur {totalPages} · {total} lead{total > 1 ? "s" : ""} au total
+                Page {currentPage} sur {totalPages} · {total} lead{total > 1 ? "s" : ""} au total
+                {selectedLeadIds.size > 0 && (
+                  <span className="text-brand-600 font-semibold"> · {selectedLeadIds.size} sélectionné{selectedLeadIds.size > 1 ? "s" : ""}</span>
+                )}
               </p>
-              <div className="flex items-center gap-1">
-                <Link
-                  href={`/audiences/${audience.id}?page=${Math.max(1, page - 1)}`}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
                   className={cn(
-                    "p-1.5 rounded-lg",
-                    page <= 1
-                      ? "text-gray-300 pointer-events-none"
-                      : "text-gray-600 hover:bg-gray-100"
+                    "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                    currentPage <= 1
+                      ? "text-gray-300 border-gray-200 cursor-not-allowed"
+                      : "text-gray-700 border-gray-300 hover:bg-gray-100"
                   )}
                 >
-                  <ChevronLeft size={14} />
-                </Link>
-                <Link
-                  href={`/audiences/${audience.id}?page=${Math.min(totalPages, page + 1)}`}
+                  <ChevronLeft size={14} /> Précédent
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
                   className={cn(
-                    "p-1.5 rounded-lg",
-                    page >= totalPages
-                      ? "text-gray-300 pointer-events-none"
-                      : "text-gray-600 hover:bg-gray-100"
+                    "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                    currentPage >= totalPages
+                      ? "text-gray-300 border-gray-200 cursor-not-allowed"
+                      : "text-gray-700 border-gray-300 hover:bg-gray-100"
                   )}
                 >
-                  <ChevronRight size={14} />
-                </Link>
+                  Suivant <ChevronRight size={14} />
+                </button>
               </div>
             </div>
           )}

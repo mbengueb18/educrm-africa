@@ -999,3 +999,52 @@ export async function assignAudienceMembers(
   revalidatePath(`/audiences/${audienceId}`);
   return { success: true, count: result.count };
 }
+
+// ─── GET ALL LEADS of an audience (no pagination, for client-side paging) ───
+export async function getAllAudienceLeads(audienceId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: session.user.organizationId },
+  });
+  if (!audience) throw new Error("Audience introuvable");
+
+  const orgId = session.user.organizationId;
+
+  if (audience.type === "DYNAMIC") {
+    const ids = await evaluateDynamicLeads(audienceId);
+    const leads = await prisma.lead.findMany({
+      where: { id: { in: ids }, organizationId: orgId },
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true, score: true,
+        createdAt: true,
+        stage: { select: { name: true, color: true } },
+        program: { select: { name: true } },
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+    // Préserver l'ordre des règles
+    const map = new Map(leads.map(l => [l.id, l]));
+    const ordered = ids.map(id => map.get(id)).filter(Boolean);
+    return { leads: ordered, total: ordered.length };
+  } else {
+    const members = await prisma.audienceMember.findMany({
+      where: { audienceId },
+      include: {
+        lead: {
+          select: {
+            id: true, firstName: true, lastName: true, email: true, phone: true, score: true,
+            createdAt: true,
+            stage: { select: { name: true, color: true } },
+            program: { select: { name: true } },
+            assignedTo: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { addedAt: "desc" },
+    });
+    const leads = members.map(m => m.lead).filter(Boolean);
+    return { leads, total: leads.length };
+  }
+}

@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getAudience, getAudienceLeads } from "../actions";
+import { getAudience, getAllAudienceLeads } from "../actions";
 import { AudienceDetailClient } from "./audience-detail-client";
 
 export const metadata: Metadata = {
@@ -13,13 +13,10 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ audienceId: string }>;
-  searchParams: Promise<{ page?: string }>;
 }
 
-export default async function AudienceDetailPage({ params, searchParams }: PageProps) {
+export default async function AudienceDetailPage({ params }: PageProps) {
   const { audienceId } = await params;
-  const { page } = await searchParams;
-  const pageNum = page ? parseInt(page, 10) || 1 : 1;
 
   const session = await auth();
   if (!session?.user) notFound();
@@ -27,7 +24,7 @@ export default async function AudienceDetailPage({ params, searchParams }: PageP
   try {
     const [audience, leadsData, users] = await Promise.all([
       getAudience(audienceId),
-      getAudienceLeads(audienceId, pageNum, 25),
+      getAllAudienceLeads(audienceId),
       prisma.user.findMany({
         where: { organizationId: session.user.organizationId, isActive: true, role: { in: ["ADMIN", "COMMERCIAL"] } },
         select: { id: true, name: true },
@@ -40,8 +37,6 @@ export default async function AudienceDetailPage({ params, searchParams }: PageP
         audience={audience as any}
         leads={leadsData.leads as any}
         total={leadsData.total}
-        page={leadsData.page}
-        pageSize={leadsData.pageSize}
         users={users}
         currentUserRole={session.user.role}
       />
