@@ -498,28 +498,92 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ─── Duplicate check ───
-    var oneDayAgo = new Date(Date.now() - 86_400_000);
-    var existing = await prisma.lead.findFirst({
-      where: {
-        organizationId,
-        createdAt: { gte: oneDayAgo },
-        OR: [
-          ...(fields.phone ? [{ phone: fields.phone }] : []),
-          ...(fields.email ? [{ email: fields.email }] : []),
-        ],
-      },
-    });
+    // ─── Duplicate check (email exact OU téléphone normalisé, SANS limite de date) ───
+    var normalizedPhone = fields.phone ? fields.phone.replace(/\D/g, "") : "";
+    var normalizedEmail = fields.email ? fields.email.toLowerCase().trim() : "";
+
+    var existing: any = null;
+
+    // 1. Match par email exact (rapide, en SQL)
+    if (normalizedEmail) {
+      existing = await prisma.lead.findFirst({
+        where: {
+          organizationId,
+          email: { equals: normalizedEmail, mode: "insensitive" },
+        },
+        orderBy: { createdAt: "asc" }, // on garde la PREMIÈRE fiche
+      });
+    }
+
+    // 2. Si pas trouvé par email, match par téléphone normalisé
+    if (!existing && normalizedPhone && normalizedPhone.length >= 8) {
+      // On récupère les leads ayant un téléphone, puis compare en normalisé
+      var phoneCandidates = await prisma.lead.findMany({
+        where: {
+          organizationId,
+          phone: { not: "N/A" },
+        },
+        select: { id: true, phone: true, whatsapp: true, createdAt: true, customFields: true, email: true, programId: true },
+        orderBy: { createdAt: "asc" },
+      });
+      var match = phoneCandidates.find(function(l) {
+        var lp = (l.phone || "").replace(/\D/g, "");
+        var lw = (l.whatsapp || "").replace(/\D/g, "");
+        return (lp.length >= 8 && lp === normalizedPhone) || (lw.length >= 8 && lw === normalizedPhone);
+      });
+      if (match) {
+        // recharger le lead complet
+        existing = await prisma.lead.findUnique({ where: { id: match.id } });
+      }
+    }
 
     if (existing) {
-      // Update custom fields + champs natifs message/subject sur le lead existant
       var existingCustom = (existing.customFields as any) || {};
+
+      // Compléter UNIQUEMENT les champs natifs vides (sans écraser l'existant)
+      var fillData: any = {};
+      if (!existing.email && fields.email) fillData.email = fields.email;
+      if ((!existing.whatsapp || existing.whatsapp === "") && fields.whatsapp) fillData.whatsapp = fields.whatsapp;
+      if (!existing.city && fields.city) fillData.city = fields.city;
+      if (!existing.civility && fields.civility) fillData.civility = fields.civility;
+      if ((!existing.phone || existing.phone === "N/A") && fields.phone) fillData.phone = fields.phone;
+
+      // Custom fields : on complète sans écraser ceux déjà présents
+      var mergedCustom = { ...allCustomFields, ...existingCustom };
+
+      // Note interne datée pour tracer la nouvelle demande
+      var now = new Date();
+      var dateStr = now.toLocaleDateString("fr-FR") + " " + now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      var demandeInfo = [];
+      if (fields.programCode) demandeInfo.push("Programme : " + fields.programCode);
+      if (fields.message) demandeInfo.push("Message : " + fields.message);
+      var demandeLabel = demandeInfo.length > 0 ? demandeInfo.join(" — ") : "Nouvelle soumission de formulaire";
+      var noteLine = "[" + dateStr + "] Nouvelle demande via formulaire : " + demandeLabel;
+      var prevNotes = (existingCustom._notes as string) || "";
+      mergedCustom._notes = prevNotes ? (prevNotes + "\n" + noteLine) : noteLine;
+
       await prisma.lead.update({
         where: { id: existing.id },
         data: {
-          ...(Object.keys(allCustomFields).length > 0 ? { customFields: { ...existingCustom, ...allCustomFields } } : {}),
+          ...fillData,
+          customFields: { ...mergedCustom },
           ...(fields.message ? { message: fields.message } : {}),
           ...(fields.subject ? { subject: fields.subject } : {}),
+        },
+      });
+
+      // Activité dans l'historique : nouvelle demande (avec le programme demandé)
+      await prisma.activity.create({
+        data: {
+          type: "NOTE_ADDED" as any,
+          description: "Nouvelle soumission de formulaire — " + demandeLabel,
+          leadId: existing.id,
+          organizationId,
+          metadata: {
+            source: "form_duplicate",
+            programCode: fields.programCode || null,
+            submittedAt: now.toISOString(),
+          },
         },
       });
 
@@ -530,7 +594,7 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           duplicate: true,
-          message: "Lead existant mis à jour avec les champs supplementaires",
+          message: "Lead existant mis à jour (doublon détecté, nouvelle demande consignée)",
           leadId: existing.id,
           trafficSource: trafficSource,
         },
