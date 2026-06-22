@@ -276,6 +276,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, type: "tracking", event: eventType, messageId: message.id });
     }
 
+    // ─── Mise à jour des stats de CAMPAGNE (si ce message appartient à une campagne) ───
+      var campTimestamp = data.created_at ? new Date(data.created_at) : new Date();
+      var campRecipient = await prisma.emailCampaignRecipient.findFirst({
+        where: { brevoMessageId: emailId },
+      });
+      if (campRecipient) {
+        if (eventType === "email.delivered") {
+          await prisma.emailCampaignRecipient.update({
+            where: { id: campRecipient.id },
+            data: { status: "DELIVERED", deliveredAt: campTimestamp },
+          });
+          await prisma.emailCampaign.update({
+            where: { id: campRecipient.campaignId },
+            data: { deliveredCount: { increment: 1 } },
+          });
+        } else if (eventType === "email.opened") {
+          var firstOpen = !campRecipient.openedAt;
+          await prisma.emailCampaignRecipient.update({
+            where: { id: campRecipient.id },
+            data: { status: "OPENED", openedAt: campRecipient.openedAt || campTimestamp, openCount: { increment: 1 } },
+          });
+          if (firstOpen) {
+            await prisma.emailCampaign.update({
+              where: { id: campRecipient.campaignId },
+              data: { openedCount: { increment: 1 } },
+            });
+          }
+        } else if (eventType === "email.clicked") {
+          var firstClick = !campRecipient.clickedAt;
+          await prisma.emailCampaignRecipient.update({
+            where: { id: campRecipient.id },
+            data: { status: "CLICKED", clickedAt: campRecipient.clickedAt || campTimestamp, clickCount: { increment: 1 } },
+          });
+          if (firstClick) {
+            await prisma.emailCampaign.update({
+              where: { id: campRecipient.campaignId },
+              data: { clickedCount: { increment: 1 } },
+            });
+          }
+        } else if (eventType === "email.bounced" || eventType === "email.failed") {
+          await prisma.emailCampaignRecipient.update({
+            where: { id: campRecipient.id },
+            data: { status: "BOUNCED", bouncedAt: campTimestamp, errorMessage: "bounce" },
+          });
+          await prisma.emailCampaign.update({
+            where: { id: campRecipient.campaignId },
+            data: { bouncedCount: { increment: 1 } },
+          });
+        }
+      }
+
     return NextResponse.json({ ok: true, skipped: "unknown event type", eventType });
   } catch (error: any) {
     console.error("[Resend Webhook]", error);

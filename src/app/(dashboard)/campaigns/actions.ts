@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { sendEmail } from "@/lib/email";
 
 // ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
 async function getCampaignLeadsQuery(
@@ -321,57 +322,32 @@ export async function sendCampaign(campaignId: string) {
       htmlBody = replaceVars(rawBody, lead);
     }
 
-    if (!apiKey) {
-      // Demo mode
+    // Envoi via sendEmail (Resend) → pose le Reply-To, crée le Message, capture les réponses
+    var sendResult = await sendEmail({
+      to: lead.email,
+      toName: lead.firstName + " " + lead.lastName,
+      subject: personalizedSubject,
+      body: htmlBody,
+      isHtml: true,
+      leadId: lead.id,
+      organizationId: session.user.organizationId,
+      sentById: session.user.id,
+    });
+
+    if (sendResult.success) {
       await prisma.emailCampaignRecipient.update({
         where: { id: recipient.id },
-        data: { status: "SENT", sentAt: new Date() },
+        data: {
+          status: "SENT",
+          sentAt: new Date(),
+          brevoMessageId: sendResult.messageId || null, // ID Resend, réutilise le champ existant
+        },
       });
       sentCount++;
-      continue;
-    }
-
-    try {
-      var response = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": apiKey,
-        },
-        body: JSON.stringify({
-          sender: { name: senderName, email: senderEmail },
-          to: [{ email: lead.email, name: lead.firstName + " " + lead.lastName }],
-          subject: personalizedSubject,
-          htmlContent: htmlBody.startsWith("<!DOCTYPE") ? htmlBody : formatCampaignHtml(htmlBody, personalizedSubject, senderName),
-textContent: stripHtml(htmlBody),
-          headers: { "X-Campaign-Id": campaignId },
-          tags: ["educrm", "campaign", campaignId],
-        }),
-      });
-
-      var result = await response.json();
-
-      if (response.ok) {
-        await prisma.emailCampaignRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            status: "SENT",
-            sentAt: new Date(),
-            brevoMessageId: result.messageId || null,
-          },
-        });
-        sentCount++;
-      } else {
-        await prisma.emailCampaignRecipient.update({
-          where: { id: recipient.id },
-          data: { status: "FAILED", errorMessage: result.message || "Erreur Brevo" },
-        });
-        failedCount++;
-      }
-    } catch (err: any) {
+    } else {
       await prisma.emailCampaignRecipient.update({
         where: { id: recipient.id },
-        data: { status: "FAILED", errorMessage: err.message || "Erreur réseau" },
+        data: { status: "FAILED", errorMessage: sendResult.error || "Erreur envoi" },
       });
       failedCount++;
     }
@@ -566,7 +542,26 @@ function buildWhereFromRules(rules: SegmentRule[], organizationId: string): any 
 }
 
 function replaceVars(text: string, lead: { firstName: string; lastName: string; email: string | null }): string {
-  return text
+  // 1. Réparer les variables fragmentées par des balises HTML.
+  //    L'éditeur contentEditable peut insérer des <span>, entités, etc. ENTRE
+  //    les caractères de {{prenom}}, cassant le motif. On retire toute balise
+  //    HTML et entités situées à l'intérieur d'une paire d'accolades.
+  var repaired = text.replace(/\{\s*\{[\s\S]*?\}\s*\}/g, function(match) {
+    // Retire les balises HTML à l'intérieur du bloc variable
+    var inner = match.replace(/<[^>]+>/g, "");
+    // Décode les entités courantes que le navigateur pourrait insérer
+    inner = inner
+      .replace(/&nbsp;/gi, "")
+      .replace(/&#123;/g, "{")
+      .replace(/&#125;/g, "}")
+      .replace(/&amp;/gi, "&");
+    // Normalise les espaces parasites autour du nom de variable
+    inner = inner.replace(/\{\{\s*/g, "{{").replace(/\s*\}\}/g, "}}");
+    return inner;
+  });
+
+  // 2. Remplacer les variables (maintenant propres)
+  return repaired
     .replace(/\{\{prenom\}\}/gi, lead.firstName)
     .replace(/\{\{firstName\}\}/gi, lead.firstName)
     .replace(/\{\{nom\}\}/gi, lead.lastName)

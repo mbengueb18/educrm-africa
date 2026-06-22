@@ -15,6 +15,7 @@ interface RichTextBlockProps {
   style?: React.CSSProperties;
   className?: string;
   onContentChange: (html: string) => void;
+  onReady?: (api: { insertVariable: (v: string) => void }) => void;
 }
 
 var FONT_FAMILIES = [
@@ -54,7 +55,7 @@ var COLORS = [
   "#E67E22", "#F39C12", "#FAD7A0",
 ];
 
-export function RichTextBlock({ initialContent, placeholder, style, className, onContentChange }: RichTextBlockProps) {
+export function RichTextBlock({ initialContent, placeholder, style, className, onContentChange, onReady }: RichTextBlockProps) {
   var editorRef = useRef<HTMLDivElement>(null);
   var [showColorPicker, setShowColorPicker] = useState(false);
   var [showBgColorPicker, setShowBgColorPicker] = useState(false);
@@ -62,6 +63,51 @@ export function RichTextBlock({ initialContent, placeholder, style, className, o
   var [linkUrl, setLinkUrl] = useState("");
   var [isEmpty, setIsEmpty] = useState(!initialContent);
   var contentSyncRef = useRef<NodeJS.Timeout | null>(null);
+  var savedRangeRef = useRef<Range | null>(null);
+
+  // Sauvegarde la position du curseur dès qu'elle change dans l'éditeur
+  var saveSelection = useCallback(function() {
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current) {
+      var range = sel.getRangeAt(0);
+      // Ne sauvegarde que si la sélection est DANS cet éditeur
+      if (editorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
+      }
+    }
+  }, []);
+
+  // Insère une variable à la position du curseur (ou à la fin si pas de curseur)
+  var insertVariable = useCallback(function(variable: string) {
+    var editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+
+    var sel = window.getSelection();
+    // Restaure la dernière position connue du curseur dans cet éditeur
+    if (savedRangeRef.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+    }
+
+    // Insère le texte au curseur
+    var ok = document.execCommand("insertText", false, variable);
+    // Fallback si insertText échoue : append à la fin
+    if (!ok) {
+      editor.innerHTML = editor.innerHTML + " " + variable;
+    }
+
+    // Resync vers le parent
+    onContentChange(editor.innerHTML);
+    saveSelection();
+  }, [onContentChange, saveSelection]);
+
+  // Expose l'API au parent au montage
+  useEffect(function() {
+    if (onReady) {
+      onReady({ insertVariable: insertVariable });
+    }
+  }, [onReady, insertVariable]);
 
   // Set initial content only once on mount
   useEffect(function() {
@@ -269,6 +315,8 @@ export function RichTextBlock({ initialContent, placeholder, style, className, o
           style={style}
           onInput={handleInput}
           onBlur={handleBlur}
+          onKeyUp={saveSelection}
+          onMouseUp={saveSelection}
         />
         {isEmpty && placeholder && (
           <div className="absolute top-3 left-5 text-gray-400 pointer-events-none text-sm" style={style}>

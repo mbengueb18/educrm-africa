@@ -92,8 +92,8 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   var [availableAudiences, setAvailableAudiences] = useState<any[]>([]);
   var [audienceSearch, setAudienceSearch] = useState("");
   var [loadingAudiences, setLoadingAudiences] = useState(false);
-
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
+  var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
   // ─── Auto-save every 5 seconds ───
   var saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -356,7 +356,11 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                         )}
 
                         {/* Block content */}
-                        <BlockContent block={block} onUpdate={function(u) { updateBlock(block.id, u); }} />
+                        <BlockContent
+                          block={block}
+                          onUpdate={function(u) { updateBlock(block.id, u); }}
+                          onEditorReady={block.id === selectedBlockId ? function(api) { activeEditorApiRef.current = api; } : undefined}
+                        />
 
                         {/* Insert between */}
                         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 z-10">
@@ -630,7 +634,13 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                     <div className="flex flex-wrap gap-1">
                       {["{{prenom}}", "{{nom}}", "{{email}}"].map(function(v) {
                         return (
-                          <button key={v} onClick={function() { updateBlock(selectedBlock!.id, { content: selectedBlock!.content + " " + v }); }}
+                          <button key={v} onClick={function() {
+                            if (activeEditorApiRef.current) {
+                              activeEditorApiRef.current.insertVariable(v);
+                            } else {
+                              updateBlock(selectedBlock!.id, { content: selectedBlock!.content + " " + v });
+                            }
+                          }}
                             className="text-[10px] px-2 py-1 bg-brand-50 text-brand-600 rounded font-mono hover:bg-brand-100">
                             {v}
                           </button>
@@ -876,7 +886,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
 }
 
 // ─── Block Content Renderer ───
-function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Partial<EmailBlock>) => void }) {
+function BlockContent({ block, onUpdate, onEditorReady }: { block: EmailBlock; onUpdate: (u: Partial<EmailBlock>) => void; onEditorReady?: (api: { insertVariable: (v: string) => void }) => void }) {
   var fileInputRef = useRef<HTMLInputElement>(null);
   var [uploading, setUploading] = useState(false);
 
@@ -910,6 +920,7 @@ function BlockContent({ block, onUpdate }: { block: EmailBlock; onUpdate: (u: Pa
           placeholder="Ecrivez votre texte..."
           style={{ color: block.styles.color || "#555", fontSize: block.styles.fontSize || "15px", textAlign: (block.styles.textAlign as any) || "left" }}
           onContentChange={function(html) { onUpdate({ content: html }); }}
+          onReady={onEditorReady}
         />
       );
     case "heading":
