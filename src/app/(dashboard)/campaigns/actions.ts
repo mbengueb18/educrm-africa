@@ -370,6 +370,81 @@ export async function sendCampaign(campaignId: string) {
   revalidatePath("/campaigns");
   revalidatePath("/campaigns/" + campaignId);
 
+  // ─── Passage automatique en « Contacté » des destinataires envoyés ───
+  try {
+    // Récupère les leads réellement envoyés (status SENT) de cette campagne
+    var sentRecipients = await prisma.emailCampaignRecipient.findMany({
+      where: { campaignId: campaignId, status: { not: "FAILED" } },
+      select: { leadId: true },
+    });
+    var sentLeadIds = sentRecipients.map(function(r) { return r.leadId; });
+
+    if (sentLeadIds.length > 0) {
+      // Récupère ces leads avec leur pipeline et étape actuelle
+      var sentLeads = await prisma.lead.findMany({
+        where: { id: { in: sentLeadIds }, organizationId: session.user.organizationId },
+        select: { id: true, pipelineId: true, stageId: true },
+      });
+
+      // Toutes les étapes "Contacté" de l'org (matching tolérant accents/casse)
+      var allStages = await prisma.pipelineStage.findMany({
+        where: { organizationId: session.user.organizationId },
+        select: { id: true, name: true, order: true, pipelineId: true },
+      });
+
+      function normalize(s: string): string {
+        return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      }
+
+      // Map pipelineId -> étape "Contacté" de ce pipeline
+      var contactStageByPipeline: Record<string, { id: string; order: number }> = {};
+      for (var st of allStages) {
+        if (normalize(st.name) === "contacte" && st.pipelineId) {
+          contactStageByPipeline[st.pipelineId] = { id: st.id, order: st.order };
+        }
+      }
+
+      // Map des ordres de toutes les étapes (pour comparer la position)
+      var stageOrderById: Record<string, number> = {};
+      for (var st2 of allStages) {
+        stageOrderById[st2.id] = st2.order;
+      }
+
+      // Pour chaque lead : passe à "Contacté" SEULEMENT s'il est avant
+      var leadsToPromote: string[] = [];
+      var targetStageForLead: Record<string, string> = {};
+      for (var ld of sentLeads) {
+        if (!ld.pipelineId) continue;
+        var contactStage = contactStageByPipeline[ld.pipelineId];
+        if (!contactStage) continue; // pas d'étape "Contacté" dans ce pipeline
+        var currentOrder = stageOrderById[ld.stageId];
+        // Ne fait avancer que si l'étape actuelle est AVANT "Contacté"
+        if (currentOrder !== undefined && currentOrder < contactStage.order) {
+          leadsToPromote.push(ld.id);
+          targetStageForLead[ld.id] = contactStage.id;
+        }
+      }
+
+      // Regroupe les updates par étape cible (un updateMany par étape)
+      var byTargetStage: Record<string, string[]> = {};
+      for (var leadId2 of leadsToPromote) {
+        var target = targetStageForLead[leadId2];
+        if (!byTargetStage[target]) byTargetStage[target] = [];
+        byTargetStage[target].push(leadId2);
+      }
+
+      for (var targetStageId in byTargetStage) {
+        await prisma.lead.updateMany({
+          where: { id: { in: byTargetStage[targetStageId] } },
+          data: { stageId: targetStageId },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[sendCampaign] Passage en Contacté échoué", e);
+    // Non bloquant : l'envoi a réussi, le passage de stage est un bonus
+  }
+
   return { sentCount: sentCount, failedCount: failedCount, total: leads.length };
 }
 
