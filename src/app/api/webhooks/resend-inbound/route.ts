@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
       var campRecipient = await prisma.emailCampaignRecipient.findFirst({
         where: { brevoMessageId: emailId },
       });
+      console.log("[Resend Tracking] campRecipient found?", !!campRecipient, "id:", campRecipient ? campRecipient.id : "none");
       if (campRecipient) {
         if (eventType === "email.delivered") {
           await prisma.emailCampaignRecipient.update({
