@@ -897,6 +897,7 @@ model EmailCampaign {
   createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   recipients   EmailCampaignRecipient[]
+  attachments     Json? // [{ path, filename, contentType, size }]
 
   @@index([organizationId])
   @@index([status])

@@ -149,6 +149,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   body?: string;
   segmentRules?: SegmentRule[];
   audienceId?: string | null;
+  attachments?: any[];
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -164,6 +165,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   if (data.name !== undefined) updateData.name = data.name;
   if (data.subject !== undefined) updateData.subject = data.subject;
   if (data.body !== undefined) updateData.body = data.body;
+  if (data.attachments !== undefined) updateData.attachments = data.attachments;
 
   // Handle audienceId update (can be set or unset)
   var newAudienceId = data.audienceId !== undefined ? data.audienceId : currentCampaign.audienceId;
@@ -348,6 +350,11 @@ export async function sendCampaign(campaignId: string) {
       sentById: session.user.id,
       fromName: campaignFromName,
       fromEmail: campaignFromEmail,
+      attachments: (campaign.attachments as any[]) && (campaign.attachments as any[]).length > 0
+        ? (campaign.attachments as any[]).map(function(a) {
+            return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
+          })
+        : undefined,
     });
 
     if (sendResult.success) {
@@ -735,7 +742,7 @@ function blocksToEmailHtml(blocks: any[], lead: { firstName: string; lastName: s
     '<div style="max-width:580px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
     '<div style="padding:32px;">' + content + "</div>" +
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-    '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via TalibCRM</p>' +
+   /* '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via TalibCRM</p>' + */
     "</div></div></body></html>";
 }
 

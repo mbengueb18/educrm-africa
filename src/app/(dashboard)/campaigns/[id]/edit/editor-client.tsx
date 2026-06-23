@@ -11,7 +11,7 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle,
+  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle, FileText
 } from "lucide-react";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
@@ -92,6 +92,8 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   var [availableAudiences, setAvailableAudiences] = useState<any[]>([]);
   var [audienceSearch, setAudienceSearch] = useState("");
   var [loadingAudiences, setLoadingAudiences] = useState(false);
+  var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
+  var [uploadingAttachment, setUploadingAttachment] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -107,13 +109,14 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
         body: JSON.stringify(blocks),
         segmentRules: audienceMode === "rules" ? rules : [],
         audienceId: audienceMode === "audience" ? selectedAudienceId : null,
+        attachments: attachments,
       });
       setLastSaved(new Date());
     } catch (e) {
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, rules, audienceMode, selectedAudienceId]);
+  }, [campaign.id, name, subject, blocks, rules, audienceMode, selectedAudienceId, attachments]);
 
   useEffect(function() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -121,7 +124,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, rules, audienceMode, selectedAudienceId, doSave]);
+  }, [name, subject, blocks, rules, audienceMode, selectedAudienceId, doSave, attachments]);
 
   // Charger les audiences disponibles au montage
   useEffect(function() {
@@ -877,6 +880,70 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                 )}
               </div>
             )}
+
+            {/* Pièces jointes */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">Pièces jointes</h3>
+                <label className="btn-secondary py-1 px-2 text-xs cursor-pointer">
+                  {uploadingAttachment ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                  Ajouter un fichier
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingAttachment}
+                    onChange={async function(e) {
+                      var file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 25 * 1024 * 1024) {
+                        toast.error("Fichier trop volumineux (max 25 Mo)");
+                        return;
+                      }
+                      setUploadingAttachment(true);
+                      try {
+                        var fd = new FormData();
+                        fd.append("file", file);
+                        fd.append("campaignId", campaign.id);
+                        var res = await fetch("/api/campaigns/attachments/upload", { method: "POST", body: fd });
+                        var data = await res.json();
+                        if (data.success) {
+                          setAttachments([...attachments, { path: data.path, filename: data.filename, contentType: data.contentType, size: data.size }]);
+                          toast.success("Fichier ajouté");
+                        } else {
+                          toast.error(data.error || "Erreur upload");
+                        }
+                      } catch {
+                        toast.error("Erreur upload");
+                      }
+                      setUploadingAttachment(false);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {attachments.length === 0 ? (
+                <p className="text-xs text-gray-400">Aucune pièce jointe. Les fichiers seront envoyés avec chaque email.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map(function(att, idx) {
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                        <FileText size={14} className="text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{att.filename}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{(att.size / 1024 / 1024).toFixed(1)} Mo</span>
+                        <button
+                          onClick={function() { setAttachments(attachments.filter(function(_, i) { return i !== idx; })); }}
+                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
