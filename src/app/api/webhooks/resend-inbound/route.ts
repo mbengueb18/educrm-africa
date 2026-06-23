@@ -276,10 +276,7 @@ export async function POST(request: NextRequest) {
         await prisma.message.update({ where: { id: message.id }, data: updateData });
       }
 
-      return NextResponse.json({ ok: true, type: "tracking", event: eventType, messageId: message.id });
-    }
-
-    // ─── Mise à jour des stats de CAMPAGNE (si ce message appartient à une campagne) ───
+      // ─── Mise à jour des stats de CAMPAGNE (si ce message appartient à une campagne) ───
       var campTimestamp = data.created_at ? new Date(data.created_at) : new Date();
       var campRecipient = await prisma.emailCampaignRecipient.findFirst({
         where: { brevoMessageId: emailId },
@@ -330,6 +327,9 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+
+      return NextResponse.json({ ok: true, type: "tracking", event: eventType, messageId: message.id });
+    }
 
     return NextResponse.json({ ok: true, skipped: "unknown event type", eventType });
   } catch (error: any) {
