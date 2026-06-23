@@ -22,6 +22,8 @@ interface SendEmailParams {
   attachments?: AttachmentInput[];
   isHtml?: boolean;
   preferUserMailbox?: boolean;
+  fromName?: string;
+  fromEmail?: string;
 }
 
 interface EmailResult {
@@ -55,8 +57,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  const senderEmail = process.env.EMAIL_FROM || "noreply@talibcrm.com";
-  const senderName = process.env.EMAIL_FROM_NAME || "TalibCRM";
+  const senderEmail = params.fromEmail || process.env.EMAIL_FROM || "noreply@talibcrm.com";
+  const senderName = params.fromName || process.env.EMAIL_FROM_NAME || "TalibCRM";
   const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
 
   // Build Reply-To: prefer custom replyTo, otherwise use inbound pattern with leadId

@@ -253,6 +253,20 @@ export async function sendCampaign(campaignId: string) {
     where: { id: campaignId },
   });
 
+  // Composer l'expéditeur : "Nom utilisateur — Organisation"
+  var [sender, org] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true },
+    }),
+    prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { name: true },
+    }),
+  ]);
+  var campaignFromName = [sender?.name, org?.name].filter(Boolean).join(" — ") || "TalibCRM";
+  var campaignFromEmail = process.env.EMAIL_FROM_CAMPAIGN || "admission@talibcrm.com";
+
   if (!campaign) throw new Error("Campagne introuvable");
   if (campaign.status !== "DRAFT") throw new Error("Cette campagne a deja ete envoyee");
 
@@ -332,6 +346,8 @@ export async function sendCampaign(campaignId: string) {
       leadId: lead.id,
       organizationId: session.user.organizationId,
       sentById: session.user.id,
+      fromName: campaignFromName,
+      fromEmail: campaignFromEmail,
     });
 
     if (sendResult.success) {
