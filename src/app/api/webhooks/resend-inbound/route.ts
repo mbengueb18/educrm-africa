@@ -233,8 +233,10 @@ export async function POST(request: NextRequest) {
 
     // ─── 2. TRACKING EVENTS (delivered, opened, clicked, bounced...) ───
     var trackingEvent = TRACKING_EVENTS[eventType];
+    console.log("[Resend Tracking]", { eventType, emailId: data.email_id || data.id, hasData: !!data });
     if (trackingEvent) {
       var emailId = data.email_id || data.id;
+      console.log("[Resend Tracking] event:", eventType, "emailId:", emailId);
       if (!emailId) {
         return NextResponse.json({ ok: true, skipped: "no email_id" });
       }
@@ -242,6 +244,7 @@ export async function POST(request: NextRequest) {
       var message = await prisma.message.findFirst({
         where: { externalId: emailId, channel: "EMAIL" },
       });
+      console.log("[Resend Tracking] message found?", !!message, "emailId:", emailId);
 
       if (!message) {
         return NextResponse.json({ ok: true, skipped: "no matching outbound message" });
