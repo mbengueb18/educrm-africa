@@ -24,6 +24,7 @@ interface SendEmailParams {
   preferUserMailbox?: boolean;
   fromName?: string;
   fromEmail?: string;
+  isCampaign?: boolean;
 }
 
 interface EmailResult {
@@ -105,6 +106,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
             sentById: sentById || null,
             organizationId,
             deliveredAt: new Date(),
+            isCampaign: params.isCampaign || false,
           },
         });
 
@@ -145,6 +147,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
             status: "FAILED",
             sentById: sentById || null,
             organizationId,
+            isCampaign: params.isCampaign || false,
           },
         });
         return {
@@ -168,6 +171,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         status: "QUEUED",
         sentById: sentById || null,
         organizationId,
+        isCampaign: params.isCampaign || false,
       },
     });
 
@@ -239,6 +243,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
           status: "FAILED",
           sentById: sentById || null,
           organizationId,
+          isCampaign: params.isCampaign || false,
         },
       });
 
@@ -255,6 +260,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         externalId: data.id,
         sentById: sentById || null,
         organizationId,
+        isCampaign: params.isCampaign || false,
         deliveredAt: new Date(),
       },
     });
@@ -297,6 +303,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         status: "FAILED",
         sentById: sentById || null,
         organizationId,
+        isCampaign: params.isCampaign || false,
       },
     });
 

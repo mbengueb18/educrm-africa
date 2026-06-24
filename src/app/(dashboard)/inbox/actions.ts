@@ -109,6 +109,7 @@ export async function getInboxMessages(params?: {
     where: {
       organizationId: session.user.organizationId,
       leadId: { not: null },
+      isCampaign: false,
       ...(params?.channel ? { channel: params.channel as any } : {}),
     },
     select: { leadId: true },
@@ -347,6 +348,7 @@ export async function getTotalUnreadCount(): Promise<number> {
       direction: "INBOUND",
       status: { not: "READ" },
       leadId: { not: null },
+      isCampaign: false,
     },
   });
 

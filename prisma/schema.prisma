@@ -630,6 +630,7 @@ model Message {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events       MessageEvent[]
   attachments  MessageAttachment[]
+  isCampaign Boolean @default(false)
 
   @@index([organizationId])
   @@index([leadId])
