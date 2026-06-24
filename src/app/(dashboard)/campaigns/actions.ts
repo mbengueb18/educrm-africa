@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/email";
+import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
 
 // ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
 async function getCampaignLeadsQuery(
@@ -246,7 +247,7 @@ export async function previewSegment(rules: SegmentRule[], audienceId?: string |
   return { count: leads.length, leads: leads };
 }
 
-// ─── Send campaign ───
+// ─── Send campaign (prépare l'envoi par lots, ne bloque pas) ───
 export async function sendCampaign(campaignId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -254,21 +255,6 @@ export async function sendCampaign(campaignId: string) {
   var campaign = await prisma.emailCampaign.findUnique({
     where: { id: campaignId },
   });
-
-  // Composer l'expéditeur : "Nom utilisateur — Organisation"
-  var [sender, org] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { name: true },
-    }),
-    prisma.organization.findUnique({
-      where: { id: session.user.organizationId },
-      select: { name: true },
-    }),
-  ]);
-  var campaignFromName = [sender?.name, org?.name].filter(Boolean).join(" — ") || "TalibCRM";
-  var campaignFromEmail = process.env.EMAIL_FROM_CAMPAIGN || "admission@talibcrm.com";
-
   if (!campaign) throw new Error("Campagne introuvable");
   if (campaign.status !== "DRAFT") throw new Error("Cette campagne a deja ete envoyee");
 
@@ -282,22 +268,11 @@ export async function sendCampaign(campaignId: string) {
 
   var leads = await prisma.lead.findMany({
     where: where,
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, email: true },
   });
-
   if (leads.length === 0) throw new Error("Aucun lead avec email dans ce segment");
 
-  // Update campaign status
-  await prisma.emailCampaign.update({
-    where: { id: campaignId },
-    data: {
-      status: "SENDING",
-      sentAt: new Date(),
-      totalRecipients: leads.length,
-    },
-  });
-
-  // Create recipients
+  // Crée les destinataires en PENDING (l'envoi réel se fait par le cron)
   await prisma.emailCampaignRecipient.createMany({
     data: leads.map(function(lead) {
       return {
@@ -307,168 +282,24 @@ export async function sendCampaign(campaignId: string) {
         status: "PENDING",
       };
     }),
+    skipDuplicates: true,
   });
 
-  // Send emails via Brevo
-  var apiKey = process.env.BREVO_API_KEY;
-  var senderEmail = process.env.EMAIL_FROM || "noreply@educrm.africa";
-  var senderName = process.env.EMAIL_FROM_NAME || "TalibCRM";
-  var sentCount = 0;
-  var failedCount = 0;
-
-  var recipients = await prisma.emailCampaignRecipient.findMany({
-    where: { campaignId: campaignId },
-  });
-
-  for (var recipient of recipients) {
-    var lead = leads.find(function(l) { return l.id === recipient.leadId; });
-    if (!lead || !lead.email) continue;
-
-    var personalizedSubject = replaceVars(campaign.subject, lead);
-    var rawBody = campaign.body;
-    var htmlBody = "";
-    try {
-      var parsedBlocks = JSON.parse(rawBody);
-      if (Array.isArray(parsedBlocks)) {
-        htmlBody = blocksToEmailHtml(parsedBlocks, lead);
-      } else {
-        htmlBody = replaceVars(rawBody, lead);
-      }
-    } catch {
-      htmlBody = replaceVars(rawBody, lead);
-    }
-
-    // Envoi via sendEmail (Resend) → pose le Reply-To, crée le Message, capture les réponses
-    var sendResult = await sendEmail({
-      to: lead.email,
-      toName: lead.firstName + " " + lead.lastName,
-      subject: personalizedSubject,
-      body: htmlBody,
-      isHtml: true,
-      leadId: lead.id,
-      organizationId: session.user.organizationId,
-      sentById: session.user.id,
-      fromName: campaignFromName,
-      fromEmail: campaignFromEmail,
-      attachments: (campaign.attachments as any[]) && (campaign.attachments as any[]).length > 0
-        ? (campaign.attachments as any[]).map(function(a) {
-            return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
-          })
-        : undefined,
-    });
-
-    if (sendResult.success) {
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: "SENT",
-          sentAt: new Date(),
-          brevoMessageId: sendResult.messageId || null, // ID Resend, réutilise le champ existant
-        },
-      });
-      sentCount++;
-    } else {
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: { status: "FAILED", errorMessage: sendResult.error || "Erreur envoi" },
-      });
-      failedCount++;
-    }
-
-    // Rate limit
-    await new Promise(function(r) { setTimeout(r, 120); });
-  }
-
-  // Update campaign totals
+  // Passe la campagne en SENDING — le cron prend le relais
   await prisma.emailCampaign.update({
     where: { id: campaignId },
     data: {
-      status: "SENT",
-      completedAt: new Date(),
-      sentCount: sentCount,
-      failedCount: failedCount,
+      status: "SENDING",
+      sentAt: new Date(),
+      totalRecipients: leads.length,
     },
   });
 
   revalidatePath("/campaigns");
   revalidatePath("/campaigns/" + campaignId);
 
-  // ─── Passage automatique en « Contacté » des destinataires envoyés ───
-  try {
-    // Récupère les leads réellement envoyés (status SENT) de cette campagne
-    var sentRecipients = await prisma.emailCampaignRecipient.findMany({
-      where: { campaignId: campaignId, status: { not: "FAILED" } },
-      select: { leadId: true },
-    });
-    var sentLeadIds = sentRecipients.map(function(r) { return r.leadId; });
-
-    if (sentLeadIds.length > 0) {
-      // Récupère ces leads avec leur pipeline et étape actuelle
-      var sentLeads = await prisma.lead.findMany({
-        where: { id: { in: sentLeadIds }, organizationId: session.user.organizationId },
-        select: { id: true, pipelineId: true, stageId: true },
-      });
-
-      // Toutes les étapes "Contacté" de l'org (matching tolérant accents/casse)
-      var allStages = await prisma.pipelineStage.findMany({
-        where: { organizationId: session.user.organizationId },
-        select: { id: true, name: true, order: true, pipelineId: true },
-      });
-
-      function normalize(s: string): string {
-        return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-      }
-
-      // Map pipelineId -> étape "Contacté" de ce pipeline
-      var contactStageByPipeline: Record<string, { id: string; order: number }> = {};
-      for (var st of allStages) {
-        if (normalize(st.name) === "contacte" && st.pipelineId) {
-          contactStageByPipeline[st.pipelineId] = { id: st.id, order: st.order };
-        }
-      }
-
-      // Map des ordres de toutes les étapes (pour comparer la position)
-      var stageOrderById: Record<string, number> = {};
-      for (var st2 of allStages) {
-        stageOrderById[st2.id] = st2.order;
-      }
-
-      // Pour chaque lead : passe à "Contacté" SEULEMENT s'il est avant
-      var leadsToPromote: string[] = [];
-      var targetStageForLead: Record<string, string> = {};
-      for (var ld of sentLeads) {
-        if (!ld.pipelineId) continue;
-        var contactStage = contactStageByPipeline[ld.pipelineId];
-        if (!contactStage) continue; // pas d'étape "Contacté" dans ce pipeline
-        var currentOrder = stageOrderById[ld.stageId];
-        // Ne fait avancer que si l'étape actuelle est AVANT "Contacté"
-        if (currentOrder !== undefined && currentOrder < contactStage.order) {
-          leadsToPromote.push(ld.id);
-          targetStageForLead[ld.id] = contactStage.id;
-        }
-      }
-
-      // Regroupe les updates par étape cible (un updateMany par étape)
-      var byTargetStage: Record<string, string[]> = {};
-      for (var leadId2 of leadsToPromote) {
-        var target = targetStageForLead[leadId2];
-        if (!byTargetStage[target]) byTargetStage[target] = [];
-        byTargetStage[target].push(leadId2);
-      }
-
-      for (var targetStageId in byTargetStage) {
-        await prisma.lead.updateMany({
-          where: { id: { in: byTargetStage[targetStageId] } },
-          data: { stageId: targetStageId },
-        });
-      }
-    }
-  } catch (e) {
-    console.error("[sendCampaign] Passage en Contacté échoué", e);
-    // Non bloquant : l'envoi a réussi, le passage de stage est un bonus
-  }
-
-  return { sentCount: sentCount, failedCount: failedCount, total: leads.length };
+  // Retourne tout de suite : l'envoi se fait en arrière-plan
+  return { queued: leads.length, total: leads.length };
 }
 
 // ─── Delete campaign ───
@@ -639,34 +470,6 @@ function buildWhereFromRules(rules: SegmentRule[], organizationId: string): any 
   return where;
 }
 
-function replaceVars(text: string, lead: { firstName: string; lastName: string; email: string | null }): string {
-  // 1. Réparer les variables fragmentées par des balises HTML.
-  //    L'éditeur contentEditable peut insérer des <span>, entités, etc. ENTRE
-  //    les caractères de {{prenom}}, cassant le motif. On retire toute balise
-  //    HTML et entités situées à l'intérieur d'une paire d'accolades.
-  var repaired = text.replace(/\{\s*\{[\s\S]*?\}\s*\}/g, function(match) {
-    // Retire les balises HTML à l'intérieur du bloc variable
-    var inner = match.replace(/<[^>]+>/g, "");
-    // Décode les entités courantes que le navigateur pourrait insérer
-    inner = inner
-      .replace(/&nbsp;/gi, "")
-      .replace(/&#123;/g, "{")
-      .replace(/&#125;/g, "}")
-      .replace(/&amp;/gi, "&");
-    // Normalise les espaces parasites autour du nom de variable
-    inner = inner.replace(/\{\{\s*/g, "{{").replace(/\s*\}\}/g, "}}");
-    return inner;
-  });
-
-  // 2. Remplacer les variables (maintenant propres)
-  return repaired
-    .replace(/\{\{prenom\}\}/gi, lead.firstName)
-    .replace(/\{\{firstName\}\}/gi, lead.firstName)
-    .replace(/\{\{nom\}\}/gi, lead.lastName)
-    .replace(/\{\{lastName\}\}/gi, lead.lastName)
-    .replace(/\{\{email\}\}/gi, lead.email || "");
-}
-
 function formatCampaignHtml(body: string, subject: string, senderName: string): string {
   var paragraphs = body.split("\n").map(function(line) {
     if (!line.trim()) return '<p style="margin:0 0 12px;">&nbsp;</p>';
@@ -681,68 +484,6 @@ function formatCampaignHtml(body: string, subject: string, senderName: string): 
     '<div style="padding:32px;">' + paragraphs + "</div>" +
     '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
     '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via TalibCRM</p>" +
-    "</div></div></body></html>";
-}
-
-function blocksToEmailHtml(blocks: any[], lead: { firstName: string; lastName: string; email: string | null }): string {
-  var content = blocks.map(function(b: any) {
-    var type = b.type;
-    var styles = b.styles || {};
-    var raw = b.content || "";
-    var text = replaceVars(raw, lead);
-
-    switch (type) {
-      case "text":
-      return text.split("\n").map(function(line: string) {
-          return '<p style="margin:0 0 8px;line-height:1.6;font-size:' + (styles.fontSize || "15px") + ";color:" + (styles.color || "#555") + ";text-align:" + (styles.textAlign || "left") + ';">' + (line || "&nbsp;") + "</p>";
-        }).join("");
-      case "heading":
-  if (text.includes("<")) {
-    return '<div style="font-size:' + (styles.fontSize || "22px") + ";color:" + (styles.color || "#1B4F72") + ";font-weight:700;text-align:" + (styles.textAlign || "left") + ';">' + text + "</div>";
-  }
-  return '<h2 style="margin:0 0 12px;font-size:' + (styles.fontSize || "22px") + ";color:" + (styles.color || "#1B4F72") + ";font-weight:700;text-align:" + (styles.textAlign || "left") + ';">' + text + "</h2>";
-      case "button":
-        return '<div style="text-align:' + (styles.textAlign || "center") + ';padding:12px 0;"><a href="' + (styles.href || "#") + '" style="display:inline-block;padding:12px 28px;background:' + (styles.bgColor || "#1B4F72") + ";color:" + (styles.color || "white") + ";border-radius:" + (styles.borderRadius || "8px") + ';text-decoration:none;font-weight:600;font-size:14px;">' + text + "</a></div>";
-      case "image":
-        return raw ? '<div style="text-align:' + (styles.textAlign || "center") + ';padding:8px 0;"><img src="' + raw + '" alt="" style="max-width:100%;width:' + (styles.width || "100%") + ';border-radius:8px;" /></div>' : "";
-      case "video":
-      var thumbUrl = b.styles.thumbnail || "";
-      var videoUrl = b.content || "#";
-      if (!thumbUrl && videoUrl.includes("youtube.com")) {
-        var vid = videoUrl.match(/[?&]v=([^&]+)/)?.[1] || "";
-        if (vid) thumbUrl = "https://img.youtube.com/vi/" + vid + "/hqdefault.jpg";
-      }
-      return '<div style="text-align:' + (b.styles.textAlign || "center") + ';padding:8px 0;"><a href="' + videoUrl + '" style="display:inline-block;position:relative;text-decoration:none;">' +
-        (thumbUrl ? '<img src="' + thumbUrl + '" style="max-width:100%;width:' + (b.styles.width || "100%") + ';border-radius:8px;display:block;" />' : '<div style="width:400px;height:225px;background:#1a1a1a;border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="font-size:48px;">&#9654;</span></div>') +
-        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60px;height:60px;background:rgba(255,255,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;"><span style="font-size:24px;color:#e74c3c;margin-left:4px;">&#9654;</span></div>' +
-        "</a></div>";
-      case "divider":
-        return '<hr style="border:none;border-top:1px ' + (styles.borderStyle || "solid") + " " + (styles.color || "#e5e7eb") + ';margin:16px 0;" />';
-      case "spacer":
-        return '<div style="height:' + (styles.height || "24px") + ';"></div>';
-      case "section":
-        if (!b.columns) return "";
-        var cellsHtml = b.columns.map(function(col: any) {
-          var widthPct = parseFloat(col.width);
-          var colContent = col.content || "&nbsp;";
-          colContent = replaceVars(colContent, lead);
-          return '<td style="width:' + widthPct + '%;vertical-align:top;padding:8px;">' +
-            '<div style="font-size:15px;line-height:1.6;color:#555;">' + colContent + "</div></td>";
-        }).join("");
-        return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="' +
-          (styles.bgColor ? "background-color:" + styles.bgColor + ";" : "") +
-          '"><tr>' + cellsHtml + "</tr></table>";
-      default:
-        return "";
-    }
-  }).join("");
-
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
-    '<body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#f8f9fa;padding:40px 0;">' +
-    '<div style="max-width:580px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
-    '<div style="padding:32px;">' + content + "</div>" +
-    '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-   /* '<p style="margin:0;font-size:12px;color:#9CA3AF;text-align:center;">Envoye via TalibCRM</p>' + */
     "</div></div></body></html>";
 }
 

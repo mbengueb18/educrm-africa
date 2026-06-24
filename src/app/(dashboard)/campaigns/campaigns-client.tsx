@@ -102,7 +102,7 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
     startTransition(async function() {
       try {
         var result = await sendCampaign(campaign.id);
-        toast.success(result.sentCount + " email" + (result.sentCount > 1 ? "s" : "") + " envoyé" + (result.sentCount > 1 ? "s" : ""));
+        toast.success("Campagne lancée — " + result.queued + " email" + (result.queued > 1 ? "s" : "") + " en cours d'envoi");
         router.refresh();
       } catch (e: any) {
         toast.error(e.message);
