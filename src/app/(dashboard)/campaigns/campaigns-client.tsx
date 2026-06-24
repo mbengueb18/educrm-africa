@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { createCampaign, sendCampaign, deleteCampaign, previewSegment, getCampaignRecipientStats, type SegmentRule } from "./actions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
@@ -66,6 +66,15 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
   var [loadingStats, setLoadingStats] = useState(false);
   var [isPending, startTransition] = useTransition();
   var router = useRouter();
+  // Rafraîchit automatiquement tant qu'une campagne est en cours d'envoi
+  useEffect(function() {
+    var hasSending = campaigns.some(function(c) { return c.status === "SENDING"; });
+    if (!hasSending) return;
+    var interval = setInterval(function() {
+      router.refresh();
+    }, 8000);
+    return function() { clearInterval(interval); };
+  }, [campaigns, router]);
 
   var handleDelete = function(id: string) {
     if (!confirm("Supprimer cette campagne ?")) return;
