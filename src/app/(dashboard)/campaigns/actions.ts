@@ -434,6 +434,22 @@ export async function getAvailableAudiencesForCampaign() {
   return enriched;
 }
 
+export async function getCampaignProgress(campaignId: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var [total, done] = await Promise.all([
+    prisma.emailCampaignRecipient.count({
+      where: { campaignId: campaignId },
+    }),
+    prisma.emailCampaignRecipient.count({
+      where: { campaignId: campaignId, status: { not: "PENDING" } },
+    }),
+  ]);
+
+  return { total: total, done: done };
+}
+
 // ─── Helpers ───
 function buildWhereFromRules(rules: SegmentRule[], organizationId: string): any {
   var where: any = { organizationId: organizationId, isConverted: false };

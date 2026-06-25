@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { createCampaign, sendCampaign, deleteCampaign, previewSegment, getCampaignRecipientStats, type SegmentRule } from "./actions";
+import { createCampaign, sendCampaign, deleteCampaign, previewSegment, getCampaignRecipientStats, getCampaignProgress, type SegmentRule } from "./actions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -66,13 +66,32 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
   var [loadingStats, setLoadingStats] = useState(false);
   var [isPending, startTransition] = useTransition();
   var router = useRouter();
-  // Rafraîchit automatiquement tant qu'une campagne est en cours d'envoi
+  var [progress, setProgress] = useState<Record<string, { total: number; done: number }>>({});
+  // Rafraîchit + récupère la progression tant qu'une campagne est en cours d'envoi
   useEffect(function() {
-    var hasSending = campaigns.some(function(c) { return c.status === "SENDING"; });
-    if (!hasSending) return;
+    var sendingCampaigns = campaigns.filter(function(c) { return c.status === "SENDING"; });
+    if (sendingCampaigns.length === 0) {
+      setProgress({});
+      return;
+    }
+
+    var fetchProgress = function() {
+      sendingCampaigns.forEach(function(c) {
+        getCampaignProgress(c.id).then(function(p) {
+          setProgress(function(prev) {
+            var next = { ...prev };
+            next[c.id] = p;
+            return next;
+          });
+        }).catch(function() {});
+      });
+    };
+
+    fetchProgress();
     var interval = setInterval(function() {
+      fetchProgress();
       router.refresh();
-    }, 8000);
+    }, 5000);
     return function() { clearInterval(interval); };
   }, [campaigns, router]);
 
@@ -243,6 +262,36 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                     <MiniMetric label="Rebonds" value={campaign.bouncedCount} icon={AlertTriangle} color="text-red-500" />
                   </div>
                 )}
+
+                {/* Barre de progression pour campagne en cours d'envoi */}
+                {campaign.status === "SENDING" && (() => {
+                  var prog = progress[campaign.id];
+                  var total = prog ? prog.total : campaign.totalRecipients;
+                  var done = prog ? prog.done : 0;
+                  var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                  return (
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Loader2 size={14} className="text-amber-500 animate-spin" />
+                          <span className="text-xs font-medium text-amber-700">Envoi en cours…</span>
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700 tabular-nums">
+                          {done} / {total} <span className="text-gray-400">({pct}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700 ease-out"
+                          style={{ width: pct + "%" }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1.5">
+                        Les emails partent progressivement pour préserver la délivrabilité.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {campaign.status === "DRAFT" && (
                   <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
