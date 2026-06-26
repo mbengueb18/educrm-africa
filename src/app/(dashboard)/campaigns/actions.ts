@@ -5,12 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
+import { buildLeadWhere } from "@/lib/lead-filters";
 
 // ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
 async function getCampaignLeadsQuery(
   organizationId: string,
   audienceId: string | null,
-  rules: SegmentRule[]
+  rules: any
 ): Promise<{
   where: any;
   fromAudience: boolean;
@@ -44,8 +45,8 @@ async function getCampaignLeadsQuery(
     };
   }
 
-  // Mode RÈGLES classique
-  var where = buildWhereFromRules(rules, organizationId);
+  // Mode RÈGLES (nouveau moteur récursif, rétrocompatible avec l'ancien format plat)
+  var where = await buildLeadWhere(rules, organizationId);
   return { where: where, fromAudience: false };
 }
 
@@ -53,7 +54,7 @@ async function getCampaignLeadsQuery(
 async function getRecipientStats(
   organizationId: string,
   audienceId: string | null,
-  rules: SegmentRule[]
+  rules: any
 ): Promise<{
   total: number;
   withEmail: number;
@@ -148,7 +149,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   name?: string;
   subject?: string;
   body?: string;
-  segmentRules?: SegmentRule[];
+  segmentRules?: any;
   audienceId?: string | null;
   attachments?: any[];
 }) {
@@ -231,20 +232,20 @@ export async function getCampaignDetail(campaignId: string) {
 }
 
 // ─── Preview segment (count matching leads) ───
-export async function previewSegment(rules: SegmentRule[], audienceId?: string | null) {
+export async function previewSegment(rules: any, audienceId?: string | null) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-
   var queryResult = await getCampaignLeadsQuery(session.user.organizationId, audienceId || null, rules);
   var where = { ...queryResult.where, email: { not: null } };
-
-  var leads = await prisma.lead.findMany({
-    where: where,
-    select: { id: true, firstName: true, lastName: true, email: true, city: true, source: true, score: true },
-    take: 500,
-  });
-
-  return { count: leads.length, leads: leads };
+  var [count, leads] = await Promise.all([
+    prisma.lead.count({ where: where }),
+    prisma.lead.findMany({
+      where: where,
+      select: { id: true, firstName: true, lastName: true, email: true, city: true, source: true, score: true },
+      take: 500,
+    }),
+  ]);
+  return { count: count, leads: leads };
 }
 
 // ─── Send campaign (prépare l'envoi par lots, ne bloque pas) ───

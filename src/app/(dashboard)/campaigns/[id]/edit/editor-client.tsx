@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
+import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
+import type { CustomFieldConfig } from "@/lib/custom-fields";
 
 interface EmailBlock {
   id: string;
@@ -37,6 +39,9 @@ interface CampaignEditorClientProps {
   };
   stages: { id: string; name: string; color: string }[];
   programs: { id: string; name: string; code: string | null }[];
+  audiences: { id: string; name: string; type: string }[];
+  users: { id: string; name: string }[];
+  customFields: CustomFieldConfig[];
 }
 
 var SOURCE_OPTIONS = [
@@ -47,7 +52,7 @@ var SOURCE_OPTIONS = [
 
 var BRAND_COLOR = "#1B4F72";
 
-export function CampaignEditorClient({ campaign, stages, programs }: CampaignEditorClientProps) {
+export function CampaignEditorClient({ campaign, stages, programs, audiences, users, customFields }: CampaignEditorClientProps) {
   var router = useRouter();
   // Global selection tracking — saves selection continuously
 
@@ -64,17 +69,25 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     }
   }
 
-  var initialRules: SegmentRule[] = [];
+  var initialGroup: FilterGroup = { operator: "AND", rules: [] };
   try {
     if (campaign.segmentRules) {
-      initialRules = campaign.segmentRules as SegmentRule[];
+      var sr = campaign.segmentRules;
+      if (Array.isArray(sr)) {
+        // Ancien format plat → groupe AND
+        initialGroup = { operator: "AND", rules: sr };
+      } else if (sr && typeof sr === "object" && Array.isArray(sr.rules)) {
+        // Nouveau format FilterGroup
+        initialGroup = sr as FilterGroup;
+      }
     }
   } catch {}
+  var initialHasRules = initialGroup.rules.length > 0;
 
   var [name, setName] = useState(campaign.name);
   var [subject, setSubject] = useState(campaign.subject);
   var [blocks, setBlocks] = useState<EmailBlock[]>(initialBlocks.length > 0 ? initialBlocks : []);
-  var [rules, setRules] = useState<SegmentRule[]>(initialRules);
+  var [filterGroup, setFilterGroup] = useState<FilterGroup>(initialGroup);
   var [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   var [previewMode, setPreviewMode] = useState(false);
   var [activePanel, setActivePanel] = useState<"content" | "audience">("content");
@@ -86,7 +99,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   var [showSectionPicker, setShowSectionPicker] = useState(false);
   // Mode audience vs règles ad-hoc — par défaut sur "audience" (recommandé)
   var [audienceMode, setAudienceMode] = useState<"audience" | "rules">(
-    campaign.audienceId ? "audience" : (initialRules.length > 0 ? "rules" : "audience")
+    campaign.audienceId ? "audience" : (initialHasRules ? "rules" : "audience")
   );
   var [selectedAudienceId, setSelectedAudienceId] = useState<string | null>(campaign.audienceId);
   var [availableAudiences, setAvailableAudiences] = useState<any[]>([]);
@@ -94,6 +107,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
   var [loadingAudiences, setLoadingAudiences] = useState(false);
   var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
   var [uploadingAttachment, setUploadingAttachment] = useState(false);
+  var [previewLoading, setPreviewLoading] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -107,7 +121,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
         name: name,
         subject: subject,
         body: JSON.stringify(blocks),
-        segmentRules: audienceMode === "rules" ? rules : [],
+        segmentRules: audienceMode === "rules" ? filterGroup : [],
         audienceId: audienceMode === "audience" ? selectedAudienceId : null,
         attachments: attachments,
       });
@@ -116,7 +130,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, rules, audienceMode, selectedAudienceId, attachments]);
+  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments]);
 
   useEffect(function() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -124,7 +138,22 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, rules, audienceMode, selectedAudienceId, doSave, attachments]);
+  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments]);
+
+  // Aperçu live des destinataires (debounce 600ms)
+  useEffect(function() {
+    if (audienceMode !== "rules") return;
+    setPreviewLoading(true);
+    var t = setTimeout(function() {
+      previewSegment(filterGroup as any).then(function(data) {
+        setPreviewData(data);
+        setPreviewLoading(false);
+      }).catch(function() {
+        setPreviewLoading(false);
+      });
+    }, 600);
+    return function() { clearTimeout(t); };
+  }, [filterGroup, audienceMode]);
 
   // Charger les audiences disponibles au montage
   useEffect(function() {
@@ -196,7 +225,7 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
         setPreviewData(data);
       }).catch(function() {});
     } else {
-      previewSegment(rules).then(function(data) {
+      previewSegment(filterGroup as any).then(function(data) {
         setPreviewData(data);
       }).catch(function() {});
     }
@@ -816,65 +845,34 @@ export function CampaignEditorClient({ campaign, stages, programs }: CampaignEdi
                 })()}
               </div>
             ) : (
-              /* ─── Mode RÈGLES ad-hoc (existant) ─── */
+              /* ─── Mode RÈGLES ad-hoc (nouveau builder) ─── */
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="mb-3">
                   <h3 className="text-sm font-semibold text-gray-700">Critères de segmentation</h3>
-                  <button onClick={function() { setRules([...rules, { field: "stageId", operator: "equals", value: "" }]); }} className="btn-secondary py-1 px-2 text-xs">
-                    <Plus size={12} /> Ajouter
-                  </button>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Combinez des critères (étape, source, champs personnalisés, activité, audience) avec des groupes ET/OU.
+                  </p>
                 </div>
 
-                {rules.length === 0 ? (
-                  <div className="bg-gray-50 rounded-xl p-6 text-center">
-                    <Users size={24} className="text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Aucun critère — tous les leads avec email seront inclus</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {rules.map(function(rule, index) {
-                      var fieldDef = FIELD_OPTIONS.find(function(f) { return f.value === rule.field; });
-                      return (
-                        <div key={index} className="flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-200">
-                          {index > 0 && <span className="text-xs text-gray-400 font-medium w-6 shrink-0">ET</span>}
-                          {index === 0 && <span className="w-6 shrink-0" />}
-                          <select value={rule.field} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], field: e.target.value, value: "" }; setRules(nr); }} className="input text-sm py-1.5 w-32">
-                            {FIELD_OPTIONS.map(function(f) { return <option key={f.value} value={f.value}>{f.label}</option>; })}
-                          </select>
-                          <select value={rule.operator} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], operator: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 w-24">
-                            <option value="equals">est</option>
-                            <option value="not_equals">n'est pas</option>
-                            {fieldDef?.type === "text" && <option value="contains">contient</option>}
-                            {fieldDef?.type === "number" && <><option value="gt">sup. à</option><option value="lt">inf. à</option></>}
-                          </select>
-                          {fieldDef?.options && fieldDef.options.length > 0 ? (
-                            <select value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1">
-                              <option value="">Choisir...</option>
-                              {fieldDef.options.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
-                            </select>
-                          ) : (
-                            <input value={rule.value} onChange={function(e) { var nr = [...rules]; nr[index] = { ...nr[index], value: e.target.value }; setRules(nr); }} className="input text-sm py-1.5 flex-1" placeholder="Valeur..." />
-                          )}
-                          <button onClick={function() { setRules(rules.filter(function(_, i) { return i !== index; })); }} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <FilterGroupBuilder
+                  group={filterGroup}
+                  onChange={setFilterGroup}
+                  stages={stages}
+                  programs={programs}
+                  audiences={audiences}
+                  users={users}
+                  customFields={customFields}
+                />
 
-                <button onClick={handlePreview} className="btn-secondary py-2 text-xs mt-3 w-full justify-center">
-                  <Eye size={14} /> Compter les destinataires
-                </button>
-
+                {/* Aperçu live */}
                 {previewData && (
-                  <div className="bg-brand-50 rounded-xl p-4 mt-3">
+                  <div className="bg-brand-50 rounded-xl p-4 mt-4">
                     <div className="flex items-center gap-2">
                       <Users size={16} className="text-brand-600" />
                       <span className="text-sm font-semibold text-brand-800">
                         {previewData.count} destinataire{previewData.count > 1 ? "s" : ""}
                       </span>
+                      {previewLoading && <Loader2 size={13} className="animate-spin text-brand-400" />}
                     </div>
                   </div>
                 )}
