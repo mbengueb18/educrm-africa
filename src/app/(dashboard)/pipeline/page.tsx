@@ -4,6 +4,7 @@ import { PipelineClient } from "./pipeline-client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getAllFieldProperties } from "@/lib/field-properties";
+import { getCustomFields } from "@/lib/custom-fields";
 
 export const metadata: Metadata = {
   title: "Pipeline",
@@ -20,7 +21,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const pipelineIdFromUrl = params.pipeline;
 
-  const [pipelineData, stats, programs, campuses, fieldProps, pipelines] = await Promise.all([
+  const [pipelineData, stats, programs, campuses, fieldProps, pipelines, customFields] = await Promise.all([
     getPipelineData(pipelineIdFromUrl),
     getPipelineStats(),
     prisma.program.findMany({
@@ -35,6 +36,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     }),
     getAllFieldProperties(),
     getOrgPipelines(),
+    getCustomFields(),
   ]);
 
   return (
@@ -46,6 +48,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
       programs={programs}
       campuses={campuses}
       crmFields={fieldProps.fields}
+      customFields={customFields}
       currentUserId={session.user.id}
       currentUserRole={session.user.role}
       pipelines={pipelines}

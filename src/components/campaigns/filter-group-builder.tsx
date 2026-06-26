@@ -26,6 +26,7 @@ interface BuilderProps {
   audiences: { id: string; name: string; type: string }[];
   users: { id: string; name: string }[];
   customFields: CustomFieldConfig[];
+  hiddenCategories?: string[];
 }
 
 var SOURCE_OPTIONS = [
@@ -82,12 +83,13 @@ function buildFieldCatalog(props: BuilderProps): { category: string; fields: Fie
     { value: "audience", label: "Appartient à une audience", type: "audience", options: props.audiences.map(function(a) { return { value: a.id, label: a.name }; }) },
   ];
 
+  var hidden = props.hiddenCategories || [];
   return [
     { category: "Champs standards", fields: standard },
     { category: "Champs personnalisés", fields: custom },
     { category: "Activité", fields: activity },
     { category: "Audience", fields: audience },
-  ].filter(function(g) { return g.fields.length > 0; });
+  ].filter(function(g) { return g.fields.length > 0 && hidden.indexOf(g.category) === -1; });
 }
 
 // ─── Opérateurs disponibles selon le type de champ ───

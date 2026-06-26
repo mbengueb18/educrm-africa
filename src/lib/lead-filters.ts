@@ -197,3 +197,80 @@ export async function buildLeadWhere(input: any, organizationId: string): Promis
   }
   return { ...base, AND: conditions };
 }
+
+// ─── Évaluation EN MÉMOIRE d'un lead contre un FilterGroup (pour le pipeline) ───
+// Ne gère que standard + custom (pas activité ni audience).
+export function evaluateLeadAgainstGroup(lead: any, input: any): boolean {
+  var group = normalizeToGroup(input);
+  if (group.rules.length === 0) return true;
+
+  var results = group.rules.map(function(node: any): boolean {
+    if (node && Array.isArray(node.rules)) {
+      return evaluateLeadAgainstGroup(lead, node); // sous-groupe
+    }
+    return evaluateRule(lead, node);
+  });
+
+  if (group.operator === "OR") return results.some(function(r) { return r; });
+  return results.every(function(r) { return r; });
+}
+
+function getLeadValue(lead: any, field: string): any {
+  // custom:key → customFields
+  if (field.indexOf("custom:") === 0) {
+    var key = field.slice(7);
+    if (lead.customFields && typeof lead.customFields === "object") {
+      return lead.customFields[key];
+    }
+    return undefined;
+  }
+  // activité/audience non évaluables en mémoire → ignorés (true)
+  return lead[field];
+}
+
+function evaluateRule(lead: any, rule: any): boolean {
+  // Familles non évaluables en mémoire → on ne filtre pas dessus
+  if (rule.field === "audience" || rule.field.indexOf("activity:") === 0) return true;
+
+  var value = getLeadValue(lead, rule.field);
+  var op = rule.operator;
+  var target = rule.value;
+
+  function isDateField(f: string) {
+    return f === "createdAt" || f === "convertedAt" || f === "updatedAt" || f === "dateOfBirth";
+  }
+
+  switch (op) {
+    case "exists": return value !== null && value !== undefined && value !== "";
+    case "not_exists": return value === null || value === undefined || value === "";
+    case "equals": return String(value == null ? "" : value) === String(target == null ? "" : target);
+    case "not_equals": return String(value == null ? "" : value) !== String(target == null ? "" : target);
+    case "contains": return String(value || "").toLowerCase().indexOf(String(target || "").toLowerCase()) !== -1;
+    case "starts_with": return String(value || "").toLowerCase().indexOf(String(target || "").toLowerCase()) === 0;
+    case "gt": return Number(value) > Number(target);
+    case "lt": return Number(value) < Number(target);
+    case "gte": return Number(value) >= Number(target);
+    case "lte": return Number(value) <= Number(target);
+    case "today": case "yesterday": case "this_week": case "this_month": case "last_month": case "last_n_days": {
+      if (!value) return false;
+      var d = new Date(value);
+      var bounds = relativeDateBounds(op, target);
+      if (bounds.gte && d < bounds.gte) return false;
+      if (bounds.lt && d >= bounds.lt) return false;
+      if (bounds.lte && d > bounds.lte) return false;
+      return true;
+    }
+    default: return true;
+  }
+}
+
+function relativeDateBounds(op: string, value: any): { gte?: Date; lte?: Date; lt?: Date } {
+  var now = new Date();
+  if (op === "today") { var s = new Date(); s.setHours(0,0,0,0); var e = new Date(); e.setHours(23,59,59,999); return { gte: s, lte: e }; }
+  if (op === "yesterday") { var ys = new Date(); ys.setDate(ys.getDate()-1); ys.setHours(0,0,0,0); var ye = new Date(); ye.setDate(ye.getDate()-1); ye.setHours(23,59,59,999); return { gte: ys, lte: ye }; }
+  if (op === "this_week") { var ws = new Date(); var day = (ws.getDay()+6)%7; ws.setDate(ws.getDate()-day); ws.setHours(0,0,0,0); return { gte: ws }; }
+  if (op === "this_month") { var ms = new Date(); ms.setDate(1); ms.setHours(0,0,0,0); return { gte: ms }; }
+  if (op === "last_month") { var lms = new Date(); lms.setMonth(lms.getMonth()-1, 1); lms.setHours(0,0,0,0); var lme = new Date(); lme.setDate(1); lme.setHours(0,0,0,0); return { gte: lms, lt: lme }; }
+  if (op === "last_n_days") { var n = Number(value) || 7; var nd = new Date(); nd.setDate(nd.getDate()-n); nd.setHours(0,0,0,0); return { gte: nd }; }
+  return {};
+}

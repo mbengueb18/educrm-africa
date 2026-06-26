@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
   Upload, Download, Copy, Check, Loader2, X, AlertTriangle,
-  MoreHorizontal,  GitBranch, ChevronDown,
+  MoreHorizontal,  GitBranch, ChevronDown, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
 import { detectDuplicates, mergeDuplicateLeads } from "@/app/(dashboard)/pipeline/actions";
+import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
+import { evaluateLeadAgainstGroup } from "@/lib/lead-filters";
 
 interface PipelineClientProps {
   stages: any[];
@@ -33,6 +35,7 @@ interface PipelineClientProps {
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string; city: string }[];
   crmFields?: any[];
+  customFields?: any[];
   pipelines: any[];                   
   currentPipelineId?: string;         
 }
@@ -47,6 +50,7 @@ export function PipelineClient({
   programs,
   campuses,
   crmFields,
+  customFields,
   pipelines,
   currentPipelineId,
 }: PipelineClientProps) {
@@ -63,6 +67,8 @@ export function PipelineClient({
   var [loadingDuplicates, setLoadingDuplicates] = useState(false);
   var [merging, setMerging] = useState(false);
   var [showMoreMenu, setShowMoreMenu] = useState(false);
+  var [advancedFilter, setAdvancedFilter] = useState<FilterGroup>({ operator: "AND", rules: [] });
+  var [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
 
   var handleDetectDuplicates = async function() {
   setShowMoreMenu(false);
@@ -102,6 +108,7 @@ export function PipelineClient({
   var filteredLeads = leads.filter(function(l: any) {
     if (filterMine && l.assignedToId !== currentUserId) return false;
     if (filterToQualify && l.programId) return false;
+    if (advancedFilter.rules.length > 0 && !evaluateLeadAgainstGroup(l, advancedFilter)) return false;
     return true;
   });
 
@@ -247,6 +254,19 @@ export function PipelineClient({
                   : "bg-amber-100 text-amber-700"
               )}>
                 {leadsToQualifyCount}
+              </span>
+            )}
+          </button>
+          {/* Filtre avancé */}
+          <button onClick={function() { setShowAdvancedFilter(!showAdvancedFilter); }}
+            className={cn("btn-secondary py-1.5 text-xs",
+              advancedFilter.rules.length > 0 && "bg-brand-100 text-brand-700 border-brand-200"
+            )}>
+            <SlidersHorizontal size={13} />
+            Filtres avancés
+            {advancedFilter.rules.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-200 text-brand-800">
+                {advancedFilter.rules.length}
               </span>
             )}
           </button>
@@ -403,6 +423,38 @@ export function PipelineClient({
               <X size={14} />
             </button>
           </div>
+        </div>
+      )}
+      {/* Bandeau d'aide quand filtre avancé actif */}
+      {showAdvancedFilter && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700">Filtres avancés</h3>
+            <div className="flex items-center gap-2">
+              {advancedFilter.rules.length > 0 && (
+                <button onClick={function() { setAdvancedFilter({ operator: "AND", rules: [] }); }}
+                  className="text-xs text-gray-400 hover:text-red-500">
+                  Réinitialiser
+                </button>
+              )}
+              <button onClick={function() { setShowAdvancedFilter(false); }} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <FilterGroupBuilder
+            group={advancedFilter}
+            onChange={setAdvancedFilter}
+            stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
+            programs={programs.map(function(p: any) { return { id: p.id, name: p.name, code: null }; })}
+            audiences={[]}
+            users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+            customFields={customFields || []}
+            hiddenCategories={["Activité", "Audience"]}
+          />
+          <p className="text-[11px] text-gray-400 mt-3">
+            {filteredLeads.length} lead{filteredLeads.length > 1 ? "s" : ""} correspondent aux filtres
+          </p>
         </div>
       )}
 
