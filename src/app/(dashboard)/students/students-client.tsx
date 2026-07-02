@@ -26,7 +26,7 @@ type Student = {
   status: string;
   enrollmentDate: Date;
   createdAt: Date;
-  program: { id: string; name: string; code: string | null; level: string };
+  program: { id: string; name: string; code: string | null; level: string; formationType: string };
   campus: { id: string; name: string; city: string };
   lead: { id: string; source: string; sourceDetail: string | null } | null;
   _count: { payments: number; enrollments: number };
@@ -34,7 +34,7 @@ type Student = {
 
 interface StudentsClientProps {
   students: Student[];
-  stats: { total: number; active: number; suspended: number; graduated: number; withdrawn: number; thisMonth: number };
+  stats: { total: number; active: number; suspended: number; graduated: number; withdrawn: number; thisMonth: number; fi: number; fc: number };
   programs: { id: string; name: string; code: string | null; level: string }[];
   campuses: { id: string; name: string; city: string }[];
 }
@@ -47,6 +47,21 @@ var STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> 
   WITHDRAWN: { label: "Retiré", color: "text-red-500", bg: "bg-red-50" },
   EXPELLED: { label: "Exclu", color: "text-red-700", bg: "bg-red-50" },
 };
+
+var FORMATION_CONFIG: Record<string, { label: string; fullLabel: string; color: string; bg: string }> = {
+  INITIAL: { label: "FI", fullLabel: "Formation Initiale (FI)", color: "text-blue-700", bg: "bg-blue-50" },
+  CONTINUE: { label: "FC", fullLabel: "Formation Continue (FC)", color: "text-orange-700", bg: "bg-orange-50" },
+  BOTH: { label: "FI/FC", fullLabel: "Initiale & Continue (FI/FC)", color: "text-gray-600", bg: "bg-gray-100" },
+};
+
+function FormationBadge({ formationType }: { formationType: string }) {
+  var conf = FORMATION_CONFIG[formationType] || FORMATION_CONFIG.INITIAL;
+  return (
+    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", conf.bg, conf.color)}>
+      {conf.label}
+    </span>
+  );
+}
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -95,8 +110,10 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-4 sm:mb-6">
         <MiniStat label="Total" value={stats.total} color="text-gray-700" />
+        <MiniStat label="FI" value={stats.fi} color="text-blue-700" />
+        <MiniStat label="FC" value={stats.fc} color="text-orange-700" />
         <MiniStat label="Actifs" value={stats.active} color="text-emerald-600" />
         <MiniStat label="Suspendus" value={stats.suspended} color="text-amber-600" highlight={stats.suspended > 0} />
         <MiniStat label="Diplômés" value={stats.graduated} color="text-purple-600" />
@@ -207,6 +224,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
                             {student.program.code || student.program.name}
                             <span className="text-gray-400 ml-0.5">({student.program.level})</span>
                           </span>
+                          <FormationBadge formationType={student.program.formationType} />
                           {student.campus.city && (
                             <span className="text-gray-500 flex items-center gap-0.5">
                               <MapPin size={10} className="shrink-0" />
@@ -232,6 +250,7 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Étudiant</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">N° Étudiant</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Filière</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Formation</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Campus</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Statut</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Contact</th>
@@ -262,6 +281,9 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
                             <span className="text-xs font-medium text-brand-600">{student.program.code || student.program.name}</span>
                             <span className="text-[10px] text-gray-400 ml-1">({student.program.level})</span>
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <FormationBadge formationType={student.program.formationType} />
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs text-gray-600">{student.campus.city}</span>
@@ -505,6 +527,7 @@ function StudentSlideOver({ studentId, onClose, programs, campuses }: {
                   {/* Formation */}
                   <InfoSection title="Formation" icon={BookOpen}>
                     <InfoRow icon={GraduationCap} label="Filière" value={student.program.name + " (" + student.program.level + ")"} />
+                    <InfoRow icon={BookOpen} label="Type" value={(FORMATION_CONFIG[student.program.formationType] || FORMATION_CONFIG.INITIAL).fullLabel} />
                     {student.program.code && <InfoRow icon={Hash} label="Code" value={student.program.code} />}
                     <InfoRow icon={Building2} label="Campus" value={student.campus.name + " — " + student.campus.city} />
                     <InfoRow icon={CreditCard} label="Scolarité" value={formatCFA(student.program.tuitionAmount)} />

@@ -33,7 +33,7 @@ export async function getStudents(filters?: {
   var students = await prisma.student.findMany({
     where,
     include: {
-      program: { select: { id: true, name: true, code: true, level: true } },
+      program: { select: { id: true, name: true, code: true, level: true, formationType: true } },
       campus: { select: { id: true, name: true, city: true } },
       lead: { select: { id: true, source: true, sourceDetail: true } },
       _count: { select: { payments: true, enrollments: true } },
@@ -52,7 +52,7 @@ export async function getStudentDetail(studentId: string) {
   var student = await prisma.student.findFirst({
     where: { id: studentId, organizationId: session.user.organizationId },
     include: {
-      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true, durationMonths: true } },
+      program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true, durationMonths: true, formationType: true } },
       campus: { select: { id: true, name: true, city: true } },
       lead: { select: { id: true, source: true, sourceDetail: true, createdAt: true } },
       enrollments: {
@@ -85,7 +85,7 @@ export async function getStudentStats() {
 
   var orgId = session.user.organizationId;
 
-  var [total, active, suspended, graduated, withdrawn, thisMonth] = await Promise.all([
+  var [total, active, suspended, graduated, withdrawn, thisMonth, fi, fc] = await Promise.all([
     prisma.student.count({ where: { organizationId: orgId } }),
     prisma.student.count({ where: { organizationId: orgId, status: "ACTIVE" } }),
     prisma.student.count({ where: { organizationId: orgId, status: "SUSPENDED" } }),
@@ -97,9 +97,13 @@ export async function getStudentStats() {
         createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
       },
     }),
+    // Formation Initiale (FI) : étudiants rattachés à une filière de type INITIAL
+    prisma.student.count({ where: { organizationId: orgId, program: { formationType: "INITIAL" } } }),
+    // Formation Continue (FC) : étudiants rattachés à une filière de type CONTINUE
+    prisma.student.count({ where: { organizationId: orgId, program: { formationType: "CONTINUE" } } }),
   ]);
 
-  return { total, active, suspended, graduated, withdrawn, thisMonth };
+  return { total, active, suspended, graduated, withdrawn, thisMonth, fi, fc };
 }
 
 // ─── Update student ───
