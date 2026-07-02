@@ -124,17 +124,27 @@ export async function registerOrganization(data: {
     });
   }
 
-  // Create default academic year
+  // Create academic years: current + upcoming.
+  // Les étudiants s'inscrivent généralement pour l'année à venir, on la crée donc dès le départ.
   var currentYear = new Date().getFullYear();
-  var startMonth = new Date().getMonth() >= 8 ? currentYear : currentYear - 1;
-  await prisma.academicYear.create({
-    data: {
-      label: startMonth + "-" + (startMonth + 1),
-      startDate: new Date(startMonth, 8, 1),
-      endDate: new Date(startMonth + 1, 6, 31),
-      isCurrent: true,
-      organizationId: org.id,
-    },
+  var startYear = new Date().getMonth() >= 8 ? currentYear : currentYear - 1;
+  await prisma.academicYear.createMany({
+    data: [
+      {
+        label: startYear + "-" + (startYear + 1),
+        startDate: new Date(startYear, 8, 1),
+        endDate: new Date(startYear + 1, 6, 31),
+        isCurrent: true,
+        organizationId: org.id,
+      },
+      {
+        label: (startYear + 1) + "-" + (startYear + 2),
+        startDate: new Date(startYear + 1, 8, 1),
+        endDate: new Date(startYear + 2, 6, 31),
+        isCurrent: false,
+        organizationId: org.id,
+      },
+    ],
   });
 
   return {
