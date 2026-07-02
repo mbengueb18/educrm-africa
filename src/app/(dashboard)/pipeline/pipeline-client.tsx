@@ -488,6 +488,7 @@ export function PipelineClient({
         onClose={handleModalClose}
         programs={programs}
         users={users}
+        canAssign={currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN"}
       />
 
       <LeadSlideOver

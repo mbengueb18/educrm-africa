@@ -11,6 +11,8 @@ interface NewLeadModalProps {
   onClose: (created?: boolean) => void;
   programs?: { id: string; name: string }[];
   users?: { id: string; name: string }[];
+  /** true pour ADMIN/SUPER_ADMIN : peut choisir l'assigné. Sinon auto-assigné au créateur. */
+  canAssign?: boolean;
 }
 
 const sources = [
@@ -27,7 +29,7 @@ const sources = [
   { value: "OTHER", label: "Autre" },
 ];
 
-export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLeadModalProps) {
+export function NewLeadModal({ open, onClose, programs = [], users = [], canAssign = false }: NewLeadModalProps) {
   // ⚠️ All hooks MUST be called before any conditional return (Rules of Hooks)
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -163,11 +165,11 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
                     </select>
                   </div>
                 )}
-                {users.length > 0 && (
+                {canAssign && users.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Commercial assigné</label>
                     <select name="assignedToId" className="input">
-                      <option value="">Auto (round-robin)</option>
+                      <option value="">Moi-même (par défaut)</option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
@@ -175,6 +177,11 @@ export function NewLeadModal({ open, onClose, programs = [], users = [] }: NewLe
                   </div>
                 )}
               </div>
+              {!canAssign && (
+                <p className="mt-3 text-sm text-gray-500">
+                  Ce prospect vous sera automatiquement attribué.
+                </p>
+              )}
             </div>
           </div>
 

@@ -261,8 +261,12 @@ const routing = await getLeadRouting(organizationId, data.programId || null);
 
 if (!routing.stageId) throw new Error("Aucune étape par défaut configurée");
 
-// Un non-admin ne peut pas définir l'assigné à la création
-var assignedToIdSafe = canAssignLeads(session.user.role) ? (data.assignedToId || null) : null;
+// Auto-assignation : le créateur du lead en devient l'assigné par défaut.
+// Un admin peut toutefois désigner explicitement un autre commercial dans le formulaire.
+var assignedToIdSafe =
+  canAssignLeads(session.user.role) && data.assignedToId
+    ? data.assignedToId
+    : session.user.id;
 
 const lead = await prisma.lead.create({
   data: {
@@ -280,6 +284,20 @@ const lead = await prisma.lead.create({
     data: {
       type: "LEAD_CREATED",
       description: `Nouveau lead: ${data.firstName} ${data.lastName}`,
+      userId: session.user.id,
+      leadId: lead.id,
+      organizationId,
+    },
+  });
+
+  // Trace l'assignation dans l'historique du lead
+  await prisma.activity.create({
+    data: {
+      type: "LEAD_ASSIGNED",
+      description:
+        assignedToIdSafe === session.user.id
+          ? `Lead auto-assigné à ${session.user.name}`
+          : "Lead assigné",
       userId: session.user.id,
       leadId: lead.id,
       organizationId,
