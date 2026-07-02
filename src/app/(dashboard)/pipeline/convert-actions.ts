@@ -33,7 +33,7 @@ export async function convertLeadToStudent(data: {
   leadId: string;
   programId: string;
   campusId: string;
-  academicYearId?: string;
+  academicYearId: string;
   // Overrides (can modify info during conversion)
   firstName?: string;
   lastName?: string;
@@ -71,6 +71,14 @@ export async function convertLeadToStudent(data: {
   });
   if (!campus) throw new Error("Campus introuvable");
 
+  // L'année académique est obligatoire
+  if (!data.academicYearId) throw new Error("L'année académique est obligatoire");
+  var academicYear = await prisma.academicYear.findFirst({
+    where: { id: data.academicYearId, organizationId: orgId },
+    select: { id: true },
+  });
+  if (!academicYear) throw new Error("Année académique introuvable");
+
   // Generate student number
   var studentNumber = await generateStudentNumber(orgId);
 
@@ -96,17 +104,15 @@ export async function convertLeadToStudent(data: {
     },
   });
 
-  // Create enrollment if academic year provided
-  if (data.academicYearId) {
-    await prisma.enrollment.create({
-      data: {
-        studentId: student.id,
-        academicYearId: data.academicYearId,
-        yearOfStudy: 1,
-        status: "ENROLLED",
-      },
-    });
-  }
+  // Create enrollment (année académique obligatoire)
+  await prisma.enrollment.create({
+    data: {
+      studentId: student.id,
+      academicYearId: data.academicYearId,
+      yearOfStudy: 1,
+      status: "ENROLLED",
+    },
+  });
 
   // Update lead as converted
   var leadUpdate: any = {

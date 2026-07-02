@@ -61,9 +61,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
         setPrograms(data.programs);
         setCampuses(data.campuses);
         setAcademicYears(data.academicYears);
-        // Auto-select current academic year
-        var current = data.academicYears.find(function(ay: any) { return ay.isCurrent; });
-        if (current) setAcademicYearId(current.id);
+        // Pas de pré-sélection : l'utilisateur choisit l'année (en cours ou à venir).
         // Auto-select campus from program if not set
         if (!campusId && programId) {
           var prog = data.programs.find(function(p: any) { return p.id === programId; });
@@ -84,6 +82,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
   var handleConvert = async function() {
     if (!programId) { toast.error("Sélectionnez une filière"); return; }
     if (!campusId) { toast.error("Sélectionnez un campus"); return; }
+    if (!academicYearId) { toast.error("Sélectionnez une année académique"); return; }
 
     setSaving(true);
     try {
@@ -91,7 +90,7 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
         leadId: lead.id,
         programId,
         campusId,
-        academicYearId: academicYearId || undefined,
+        academicYearId: academicYearId,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
@@ -187,9 +186,9 @@ export function ConvertLeadModal({ open, onClose, lead }: ConvertLeadModalProps)
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Année académique</label>
-                  <select value={academicYearId} onChange={function(e) { setAcademicYearId(e.target.value); }} className="input text-sm">
-                    <option value="">Aucune (inscription sans année)</option>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Année académique <span className="text-danger-500">*</span></label>
+                  <select value={academicYearId} onChange={function(e) { setAcademicYearId(e.target.value); }} className="input text-sm" required>
+                    <option value="">Sélectionner une année...</option>
                     {academicYears.map(function(ay: any) {
                       return <option key={ay.id} value={ay.id}>{ay.label} {ay.isCurrent ? "(en cours)" : ""}</option>;
                     })}
