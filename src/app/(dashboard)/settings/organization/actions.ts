@@ -266,6 +266,49 @@ export async function createAcademicYear(data: {
   return { success: true };
 }
 
+export async function updateAcademicYear(yearId: string, data: {
+  label: string; startDate: string; endDate: string; isCurrent?: boolean;
+}) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+
+  var orgId = session.user.organizationId;
+
+  // Sécurité multi-tenant : l'année doit appartenir à l'organisation
+  var existing = await prisma.academicYear.findFirst({
+    where: { id: yearId, organizationId: orgId },
+    select: { id: true },
+  });
+  if (!existing) throw new Error("Année académique introuvable");
+
+  // Si on la passe "en cours", retirer le flag des autres années
+  if (data.isCurrent) {
+    await prisma.academicYear.updateMany({
+      where: { organizationId: orgId, isCurrent: true, id: { not: yearId } },
+      data: { isCurrent: false },
+    });
+  }
+
+  try {
+    await prisma.academicYear.update({
+      where: { id: yearId },
+      data: {
+        label: data.label.trim(),
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        ...(data.isCurrent !== undefined ? { isCurrent: data.isCurrent } : {}),
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === "P2002") throw new Error("Ce libellé d'année existe déjà");
+    throw err;
+  }
+
+  revalidatePath("/settings/organization");
+  return { success: true };
+}
+
 export async function setCurrentAcademicYear(yearId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");

@@ -14,7 +14,7 @@ import {
   getOrganization, updateOrganization,
   createCampus, updateCampus, deleteCampus,
   createProgram, updateProgram, deleteProgram,
-  createAcademicYear, setCurrentAcademicYear,
+  createAcademicYear, updateAcademicYear, setCurrentAcademicYear,
 } from "./actions";
 
 var SCHOOL_TYPES: Record<string, string> = {
@@ -527,6 +527,15 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
   var [isCurrent, setIsCurrent] = useState(false);
   var [saving, setSaving] = useState(false);
 
+  // Édition inline
+  var [editingId, setEditingId] = useState<string | null>(null);
+  var [editLabel, setEditLabel] = useState("");
+  var [editStartDate, setEditStartDate] = useState("");
+  var [editEndDate, setEditEndDate] = useState("");
+  var [editIsCurrent, setEditIsCurrent] = useState(false);
+
+  var toDateInput = function(d: any) { return new Date(d).toISOString().split("T")[0]; };
+
   var handleAdd = async function() {
     if (!label.trim() || !startDate || !endDate) { toast.error("Tous les champs sont requis"); return; }
     setSaving(true);
@@ -534,6 +543,28 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
       await createAcademicYear({ label: label.trim(), startDate, endDate, isCurrent });
       toast.success("Année académique créée");
       setShowAdd(false); setLabel(""); setStartDate(""); setEndDate(""); setIsCurrent(false);
+      onChanged();
+    } catch (err: any) { toast.error(err.message || "Erreur"); }
+    setSaving(false);
+  };
+
+  var startEdit = function(year: any) {
+    setShowAdd(false);
+    setEditingId(year.id);
+    setEditLabel(year.label);
+    setEditStartDate(toDateInput(year.startDate));
+    setEditEndDate(toDateInput(year.endDate));
+    setEditIsCurrent(!!year.isCurrent);
+  };
+
+  var handleSaveEdit = async function() {
+    if (!editLabel.trim() || !editStartDate || !editEndDate) { toast.error("Tous les champs sont requis"); return; }
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await updateAcademicYear(editingId, { label: editLabel.trim(), startDate: editStartDate, endDate: editEndDate, isCurrent: editIsCurrent });
+      toast.success("Année académique mise à jour");
+      setEditingId(null);
       onChanged();
     } catch (err: any) { toast.error(err.message || "Erreur"); }
     setSaving(false);
@@ -573,6 +604,32 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
 
       <div className="space-y-2">
         {years.map(function(year) {
+          if (editingId === year.id) {
+            return (
+              <div key={year.id} className="bg-white rounded-xl border border-brand-200 p-3 sm:p-4 animate-scale-in">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <div><label className="text-xs font-medium text-gray-600 mb-1 block">Label *</label>
+                    <input type="text" value={editLabel} onChange={function(e) { setEditLabel(e.target.value); }} className="input text-sm" placeholder="2025-2026" autoFocus /></div>
+                  <div><label className="text-xs font-medium text-gray-600 mb-1 block">Début *</label>
+                    <input type="date" value={editStartDate} onChange={function(e) { setEditStartDate(e.target.value); }} className="input text-sm" /></div>
+                  <div><label className="text-xs font-medium text-gray-600 mb-1 block">Fin *</label>
+                    <input type="date" value={editEndDate} onChange={function(e) { setEditEndDate(e.target.value); }} className="input text-sm" /></div>
+                </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={editIsCurrent} onChange={function(e) { setEditIsCurrent(e.target.checked); }} className="w-4 h-4 rounded border-gray-300 text-brand-600" />
+                    Année en cours
+                  </label>
+                  <div className="flex gap-2">
+                    <button onClick={function() { setEditingId(null); }} className="btn-secondary py-1.5 px-3 text-xs" disabled={saving}>Annuler</button>
+                    <button onClick={handleSaveEdit} disabled={saving || !editLabel.trim()} className="btn-primary py-1.5 px-3 text-xs">
+                      {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Enregistrer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={year.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 group hover:border-brand-200 transition-colors">
               <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
@@ -593,14 +650,19 @@ function AcademicYearsSection({ years, onChanged }: { years: any[]; onChanged: (
                   {new Date(year.startDate).toLocaleDateString("fr-FR")} → {new Date(year.endDate).toLocaleDateString("fr-FR")}
                 </p>
               </div>
-              {!year.isCurrent && (
-                <button onClick={async function() {
-                  try { await setCurrentAcademicYear(year.id); toast.success("Année en cours mise à jour"); onChanged(); }
-                  catch (err: any) { toast.error(err.message); }
-                }} className="btn-secondary py-1.5 px-2 sm:px-3 text-xs shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <Star size={12} /> <span className="hidden sm:inline">Définir en cours</span>
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                {!year.isCurrent && (
+                  <button onClick={async function() {
+                    try { await setCurrentAcademicYear(year.id); toast.success("Année en cours mise à jour"); onChanged(); }
+                    catch (err: any) { toast.error(err.message); }
+                  }} className="btn-secondary py-1.5 px-2 sm:px-3 text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <Star size={12} /> <span className="hidden sm:inline">Définir en cours</span>
+                  </button>
+                )}
+                <button onClick={function() { startEdit(year); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-brand-600 transition-colors" title="Modifier">
+                  <Pencil size={15} />
                 </button>
-              )}
+              </div>
             </div>
           );
         })}
