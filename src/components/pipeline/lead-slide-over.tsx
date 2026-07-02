@@ -1250,6 +1250,7 @@ function QuickTaskForm({ leadId, leadName, users, onClose }: {
         <input type="datetime-local" value={dueDate} onChange={function(e) { setDueDate(e.target.value); }} className="input text-xs py-1.5" placeholder="Échéance" />
         <select value={reminderMinutes} onChange={function(e) { setReminderMinutes(e.target.value); }} className="input text-xs py-1.5" disabled={!dueDate}>
           <option value="">Pas de rappel</option>
+          <option value="5">5 min avant</option>
           <option value="15">15 min avant</option>
           <option value="30">30 min avant</option>
           <option value="60">1h avant</option>
