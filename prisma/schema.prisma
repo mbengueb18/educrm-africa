@@ -225,10 +225,34 @@ model User {
   whatsappTemplatesCreated WhatsAppTemplate[] @relation("WhatsAppTemplatesCreated")
   whatsappCampaignsCreated WhatsAppCampaign[] @relation("WhatsAppCampaignsCreated")
   supportTickets SupportTicket[]
+  notifications  Notification[]
 
   @@index([organizationId])
   @@index([email])
   @@map("users")
+}
+
+// ─── NOTIFICATIONS ───
+
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String // Destinataire
+  organizationId String
+  type           String   @default("TASK_REMINDER") // TASK_REMINDER, ...
+  title          String
+  body           String?
+  taskId         String? // Tâche liée (optionnel)
+  leadId         String? // Lead lié (optionnel)
+  url            String? // Lien de destination au clic
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 enum UserRole {
@@ -823,6 +847,7 @@ model Task {
   dueDate     DateTime?
   completedAt DateTime?
   reminderAt  DateTime?
+  reminderSentAt DateTime? // Rappel déjà notifié (anti-doublon cron)
 
   // Relations
   leadId         String?

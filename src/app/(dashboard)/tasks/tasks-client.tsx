@@ -65,6 +65,7 @@ var STATUS_CONFIG: Record<string, { label: string; icon: typeof Circle; color: s
 
 var REMINDER_OPTIONS = [
   { value: "", label: "Pas de rappel" },
+  { value: "5", label: "5 minutes avant" },
   { value: "15", label: "15 minutes avant" },
   { value: "30", label: "30 minutes avant" },
   { value: "60", label: "1 heure avant" },

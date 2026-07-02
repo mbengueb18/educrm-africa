@@ -1,9 +1,20 @@
 "use client";
 
-import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2, Menu } from "lucide-react";
+import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2, Menu, BellRing, CheckCheck } from "lucide-react";
 import { getInitials, formatRelative } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from "@/app/(dashboard)/notifications/actions";
+
+interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  isRead: boolean;
+  createdAt: Date;
+}
 
 interface OverdueTask {
   id: string;
@@ -46,8 +57,83 @@ var TYPE_LABELS: Record<string, string> = {
 
 export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClick }: HeaderProps) {
   var [showNotifs, setShowNotifs] = useState(false);
+  var [notifications, setNotifications] = useState<AppNotification[]>([]);
+  var [unreadCount, setUnreadCount] = useState(0);
+  var seenIdsRef = useRef<Set<string>>(new Set());
+  var isFirstLoadRef = useRef(true);
+  var audioCtxRef = useRef<any>(null);
 
-  var totalNotifs = overdueTasks.length + dueTodayTasks.length;
+  // ─── Bip sonore (Web Audio, aucun fichier externe) ───
+  var playBeep = useCallback(function () {
+    try {
+      var Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      var ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.36);
+    } catch {
+      // ignore (autoplay bloqué, etc.)
+    }
+  }, []);
+
+  // ─── Polling des notifications ───
+  var refreshNotifications = useCallback(function () {
+    getMyNotifications()
+      .then(function (res) {
+        setNotifications(res.items as any);
+        setUnreadCount(res.count);
+
+        var freshUnread = (res.items as AppNotification[]).filter(function (n) {
+          return !n.isRead && !seenIdsRef.current.has(n.id);
+        });
+        (res.items as AppNotification[]).forEach(function (n) { seenIdsRef.current.add(n.id); });
+
+        // Ne pas biper au tout premier chargement de la session
+        if (!isFirstLoadRef.current && freshUnread.length > 0) {
+          playBeep();
+        }
+        isFirstLoadRef.current = false;
+      })
+      .catch(function () { /* silent */ });
+  }, [playBeep]);
+
+  useEffect(function () {
+    refreshNotifications();
+    var interval = setInterval(refreshNotifications, 30000);
+    var onVisible = function () { if (document.visibilityState === "visible") refreshNotifications(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return function () {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refreshNotifications]);
+
+  var handleNotifClick = function (n: AppNotification) {
+    markNotificationRead(n.id).catch(function () {});
+    setNotifications(function (prev) { return prev.map(function (x) { return x.id === n.id ? { ...x, isRead: true } : x; }); });
+    setUnreadCount(function (c) { return Math.max(0, c - (n.isRead ? 0 : 1)); });
+    setShowNotifs(false);
+    if (n.url) window.location.href = n.url;
+  };
+
+  var handleMarkAllRead = function () {
+    markAllNotificationsRead().catch(function () {});
+    setNotifications(function (prev) { return prev.map(function (x) { return { ...x, isRead: true }; }); });
+    setUnreadCount(0);
+  };
+
+  var totalNotifs = unreadCount + overdueTasks.length + dueTodayTasks.length;
 
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between gap-2 h-[var(--header-height)] px-3 sm:px-6 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
@@ -98,16 +184,19 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                   <h3 className="text-sm font-bold text-gray-900">Notifications</h3>
-                  {totalNotifs > 0 && (
-                    <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                      {totalNotifs} en attente
-                    </span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[10px] font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+                    >
+                      <CheckCheck size={12} /> Tout marquer comme lu
+                    </button>
                   )}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto">
-                  {totalNotifs === 0 ? (
+                  {notifications.length === 0 && overdueTasks.length === 0 && dueTodayTasks.length === 0 ? (
                     <div className="py-12 text-center">
                       <CheckCircle2 size={32} className="text-emerald-300 mx-auto mb-2" />
                       <p className="text-sm text-gray-400">Aucune notification</p>
@@ -115,6 +204,41 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
                     </div>
                   ) : (
                     <>
+                      {/* App notifications (rappels de tâches, etc.) */}
+                      {notifications.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-brand-50/50 border-b border-brand-100">
+                            <span className="text-[10px] font-semibold text-brand-600 uppercase tracking-wider flex items-center gap-1">
+                              <BellRing size={10} /> Rappels
+                            </span>
+                          </div>
+                          {notifications.map(function (n) {
+                            return (
+                              <button
+                                key={n.id}
+                                onClick={function () { handleNotifClick(n); }}
+                                className={cn(
+                                  "w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50",
+                                  !n.isRead && "bg-brand-50/30"
+                                )}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center shrink-0 mt-0.5">
+                                  <BellRing size={14} className="text-brand-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn("text-sm truncate", !n.isRead ? "font-semibold text-gray-900" : "font-medium text-gray-600")}>
+                                    {n.title}
+                                  </p>
+                                  {n.body && <p className="text-xs text-gray-500 truncate mt-0.5">{n.body}</p>}
+                                  <p className="text-[10px] text-gray-400 mt-1">{formatRelative(n.createdAt)}</p>
+                                </div>
+                                {!n.isRead && <span className="w-2 h-2 rounded-full bg-brand-600 shrink-0 mt-1.5" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       {/* Overdue tasks */}
                       {overdueTasks.length > 0 && (
                         <div>
