@@ -132,7 +132,12 @@ export async function getInboxMessages(params?: {
     },
     orderBy: { sentAt: "desc" },
     include: {
-      lead: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      lead: {
+        select: {
+          id: true, firstName: true, lastName: true, email: true, phone: true,
+          assignedTo: { select: { id: true, name: true } },
+        },
+      },
       sentBy: { select: { id: true, name: true } },
       attachments: { select: { id: true, filename: true, contentType: true, size: true } },
     },
@@ -140,7 +145,7 @@ export async function getInboxMessages(params?: {
 
   // 3. Group by lead
   var grouped: Record<string, {
-    lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string };
+    lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string; assignedTo: { id: string; name: string } | null };
     messages: typeof messages;
     lastMessage: typeof messages[0];
     unreadCount: number;
@@ -165,6 +170,22 @@ export async function getInboxMessages(params?: {
 
   return Object.values(grouped).sort(function(a, b) {
     return new Date(b.lastMessage.sentAt).getTime() - new Date(a.lastMessage.sentAt).getTime();
+  });
+}
+
+// ─── Liste des utilisateurs assignables (pour le filtre Inbox) ───
+export async function getInboxUsers() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  return prisma.user.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      role: { in: ["ADMIN", "COMMERCIAL"] },
+      isActive: true,
+    },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
   });
 }
 

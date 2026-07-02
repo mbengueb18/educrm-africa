@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { getInboxMessages } from "./actions";
+import { getInboxMessages, getInboxUsers } from "./actions";
 import { InboxClient } from "./inbox-client";
 
 export const metadata: Metadata = {
@@ -9,6 +9,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function InboxPage() {
-  const conversations = await getInboxMessages();
-  return <InboxClient conversations={conversations as any} />;
+  const [conversations, users] = await Promise.all([
+    getInboxMessages(),
+    getInboxUsers(),
+  ]);
+  return <InboxClient conversations={conversations as any} users={users} />;
 }

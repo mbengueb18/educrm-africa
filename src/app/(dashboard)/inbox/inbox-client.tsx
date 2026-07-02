@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import {
   Search, Mail, MessageCircle, MessageSquare, Phone, Bot,
-  Inbox as InboxIcon,
+  Inbox as InboxIcon, User as UserIcon,
 } from "lucide-react";
 
 interface Conversation {
-  lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string };
+  lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string; assignedTo: { id: string; name: string } | null };
   messages: any[];
   lastMessage: {
     id: string;
@@ -24,6 +24,7 @@ interface Conversation {
 
 interface InboxClientProps {
   conversations: Conversation[];
+  users: { id: string; name: string }[];
 }
 
 const CHANNEL_ICONS: Record<string, typeof Mail> = {
@@ -84,10 +85,11 @@ function getMessagePreview(content: string): string {
   return body.slice(0, 80);
 }
 
-export function InboxClient({ conversations: initialConversations }: InboxClientProps) {
+export function InboxClient({ conversations: initialConversations, users }: InboxClientProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
+  const [userFilter, setUserFilter] = useState<string>("");
   const router = useRouter();
 
   useEffect(() => {
@@ -102,6 +104,13 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
     }
     if (channelFilter) {
       if (!c.messages.some((m: any) => m.channel === channelFilter)) return false;
+    }
+    if (userFilter) {
+      if (userFilter === "unassigned") {
+        if (c.lead.assignedTo) return false;
+      } else if (c.lead.assignedTo?.id !== userFilter) {
+        return false;
+      }
     }
     return true;
   });
@@ -118,8 +127,8 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
 
       {/* Search & filters */}
       <div className="bg-white rounded-xl border border-gray-200 mb-4">
-        <div className="p-3 border-b border-gray-100">
-          <div className="relative">
+        <div className="p-3 border-b border-gray-100 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -128,6 +137,20 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+          </div>
+          <div className="relative sm:w-56 shrink-0">
+            <UserIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              className="input pl-9 text-sm py-2 w-full"
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+            >
+              <option value="">Tous les commerciaux</option>
+              <option value="unassigned">Non assigné</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -191,6 +214,10 @@ export function InboxClient({ conversations: initialConversations }: InboxClient
                           {getMessagePreview(conv.lastMessage.content)}
                         </p>
                       </div>
+                      <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                        <UserIcon size={9} className="shrink-0" />
+                        {conv.lead.assignedTo ? conv.lead.assignedTo.name : "Non assigné"}
+                      </p>
                     </div>
                     {conv.unreadCount > 0 && (
                       <span className="min-w-[20px] h-5 px-1.5 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
