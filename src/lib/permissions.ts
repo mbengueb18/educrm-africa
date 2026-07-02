@@ -63,7 +63,7 @@ var ROLE_PERMISSIONS: Record<Role, Record<Permission, PermissionConfig>> = {
     "appointments:edit": { allowed: true, scope: "own" },
     "appointments:delete": { allowed: true, scope: "own" },
     // Students
-    "students:view": { allowed: false },
+    "students:view": { allowed: true },
     "students:edit": { allowed: false },
     "students:delete": { allowed: false },
     // Payments
