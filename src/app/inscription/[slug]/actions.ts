@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { getLeadRouting } from "@/lib/pipeline-routing";
 
 export async function getOrganizationBySlug(slug: string) {
   return prisma.organization.findUnique({
@@ -60,11 +61,9 @@ export async function submitInscription(slug: string, data: InscriptionData) {
   if (!data.email?.trim()) throw new Error("Email requis");
   if (!data.phone?.trim()) throw new Error("Téléphone requis");
 
-  // Find default stage
-  const defaultStage = await prisma.pipelineStage.findFirst({
-    where: { organizationId: org.id, isDefault: true },
-  });
-  if (!defaultStage) throw new Error("Configuration incomplète");
+  // Routing pipeline + étape (sinon le lead n'apparaît dans aucun pipeline)
+  const routing = await getLeadRouting(org.id, data.programId || null);
+  if (!routing.stageId) throw new Error("Configuration incomplète");
 
   // Check duplicate by phone or email
   const existing = await prisma.lead.findFirst({
@@ -128,7 +127,8 @@ export async function submitInscription(slug: string, data: InscriptionData) {
         sourceDetail: "Inscription en ligne",
         programId: data.programId || null,
         campusId: data.campusId || null,
-        stageId: defaultStage.id,
+        stageId: routing.stageId,
+        pipelineId: routing.pipelineId,
         organizationId: org.id,
         customFields,
       },

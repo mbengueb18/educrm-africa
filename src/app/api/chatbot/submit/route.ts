@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getLeadRouting } from "@/lib/pipeline-routing";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,10 +21,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Informations insuffisantes" }, { status: 400 });
     }
 
-    const defaultStage = await prisma.pipelineStage.findFirst({
-      where: { organizationId: org.id, isDefault: true },
-    });
-    if (!defaultStage) return NextResponse.json({ error: "Configuration incomplète" }, { status: 500 });
+    // Routing : détermine le pipeline ET l'étape (comme la création manuelle),
+    // sinon le lead est créé sans pipelineId et n'apparaît dans aucun pipeline.
+    const routing = await getLeadRouting(org.id, null);
+    if (!routing.stageId) return NextResponse.json({ error: "Configuration incomplète" }, { status: 500 });
 
     // Check duplicate
     const existing = await prisma.lead.findFirst({
@@ -68,7 +69,8 @@ export async function POST(request: NextRequest) {
           whatsapp: phone?.trim() || null,
           source: "WEBSITE",
           sourceDetail: "Chatbot",
-          stageId: defaultStage.id,
+          stageId: routing.stageId,
+          pipelineId: routing.pipelineId,
           organizationId: org.id,
           customFields,
         },

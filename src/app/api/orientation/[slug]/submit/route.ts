@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getLeadRouting } from "@/lib/pipeline-routing";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -20,10 +21,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
     if (!org) return NextResponse.json({ error: "Organisation introuvable" }, { status: 404 });
 
-    const defaultStage = await prisma.pipelineStage.findFirst({
-      where: { organizationId: org.id, isDefault: true },
-    });
-    if (!defaultStage) return NextResponse.json({ error: "Configuration incomplète" }, { status: 500 });
+    // Routing pipeline + étape (sinon le lead n'apparaît dans aucun pipeline)
+    const routing = await getLeadRouting(org.id, recommendedProgramId || null);
+    if (!routing.stageId) return NextResponse.json({ error: "Configuration incomplète" }, { status: 500 });
 
     // Check duplicate
     const existing = await prisma.lead.findFirst({
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           source: "WEBSITE",
           sourceDetail: "Test orientation IA",
           programId: recommendedProgramId || null,
-          stageId: defaultStage.id,
+          stageId: routing.stageId,
+          pipelineId: routing.pipelineId,
           organizationId: org.id,
           customFields,
           score: 70, // Pre-qualified through IA test
