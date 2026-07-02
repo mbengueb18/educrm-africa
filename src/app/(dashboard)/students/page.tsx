@@ -12,7 +12,7 @@ export default async function StudentsPage() {
   var session = await auth();
   if (!session?.user) return null;
 
-  var [students, stats, programs, campuses] = await Promise.all([
+  var [students, stats, programs, campuses, academicYears] = await Promise.all([
     getStudents(),
     getStudentStats(),
     prisma.program.findMany({
@@ -25,6 +25,11 @@ export default async function StudentsPage() {
       select: { id: true, name: true, city: true },
       orderBy: { name: "asc" },
     }),
+    prisma.academicYear.findMany({
+      where: { organizationId: session.user.organizationId },
+      select: { id: true, label: true, isCurrent: true },
+      orderBy: { startDate: "desc" },
+    }),
   ]);
 
   return (
@@ -33,6 +38,7 @@ export default async function StudentsPage() {
       stats={stats}
       programs={programs}
       campuses={campuses}
+      academicYears={academicYears}
     />
   );
 }

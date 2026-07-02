@@ -36,6 +36,7 @@ export async function getStudents(filters?: {
       program: { select: { id: true, name: true, code: true, level: true, formationType: true } },
       campus: { select: { id: true, name: true, city: true } },
       lead: { select: { id: true, source: true, sourceDetail: true } },
+      enrollments: { select: { academicYear: { select: { id: true, label: true } } } },
       _count: { select: { payments: true, enrollments: true } },
     },
     orderBy: { createdAt: "desc" },

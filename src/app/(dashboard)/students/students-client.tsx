@@ -29,6 +29,7 @@ type Student = {
   program: { id: string; name: string; code: string | null; level: string; formationType: string };
   campus: { id: string; name: string; city: string };
   lead: { id: string; source: string; sourceDetail: string | null } | null;
+  enrollments: { academicYear: { id: string; label: string } }[];
   _count: { payments: number; enrollments: number };
 };
 
@@ -37,6 +38,7 @@ interface StudentsClientProps {
   stats: { total: number; active: number; suspended: number; graduated: number; withdrawn: number; thisMonth: number; fi: number; fc: number };
   programs: { id: string; name: string; code: string | null; level: string }[];
   campuses: { id: string; name: string; city: string }[];
+  academicYears: { id: string; label: string; isCurrent: boolean }[];
 }
 
 var STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -70,11 +72,12 @@ var SOURCE_LABELS: Record<string, string> = {
   PARTNER: "Partenaire", IMPORT: "Import", OTHER: "Autre",
 };
 
-export function StudentsClient({ students, stats, programs, campuses }: StudentsClientProps) {
+export function StudentsClient({ students, stats, programs, campuses, academicYears }: StudentsClientProps) {
   var [search, setSearch] = useState("");
   var [filterStatus, setFilterStatus] = useState<string>("");
   var [filterProgram, setFilterProgram] = useState<string>("");
   var [filterCampus, setFilterCampus] = useState<string>("");
+  var [filterYear, setFilterYear] = useState<string>("");
   var [showFilters, setShowFilters] = useState(false);
   var [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   var router = useRouter();
@@ -93,11 +96,12 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
       if (filterStatus && s.status !== filterStatus) return false;
       if (filterProgram && s.program.id !== filterProgram) return false;
       if (filterCampus && s.campus.id !== filterCampus) return false;
+      if (filterYear && !s.enrollments.some(function(e) { return e.academicYear && e.academicYear.id === filterYear; })) return false;
       return true;
     });
-  }, [students, search, filterStatus, filterProgram, filterCampus]);
+  }, [students, search, filterStatus, filterProgram, filterCampus, filterYear]);
 
-  var activeFiltersCount = [filterStatus, filterProgram, filterCampus].filter(Boolean).length;
+  var activeFiltersCount = [filterStatus, filterProgram, filterCampus, filterYear].filter(Boolean).length;
 
   return (
     <div>
@@ -162,9 +166,9 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-semibold text-gray-700">Filtres avancés</h4>
-            <button onClick={function() { setFilterProgram(""); setFilterCampus(""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
+            <button onClick={function() { setFilterProgram(""); setFilterCampus(""); setFilterYear(""); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">Effacer</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Filière</label>
               <select value={filterProgram} onChange={function(e) { setFilterProgram(e.target.value); }} className="input text-sm py-1.5">
@@ -177,6 +181,13 @@ export function StudentsClient({ students, stats, programs, campuses }: Students
               <select value={filterCampus} onChange={function(e) { setFilterCampus(e.target.value); }} className="input text-sm py-1.5">
                 <option value="">Tous</option>
                 {campuses.map(function(c) { return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Année académique</label>
+              <select value={filterYear} onChange={function(e) { setFilterYear(e.target.value); }} className="input text-sm py-1.5">
+                <option value="">Toutes</option>
+                {academicYears.map(function(ay) { return <option key={ay.id} value={ay.id}>{ay.label}{ay.isCurrent ? " (en cours)" : ""}</option>; })}
               </select>
             </div>
           </div>
