@@ -63,3 +63,6 @@ data-local/
 *.tsbuildinfo
 .vercel
 .env*
+
+# Claude Code (config locale de l'outil)
+.claude/
