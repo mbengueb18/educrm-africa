@@ -170,7 +170,9 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
   }
 
   return (
-    <div>
+    <div className="lg:h-[calc(100vh-var(--header-height)-3rem)] lg:flex lg:flex-col lg:overflow-hidden">
+      {/* Zone fixe : titre, stats, recherche, filtres */}
+      <div className="lg:flex-none">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -259,11 +261,14 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
           </div>
         </div>
       )}
+      </div>
 
-      {/* Vue scindée : liste des tâches (gauche) + revue du prospect (droite) */}
-      <div className="lg:grid lg:grid-cols-[minmax(340px,38%)_1fr] lg:gap-4 lg:items-start">
+      {/* Vue scindée : liste des tâches (gauche) + revue du prospect (droite).
+          Hauteur bornée + scroll indépendant par volet → le panneau droit reste
+          toujours visible, même après avoir scrollé loin dans la liste. */}
+      <div className="lg:flex-1 lg:min-h-0 lg:grid lg:grid-cols-[minmax(340px,38%)_1fr] lg:gap-4">
         {/* Liste des tâches */}
-        <div className="bg-white rounded-xl border border-gray-200">
+        <div className="bg-white rounded-xl border border-gray-200 lg:h-full lg:overflow-y-auto lg:min-h-0">
           {filtered.length === 0 ? (
             <div className="py-16 text-center">
               <ListTodo size={40} className="text-gray-300 mx-auto mb-3" />
@@ -285,8 +290,8 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
           )}
         </div>
 
-        {/* Volet droit — desktop (sticky) */}
-        <div className="hidden lg:block lg:sticky lg:top-4">
+        {/* Volet droit — desktop (hauteur pleine, scroll interne) */}
+        <div className="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <TaskReviewPanel
             task={selectedTask}
             onEdit={function() { if (selectedTask) setEditingTask(selectedTask); }}
