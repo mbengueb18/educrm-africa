@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -9,9 +10,12 @@ import {
   Phone, Mail, Users, Calendar, FileText, ArrowRight, MoreHorizontal,
   Trash2, Loader2, X, ChevronDown, Flag, User as UserIcon,
   ListTodo, PlayCircle, CheckCheck, XCircle, Target, Pencil,
-  Bell, BellOff, Bold, Italic, List as ListIcon, LinkIcon,
+  Bell, BellOff, Bold, Italic, List as ListIcon, LinkIcon, ExternalLink,
+  MessageCircle, Star, GraduationCap, History, StickyNote, Inbox,
+  Check, MessageSquare, Bot,
 } from "lucide-react";
 import { createTask, updateTask, deleteTask } from "./actions";
+import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 
 type Task = {
   id: string;
@@ -114,6 +118,8 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
   var [showFilters, setShowFilters] = useState(false);
   var [showCreateModal, setShowCreateModal] = useState(false);
   var [editingTask, setEditingTask] = useState<Task | null>(null);
+  var [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  var [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   var router = useRouter();
 
   var filtered = useMemo(function() {
@@ -144,6 +150,24 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
     filterStatus !== "active" ? filterStatus : "",
     filterAssigned, filterType, filterPriority,
   ].filter(Boolean).length;
+
+  var selectedTask = useMemo(function() {
+    return filtered.find(function(t) { return t.id === selectedTaskId; }) || null;
+  }, [filtered, selectedTaskId]);
+
+  // Auto-sélection de la 1ère tâche (pour peupler le volet droit sur desktop).
+  // N'ouvre PAS l'overlay mobile (mobilePanelOpen reste false tant qu'on ne tape pas).
+  useEffect(function() {
+    if (filtered.length === 0) { if (selectedTaskId !== null) setSelectedTaskId(null); return; }
+    if (!selectedTaskId || !filtered.some(function(t) { return t.id === selectedTaskId; })) {
+      setSelectedTaskId(filtered[0].id);
+    }
+  }, [filtered, selectedTaskId]);
+
+  function handleSelectTask(task: Task) {
+    setSelectedTaskId(task.id);
+    setMobilePanelOpen(true);
+  }
 
   return (
     <div>
@@ -236,24 +260,53 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
         </div>
       )}
 
-      {/* Task list */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        {filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <ListTodo size={40} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">Aucune tâche trouvée</p>
-            <button onClick={function() { setShowCreateModal(true); }} className="btn-primary py-2 text-xs mt-4">
-              <Plus size={14} /> Créer une tâche
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {filtered.map(function(task) {
-              return <TaskRow key={task.id} task={task} users={users} onUpdate={function() { router.refresh(); }} onEdit={function() { setEditingTask(task); }} />;
-            })}
-          </div>
-        )}
+      {/* Vue scindée : liste des tâches (gauche) + revue du prospect (droite) */}
+      <div className="lg:grid lg:grid-cols-[minmax(340px,38%)_1fr] lg:gap-4 lg:items-start">
+        {/* Liste des tâches */}
+        <div className="bg-white rounded-xl border border-gray-200">
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center">
+              <ListTodo size={40} className="text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">Aucune tâche trouvée</p>
+              <button onClick={function() { setShowCreateModal(true); }} className="btn-primary py-2 text-xs mt-4">
+                <Plus size={14} /> Créer une tâche
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {filtered.map(function(task) {
+                return <TaskRow key={task.id} task={task} users={users}
+                  selected={task.id === selectedTaskId}
+                  onSelect={function() { handleSelectTask(task); }}
+                  onUpdate={function() { router.refresh(); }}
+                  onEdit={function() { setEditingTask(task); }} />;
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Volet droit — desktop (sticky) */}
+        <div className="hidden lg:block lg:sticky lg:top-4">
+          <TaskReviewPanel
+            task={selectedTask}
+            onEdit={function() { if (selectedTask) setEditingTask(selectedTask); }}
+            onUpdate={function() { router.refresh(); }}
+          />
+        </div>
       </div>
+
+      {/* Volet droit — overlay plein écran sur mobile */}
+      {mobilePanelOpen && selectedTask && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-gray-50 overflow-y-auto animate-fade-in">
+          <TaskReviewPanel
+            task={selectedTask}
+            mobile
+            onClose={function() { setMobilePanelOpen(false); }}
+            onEdit={function() { if (selectedTask) setEditingTask(selectedTask); }}
+            onUpdate={function() { router.refresh(); }}
+          />
+        </div>
+      )}
 
       {/* Create modal */}
       {showCreateModal && (
@@ -282,7 +335,7 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
 }
 
 // ─── Task Row ───
-function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; onUpdate: () => void; onEdit: () => void }) {
+function TaskRow({ task, users, onUpdate, onEdit, selected, onSelect }: { task: Task; users: any[]; onUpdate: () => void; onEdit: () => void; selected?: boolean; onSelect?: () => void }) {
   var [updating, setUpdating] = useState(false);
   var [showMenu, setShowMenu] = useState(false);
 
@@ -334,9 +387,10 @@ function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; 
 
   return (
     <div className={cn(
-      "px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-gray-50/50 transition-colors group",
+      "px-3 sm:px-5 py-3 sm:py-3.5 transition-colors group border-l-[3px]",
+      selected ? "bg-brand-50/60 border-brand-500" : "border-transparent hover:bg-gray-50/50",
       task.status === "DONE" && "opacity-60",
-      isOverdue && "bg-red-50/30"
+      isOverdue && !selected && "bg-red-50/30"
     )}>
       <div className="flex items-start sm:items-center gap-3 sm:gap-4">
         {/* Status toggle */}
@@ -353,8 +407,8 @@ function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; 
           <TypeIcon size={16} className={typeConf.color} />
         </div>
 
-        {/* Main content */}
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={onEdit}>
+        {/* Main content — clic = sélection (affiche le prospect dans le volet droit) */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onSelect}>
           {/* Title — own line, truncated */}
           <p className={cn(
             "text-sm font-medium text-gray-900 truncate",
@@ -380,7 +434,8 @@ function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; 
             )}
 
             {task.lead && (
-              <span className="text-xs text-brand-600 font-medium truncate max-w-[140px]">
+              <span className="text-xs text-brand-600 font-medium truncate max-w-[140px] inline-flex items-center gap-1">
+                <UserIcon size={11} className="shrink-0" />
                 {task.lead.firstName} {task.lead.lastName}
               </span>
             )}
@@ -460,6 +515,238 @@ function TaskRow({ task, users, onUpdate, onEdit }: { task: Task; users: any[]; 
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ Volet droit : revue du prospect ═══
+
+var CHANNEL_META: Record<string, { icon: any; bg: string; color: string; label: string }> = {
+  WHATSAPP: { icon: MessageCircle, bg: "bg-emerald-50", color: "text-emerald-600", label: "WhatsApp" },
+  EMAIL: { icon: Mail, bg: "bg-blue-50", color: "text-blue-600", label: "Email" },
+  SMS: { icon: MessageSquare, bg: "bg-sky-50", color: "text-sky-600", label: "SMS" },
+  CHATBOT: { icon: Bot, bg: "bg-violet-50", color: "text-violet-600", label: "Chatbot" },
+  PHONE_CALL: { icon: Phone, bg: "bg-brand-50", color: "text-brand-600", label: "Appel" },
+  IN_APP: { icon: Bell, bg: "bg-gray-50", color: "text-gray-500", label: "Message" },
+};
+
+var CALL_OUTCOME: Record<string, string> = {
+  ANSWERED: "Répondu", NO_ANSWER: "Sans réponse", BUSY: "Occupé", VOICEMAIL: "Messagerie",
+  CALLBACK: "À rappeler", WRONG_NUMBER: "Mauvais numéro", NOT_INTERESTED: "Pas intéressé",
+};
+
+function stripTaskHtml(html: string): string {
+  return String(html)
+    .replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n").replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function messagePreview(content: string): string {
+  var body = content;
+  try { var p = JSON.parse(content); body = p.body || p.subject || content; } catch { /* pas du JSON */ }
+  return stripTaskHtml(body).slice(0, 240);
+}
+
+function TaskReviewPanel({ task, mobile, onClose, onEdit, onUpdate }: {
+  task: Task | null;
+  mobile?: boolean;
+  onClose?: () => void;
+  onEdit: () => void;
+  onUpdate: () => void;
+}) {
+  var [lead, setLead] = useState<any>(null);
+  var [loading, setLoading] = useState(false);
+  var [completing, setCompleting] = useState(false);
+  var leadId = task?.leadId || null;
+
+  useEffect(function() {
+    if (!leadId) { setLead(null); return; }
+    var active = true;
+    setLoading(true);
+    getLeadDetail(leadId)
+      .then(function(data) { if (active) setLead(data); })
+      .catch(function() { if (active) setLead(null); })
+      .finally(function() { if (active) setLoading(false); });
+    return function() { active = false; };
+  }, [leadId]);
+
+  if (!task) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 min-h-[420px] flex flex-col items-center justify-center text-center p-10 gap-2">
+        <div className="w-14 h-14 rounded-full bg-brand-50 flex items-center justify-center text-brand-500"><Inbox size={26} /></div>
+        <h3 className="text-sm font-semibold text-gray-600 mt-1">Sélectionnez une tâche</h3>
+        <p className="text-xs text-gray-400 max-w-[240px]">Choisissez une tâche à gauche pour consulter le prospect et l'historique des échanges avant votre rappel.</p>
+      </div>
+    );
+  }
+
+  var priorityConf = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.MEDIUM;
+  var isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "DONE" && task.status !== "CANCELLED";
+  var descText = task.description ? stripTaskHtml(task.description) : "";
+
+  var handleComplete = async function() {
+    setCompleting(true);
+    try {
+      await updateTask(task.id, { status: "DONE" });
+      toast.success("Tâche terminée");
+      onUpdate();
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+    setCompleting(false);
+  };
+
+  return (
+    <div className={cn("bg-white lg:rounded-xl lg:border lg:border-gray-200", mobile && "min-h-screen")}>
+      {mobile && (
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-3 bg-white border-b border-gray-100">
+          <button onClick={onClose} className="p-2 -ml-1 rounded-lg hover:bg-gray-100 text-gray-600"><ArrowRight size={18} className="rotate-180" /></button>
+          <span className="text-sm font-semibold text-gray-900">Revue du prospect</span>
+        </div>
+      )}
+
+      {/* Bandeau tâche en cours */}
+      <div className="m-3 sm:m-4 rounded-xl border border-gray-200 bg-gradient-to-b from-brand-50/60 to-transparent p-3 sm:p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-brand-600 shrink-0"><Target size={16} /></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Tâche en cours</p>
+            <p className="text-sm font-bold text-gray-900 mt-0.5 break-words">{task.title}</p>
+            <div className="flex items-center gap-2 flex-wrap mt-1">
+              <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", priorityConf.bg, priorityConf.color)}>{priorityConf.label}</span>
+              {task.dueDate && (
+                <span className={cn("text-[11px] inline-flex items-center gap-1", isOverdue ? "text-red-600 font-semibold" : "text-gray-500")}>
+                  <Clock size={11} /> {formatDateTime(task.dueDate)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {task.status !== "DONE" && (
+              <button onClick={handleComplete} disabled={completing} className="btn-primary py-1.5 px-3 text-xs">
+                {completing ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Terminer
+              </button>
+            )}
+            <button onClick={onEdit} className="btn-secondary py-1.5 px-3 text-xs"><Pencil size={13} /> Modifier</button>
+          </div>
+        </div>
+        {descText && (
+          <div className="flex gap-2 border-t border-dashed border-gray-200 mt-3 pt-3">
+            <StickyNote size={15} className="text-brand-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{descText}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Prospect */}
+      {!task.leadId ? (
+        <div className="px-4 py-10 text-center text-gray-400">
+          <UserIcon size={28} className="mx-auto mb-2 text-gray-300" />
+          <p className="text-sm">Cette tâche n'est pas liée à un prospect.</p>
+        </div>
+      ) : loading ? (
+        <div className="px-4 py-16 text-center"><Loader2 size={26} className="animate-spin text-brand-500 mx-auto" /></div>
+      ) : !lead ? (
+        <div className="px-4 py-10 text-center text-gray-400"><p className="text-sm">Prospect introuvable.</p></div>
+      ) : (
+        <LeadReview lead={lead} />
+      )}
+    </div>
+  );
+}
+
+function LeadReview({ lead }: { lead: any }) {
+  var stageColor = lead.stage?.color || "#64748B";
+  var waNumber = String(lead.whatsapp || lead.phone || "").replace(/\D/g, "");
+
+  var events = useMemo(function() {
+    var evs: any[] = [];
+    (lead.messages || []).forEach(function(m: any) {
+      evs.push({ kind: "message", channel: m.channel, direction: m.direction, date: new Date(m.sentAt), text: messagePreview(m.content) });
+    });
+    (lead.calls || []).forEach(function(c: any) {
+      evs.push({ kind: "call", direction: c.direction, date: new Date(c.calledAt), outcome: c.outcome, duration: c.duration, text: c.notes || "" });
+    });
+    (lead.activities || []).forEach(function(a: any) {
+      if (a.type === "NOTE_ADDED" || a.type === "LEAD_STAGE_CHANGED" || a.type === "LEAD_ASSIGNED" || a.type === "LEAD_CONVERTED") {
+        evs.push({ kind: "activity", actType: a.type, date: new Date(a.createdAt), text: a.description });
+      }
+    });
+    evs.sort(function(a, b) { return b.date.getTime() - a.date.getTime(); });
+    return evs.slice(0, 20);
+  }, [lead]);
+
+  return (
+    <div>
+      {/* En-tête prospect */}
+      <div className="px-4 flex items-start gap-3">
+        <div className="w-12 h-12 rounded-xl bg-brand-600 text-white text-base font-bold flex items-center justify-center shrink-0">{getInitials(lead.firstName + " " + lead.lastName)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-base font-bold text-gray-900">{lead.firstName} {lead.lastName}</span>
+            {lead.stage && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: stageColor + "20", color: stageColor }}>{lead.stage.name}</span>}
+            <span className="text-[11px] text-gray-500 font-medium inline-flex items-center gap-1"><Star size={11} /> {lead.score}/100</span>
+          </div>
+          <div className="flex gap-x-3 gap-y-1 flex-wrap text-xs text-gray-500 mt-1">
+            {lead.program && <span className="inline-flex items-center gap-1 min-w-0"><GraduationCap size={12} className="shrink-0" /> <span className="truncate">{lead.program.name}</span></span>}
+            {lead.assignedTo && <span className="inline-flex items-center gap-1"><UserIcon size={12} className="shrink-0" /> {lead.assignedTo.name}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions rapides */}
+      <div className="px-4 mt-3 flex gap-2 flex-wrap">
+        <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs"><Phone size={13} /> Appeler</a>
+        {waNumber && <a href={"https://wa.me/" + waNumber} target="_blank" rel="noopener noreferrer" className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50"><MessageCircle size={13} /> WhatsApp</a>}
+        {lead.email && <a href={"mailto:" + lead.email} className="btn-secondary py-1.5 px-3 text-xs"><Mail size={13} /> Email</a>}
+        <Link href={"/leads/" + lead.id} className="btn-secondary py-1.5 px-3 text-xs"><ExternalLink size={13} /> Fiche complète</Link>
+      </div>
+
+      {/* Historique des échanges */}
+      <div className="border-t border-gray-100 mt-4 px-4 py-4">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><History size={12} /> Historique des échanges</p>
+        {events.length === 0 ? (
+          <p className="text-xs text-gray-400 py-6 text-center">Aucun échange enregistré pour l'instant.</p>
+        ) : (
+          <div className="space-y-0">
+            {events.map(function(e, i) { return <TimelineEvent key={i} ev={e} />; })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimelineEvent({ ev }: { ev: any }) {
+  var Icon: any, iconBg: string, iconColor: string, title: string, dirLabel = "";
+  if (ev.kind === "message") {
+    var meta = CHANNEL_META[ev.channel] || CHANNEL_META.EMAIL;
+    Icon = meta.icon; iconBg = meta.bg; iconColor = meta.color; title = meta.label;
+    dirLabel = ev.direction === "INBOUND" ? "Reçu" : "Envoyé";
+  } else if (ev.kind === "call") {
+    Icon = Phone; iconBg = "bg-brand-50"; iconColor = "text-brand-600";
+    title = "Appel " + (ev.direction === "INBOUND" ? "entrant" : "sortant");
+    dirLabel = CALL_OUTCOME[ev.outcome] || "";
+  } else {
+    Icon = ev.actType === "NOTE_ADDED" ? StickyNote : ev.actType === "LEAD_STAGE_CHANGED" ? ArrowRight : UserIcon;
+    iconBg = "bg-amber-50"; iconColor = "text-amber-600";
+    title = ev.actType === "NOTE_ADDED" ? "Note" : ev.actType === "LEAD_STAGE_CHANGED" ? "Changement d'étape" : ev.actType === "LEAD_CONVERTED" ? "Converti" : "Assignation";
+  }
+  return (
+    <div className="flex gap-3">
+      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", iconBg, iconColor)}><Icon size={13} /></div>
+      <div className="flex-1 min-w-0 pb-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold text-gray-800">
+            {title}
+            {dirLabel && <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">{dirLabel}</span>}
+            {ev.kind === "call" && ev.duration ? <span className="ml-1.5 text-[10px] text-gray-400">{Math.round(ev.duration / 60)} min</span> : null}
+          </p>
+          <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">{formatRelative(ev.date)}</span>
+        </div>
+        {ev.text && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed line-clamp-3">{ev.text}</p>}
       </div>
     </div>
   );
