@@ -9,12 +9,13 @@ import {
   ArrowLeft, Mail, Phone, MessageCircle, Calendar, FileText, ListTodo,
   Activity as ActivityIcon, History, GraduationCap, MapPin, Building2,
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
-  ExternalLink, ChevronRight, Plus, Loader2, Check, Trash2, X,
+  ExternalLink, ChevronRight, ChevronDown, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
-  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight, 
+  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
+import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { stripHtml } from "@/lib/email-blocks";
@@ -38,6 +39,7 @@ interface LeadDetailClientProps {
   initialTab: string;
   canUseWhatsAppAPI: boolean;
   currentPlanName: string;
+  stages: { id: string; name: string; color: string }[];
 }
 
 const TABS = [
@@ -51,11 +53,12 @@ const TABS = [
   { id: "appointments", label: "Rendez-vous", icon: Calendar },
 ];
 
-export function LeadDetailClient({ 
-  lead, 
-  initialTab, 
+export function LeadDetailClient({
+  lead,
+  initialTab,
   canUseWhatsAppAPI,
-  currentPlanName, }: LeadDetailClientProps) {
+  currentPlanName,
+  stages, }: LeadDetailClientProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -87,9 +90,7 @@ export function LeadDetailClient({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-base sm:text-xl font-bold text-gray-900 break-words">{fullName}</h1>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: (lead.stage?.color || "#888") + "20", color: lead.stage?.color || "#888" }}>
-              {lead.stage?.name}
-            </span>
+            <StageSelector leadId={lead.id} currentStage={lead.stage} stages={stages} />
             {lead.isConverted && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium shrink-0">Converti ✓</span>
             )}
@@ -192,6 +193,70 @@ export function LeadDetailClient({
 }
 
 // ─── Overview Tab ───
+// ─── Sélecteur d'étape (changement de statut depuis la fiche) ───
+function StageSelector({ leadId, currentStage, stages }: {
+  leadId: string;
+  currentStage: any;
+  stages: { id: string; name: string; color: string }[];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const color = currentStage?.color || "#888";
+
+  const change = (stageId: string) => {
+    setOpen(false);
+    if (stageId === currentStage?.id) return;
+    startTransition(async () => {
+      try {
+        await moveLeadToStage(leadId, stageId);
+        toast.success("Statut mis à jour");
+        router.refresh();
+      } catch (e: any) {
+        toast.error(e.message || "Erreur");
+      }
+    });
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={pending || stages.length === 0}
+        className="text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 hover:opacity-80 transition-opacity disabled:opacity-60"
+        style={{ backgroundColor: color + "20", color }}
+        title="Changer le statut"
+      >
+        {pending && <Loader2 size={11} className="animate-spin" />}
+        {currentStage?.name || "—"}
+        <ChevronDown size={11} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-56 max-h-72 overflow-y-auto animate-scale-in">
+            <p className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wider">Changer le statut</p>
+            {stages.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => change(s.id)}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2",
+                  s.id === currentStage?.id ? "font-semibold text-gray-900" : "text-gray-700"
+                )}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="truncate">{s.name}</span>
+                {s.id === currentStage?.id && <Check size={12} className="ml-auto text-brand-600 shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function OverviewTab({ lead }: { lead: any }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
@@ -199,10 +264,15 @@ function OverviewTab({ lead }: { lead: any }) {
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact</h3>
         <div className="space-y-3">
+          {lead.civility && <InfoRow icon={UserIcon} label="Civilité" value={lead.civility} />}
           <InfoRow icon={Phone} label="Téléphone" value={lead.phone ? formatPhone(lead.phone) : "—"} />
           <InfoRow icon={MessageCircle} label="WhatsApp" value={lead.whatsapp ? formatPhone(lead.whatsapp) : "—"} />
           <InfoRow icon={Mail} label="Email" value={lead.email || "—"} />
+          {lead.dateOfBirth && (
+            <InfoRow icon={Calendar} label="Naissance" value={new Date(lead.dateOfBirth).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} />
+          )}
           <InfoRow icon={MapPin} label="Ville" value={lead.city || "—"} />
+          <InfoRow icon={Globe} label="Pays" value={lead.country || "—"} />
         </div>
 
       </div>
@@ -238,9 +308,11 @@ function OverviewTab({ lead }: { lead: any }) {
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Pipeline</h3>
         <div className="space-y-3">
           <InfoRow icon={Tag} label="Étape" value={lead.stage?.name || "—"} />
+          <InfoRow icon={UserIcon} label="Assigné à" value={lead.assignedTo?.name || "Non assigné"} />
           <InfoRow icon={Star} label="Score" value={lead.score + "/100"} />
           <InfoRow icon={Globe} label="Source" value={lead.source} />
           {lead.sourceDetail && <InfoRow icon={Briefcase} label="Détail source" value={lead.sourceDetail} />}
+          {lead.campaign && <InfoRow icon={Briefcase} label="Campagne" value={lead.campaign.name} />}
           <InfoRow icon={Clock} label="Créé le" value={new Date(lead.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} />
         </div>
       </div>
@@ -257,6 +329,15 @@ function OverviewTab({ lead }: { lead: any }) {
           <StatRow icon={ActivityIcon} label="Activités" value={lead._count?.activities || 0} />
         </div>
       </div>
+
+      {/* Message du formulaire de contact */}
+      {(lead.message || lead.subject) && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 md:col-span-3">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">Message</h3>
+          {lead.subject && <p className="text-xs font-medium text-gray-700 mb-1">{lead.subject}</p>}
+          {lead.message && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{lead.message}</p>}
+        </div>
+      )}
     </div>
   );
 }
