@@ -317,7 +317,11 @@ async function createInboundMessageIfPresent(
   message: string | null | undefined,
   subject: string | null | undefined
 ) {
-  if (!message || typeof message !== "string" || !message.trim()) return;
+  // Corps du message : le message natif, sinon le sujet (formulaires "sujet seul")
+  var body = (message && typeof message === "string" && message.trim())
+    ? message.trim()
+    : ((subject && typeof subject === "string" && subject.trim()) ? subject.trim() : "");
+  if (!body) return;
 
   var subj = (subject && subject.trim()) ? subject.trim() : "Message depuis le formulaire de contact";
 
@@ -328,7 +332,7 @@ async function createInboundMessageIfPresent(
         leadId: leadId,
         channel: "EMAIL",
         direction: "INBOUND",
-        content: JSON.stringify({ subject: subj, body: message.trim() }),
+        content: JSON.stringify({ subject: subj, body: body }),
         status: "DELIVERED", // != READ → compté comme non lu dans l'Inbox
         sentAt: new Date(),
         deliveredAt: new Date(),

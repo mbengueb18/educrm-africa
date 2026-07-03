@@ -219,7 +219,8 @@ export async function GET(request: NextRequest) {
     specialite: 'filière', campus: 'campus', site: 'campus',
     message: 'message', msg: 'message', commentaire: 'message',
     comments: 'message', comment: 'message', question: 'message',
-    demande: 'message', objet: 'message', sujet: 'message', subject: 'message',
+    demande: 'message',
+    subject: 'subject', sujet: 'subject', objet: 'subject', motif: 'subject',
   };
 
 // ─── Extract form data ───
@@ -230,7 +231,7 @@ export async function GET(request: NextRequest) {
     var elements = form.elements;
 
     // Clés principales connues (si une valeur atterrit là, la clé brute est "consommée")
-    var CORE_KEYS = ['firstName','lastName','phone','email','whatsapp','city','filière','campus','niveau','message','_fullName'];
+    var CORE_KEYS = ['firstName','lastName','phone','email','whatsapp','city','filière','campus','niveau','message','subject','_fullName'];
 
     for (var i = 0; i < elements.length; i++) {
       var el = elements[i];
@@ -305,6 +306,7 @@ export async function GET(request: NextRequest) {
       ['ville', 'city'], ['city', 'city'],
       ['formation', 'filiere'], ['filiere', 'filière'], ['programme', 'filière'],
       ['campus', 'campus'],
+      ['sujet', 'subject'], ['objet', 'subject'], ['subject', 'subject'], ['motif', 'subject'],
       ['message', 'message'], ['commentaire', 'message'], ['question', 'message'],
       ['nom', 'lastName'],
     ];
@@ -465,6 +467,7 @@ export async function GET(request: NextRequest) {
       sourceDetail: data._pageTitle || data._formId || '',
       formName: data._formId || 'Auto-captured',
       message: data.message || '',
+      subject: data.subject || '',
       niveau: data.niveau || '',
       _capturedBy: 'ecrm-tracker',
       _pageUrl: data._pageUrl || '',
