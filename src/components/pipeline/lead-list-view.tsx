@@ -346,13 +346,15 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
         return <span className="text-xs text-gray-500">{formatRelative(lead.updatedAt)}</span>;
         case "lastContact":
         if (lead.daysSinceContact === undefined || lead.daysSinceContact === null) return <span className="text-gray-400">—</span>;
+        // Jamais contacté : neutre (le code couleur ne s'applique qu'à un vrai dernier contact)
+        if (!lead.lastContactAt) return <span className="text-xs font-medium text-gray-400">Jamais</span>;
         return (
           <span className={cn("text-xs font-medium",
             lead.daysSinceContact >= 7 ? "text-red-600" :
             lead.daysSinceContact >= 3 ? "text-amber-600" :
             "text-emerald-600"
           )}>
-            {lead.lastContactAt ? formatRelative(lead.lastContactAt) : "Jamais"}
+            {formatRelative(lead.lastContactAt)}
           </span>
         );
       default:

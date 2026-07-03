@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
       if (el.offsetParent === null && el.type !== 'hidden') continue;
 
       var key = (el.name || el.id || '').toLowerCase().trim();
-      var value = (el.value || '').trim();
+      var value = getFieldValue(el); // ignore les placeholders de <select>
       if (!key || !value) continue;
 
       // Ignorer les champs techniques internes de Gravity Forms
@@ -328,6 +328,21 @@ export async function GET(request: NextRequest) {
 
   function isEmail(v) { return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v); }
   function isPhone(v) { return /^[+]?[\\d\\s\\-().]{8,}$/.test(v.replace(/\\s/g, '')); }
+
+  // Placeholder d'un <select> ("Sélectionnez...", "Choisir...", option désactivée) → valeur vide.
+  // Évite de capturer le texte du placeholder (ex. Gravity "Sélectionnez le diplôme recherché").
+  var PLACEHOLDER_RE = /^\\s*(s[ée]lectionn|choisi|choisir|choisissez|s[ée]lect|veuillez|please|--|—|\\.\\.\\.)/i;
+  function getFieldValue(el) {
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag !== 'select') return (el.value || '').trim();
+    var v = (el.value || '').trim();
+    if (!v) return '';
+    var opt = (el.options && el.selectedIndex >= 0) ? el.options[el.selectedIndex] : null;
+    if (opt && opt.disabled) return '';
+    var txt = (opt && opt.text ? opt.text : v).trim();
+    if (PLACEHOLDER_RE.test(v) || PLACEHOLDER_RE.test(txt)) return '';
+    return v;
+  }
 
   // ─── Should we capture this form? ───
   function shouldCapture(form) {
@@ -576,7 +591,8 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Texte, select, email, tel, textarea... ──
-    var value = (el.value || '').trim();
+    // getFieldValue ignore les placeholders de <select> ("Sélectionnez...").
+    var value = getFieldValue(el);
     // On ne stocke QUE les valeurs non vides → un champ rempli n'est jamais effacé par du vide.
     if (value) {
       _gravityRaw[formId][key] = value;
