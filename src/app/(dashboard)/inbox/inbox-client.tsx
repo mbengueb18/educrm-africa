@@ -110,8 +110,14 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
   const filtered = useMemo(() => conversations.filter((c) => {
     if (search) {
       var q = search.toLowerCase();
-      var name = (c.lead.firstName + " " + c.lead.lastName).toLowerCase();
-      if (!name.includes(q) && !(c.lead.email || "").toLowerCase().includes(q)) return false;
+      // Recherche par nom, email, téléphone…
+      var header = (
+        c.lead.firstName + " " + c.lead.lastName + " " +
+        (c.lead.email || "") + " " + (c.lead.phone || "")
+      ).toLowerCase();
+      // …et par mot-clé dans le contenu des messages de la conversation
+      var inMessages = c.messages.some((m: any) => (m.content || "").toLowerCase().includes(q));
+      if (!header.includes(q) && !inMessages) return false;
     }
     if (channelFilter) {
       if (!c.messages.some((m: any) => m.channel === channelFilter)) return false;
@@ -169,7 +175,7 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Rechercher une conversation..."
+              placeholder="Rechercher (nom, email, mot-clé du message)..."
               className="input pl-9 text-sm py-2 w-full"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
