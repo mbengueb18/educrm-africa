@@ -17,6 +17,7 @@ import {
   ArrowLeft, Send, Mail, MessageCircle, MessageSquare, Phone, Bot,
   Paperclip, Download, Clock, AlertTriangle, Loader2, Sparkles,
   ChevronRight, X, ExternalLink, FileText, Tag, Globe, Search,
+  Maximize2, Minimize2,
 } from "lucide-react";
 
 interface Lead {
@@ -160,6 +161,7 @@ type ComposeChannel = "EMAIL" | "WHATSAPP";
 export function ConversationClient({ lead, messages, embedded, onBack, onRead, onMessageSent }: ConversationClientProps) {
   const router = useRouter();
   const [composing, setComposing] = useState(!!embedded);
+  const [expanded, setExpanded] = useState(false); // éditeur agrandi (remplit le volet droit)
   const messagesRef = useRef<HTMLDivElement>(null);
   const [composeChannel, setComposeChannel] = useState<ComposeChannel>("EMAIL");
   const [replySubject, setReplySubject] = useState("");
@@ -228,7 +230,7 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
   };
 
   return (
-    <div className={cn(embedded ? "flex flex-col h-full min-h-0 bg-white" : "pb-32")}>
+    <div className={cn(embedded ? "relative flex flex-col h-full min-h-0 bg-white" : "pb-32")}>
       {/* Header */}
       <div className={cn(
         "z-30 bg-white border-b border-gray-200",
@@ -331,11 +333,13 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
       {/* Composer — bas du volet (embedded) ou barre fixe (pleine page) */}
       {composing && (
         <div className={cn(
-          "bg-white border-t border-gray-200",
-          embedded ? "shrink-0 lg:max-h-[48%] overflow-y-auto" : "fixed bottom-0 left-0 right-0 z-40 shadow-2xl"
+          "bg-white border-gray-200",
+          embedded
+            ? (expanded ? "absolute inset-0 z-40 flex flex-col" : "shrink-0 border-t lg:max-h-[48%] overflow-y-auto")
+            : "fixed bottom-0 left-0 right-0 z-40 border-t shadow-2xl"
         )}>
-          <div className={cn("p-3 sm:p-4", !embedded && "max-w-4xl mx-auto")}>
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+          <div className={cn("p-3 sm:p-4", expanded && "flex flex-col h-full min-h-0", !embedded && "max-w-4xl mx-auto")}>
+            <div className={cn("flex items-center justify-between mb-3 pb-3 border-b border-gray-100", expanded && "shrink-0")}>
               <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-0.5 border border-gray-200">
                 <button
                   onClick={() => setComposeChannel("EMAIL")}
@@ -364,15 +368,27 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
                   WhatsApp
                 </button>
               </div>
-              <button
-                onClick={() => { setComposing(false); setReplySubject(""); setWhatsappText(""); }}
-                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                title="Fermer"
-              >
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                {embedded && (
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-lg text-xs font-semibold px-2.5 py-1 bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors"
+                    title={expanded ? "Réduire la rédaction" : "Agrandir la rédaction"}
+                  >
+                    {expanded ? <><Minimize2 size={14} /> Réduire</> : <><Maximize2 size={14} /> Agrandir</>}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setComposing(false); setExpanded(false); setReplySubject(""); setWhatsappText(""); }}
+                  className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                  title="Fermer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
+            <div className={cn(expanded && "flex-1 min-h-0 flex flex-col")}>
             {composeChannel === "EMAIL" && (
               <ComposeEmail
                 leadId={lead.id}
@@ -380,6 +396,7 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
                 leadEmail={lead.email}
                 initialSubject={replySubject}
                 compact
+                fill={expanded}
                 onSent={() => {
                   setReplySubject("");
                   if (embedded) {
@@ -389,7 +406,7 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
                   }
                   router.refresh();
                 }}
-                onClose={() => { setComposing(false); setReplySubject(""); }}
+                onClose={() => { setComposing(false); setExpanded(false); setReplySubject(""); }}
               />
             )}
 
@@ -403,6 +420,7 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
                 onSend={handleSendWhatsApp}
               />
             )}
+            </div>
           </div>
         </div>
       )}

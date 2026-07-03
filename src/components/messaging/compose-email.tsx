@@ -32,6 +32,8 @@ interface ComposeEmailProps {
   onSent?: () => void;
   onClose?: () => void;
   compact?: boolean;
+  /** Mode agrandi : la zone de texte remplit toute la hauteur disponible */
+  fill?: boolean;
 }
 
 const QUICK_TEMPLATES = [
@@ -57,7 +59,7 @@ const QUICK_TEMPLATES = [
   },
 ];
 
-export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSent, onClose, compact = false }: ComposeEmailProps) {
+export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSent, onClose, compact = false, fill = false }: ComposeEmailProps) {
   const [mode, setMode] = useState<"text" | "visual">("text");
   const [subject, setSubject] = useState(initialSubject || "");
   const [body, setBody] = useState("");
@@ -195,7 +197,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   };
 
   return (
-    <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3")}>
+    <div className={cn("flex flex-col", fill && "h-full min-h-0", compact ? "gap-2" : "gap-3")}>
       {/* To — masqué en mode compact (destinataire déjà visible dans l'en-tête) */}
       {!compact && (
         <div className="flex items-center gap-2 text-sm">
@@ -287,7 +289,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Redigez votre message..."
-            className={cn("input text-sm resize-y", compact ? "min-h-[76px]" : "min-h-[150px]")}
+            className={cn("input text-sm", fill ? "flex-1 min-h-0 resize-none" : cn("resize-y", compact ? "min-h-[76px]" : "min-h-[150px]"))}
             rows={compact ? 3 : 8}
           />
 
