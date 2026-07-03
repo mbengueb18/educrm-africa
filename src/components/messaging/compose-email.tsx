@@ -196,12 +196,14 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
 
   return (
     <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3")}>
-      {/* To */}
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-gray-400 w-8 shrink-0">A :</span>
-        <span className="text-gray-700 font-medium">{leadName}</span>
-        <span className="text-gray-400">&lt;{leadEmail}&gt;</span>
-      </div>
+      {/* To — masqué en mode compact (destinataire déjà visible dans l'en-tête) */}
+      {!compact && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-400 w-8 shrink-0">A :</span>
+          <span className="text-gray-700 font-medium">{leadName}</span>
+          <span className="text-gray-400">&lt;{leadEmail}&gt;</span>
+        </div>
+      )}
 
       {/* Mode toggle + Templates */}
       <div className="flex items-center gap-2">
@@ -285,11 +287,11 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Redigez votre message..."
-            className="input text-sm min-h-[150px] resize-y"
-            rows={compact ? 5 : 8}
+            className={cn("input text-sm resize-y", compact ? "min-h-[76px]" : "min-h-[150px]")}
+            rows={compact ? 3 : 8}
           />
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 items-center">
             <span className="text-[10px] text-gray-400">Variables :</span>
             {["{{prenom}}", "{{nom}}", "{{email}}"].map((v) => (
               <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ComposeEmail } from "@/components/messaging/compose-email";
@@ -54,6 +54,14 @@ interface Message {
 interface ConversationClientProps {
   lead: Lead;
   messages: Message[];
+  /** Rendu dans un volet (vue scindée de l'inbox) plutôt qu'en pleine page */
+  embedded?: boolean;
+  /** Bouton retour en mode embedded (overlay mobile) */
+  onBack?: () => void;
+  /** Appelé après le marquage "lu" (pour rafraîchir le badge de la liste) */
+  onRead?: () => void;
+  /** Appelé après un envoi (embedded) pour recharger le fil du volet droit */
+  onMessageSent?: () => void;
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -149,9 +157,10 @@ function parseMessageContent(msg: Message): { subject: string | null; body: stri
 
 type ComposeChannel = "EMAIL" | "WHATSAPP";
 
-export function ConversationClient({ lead, messages }: ConversationClientProps) {
+export function ConversationClient({ lead, messages, embedded, onBack, onRead, onMessageSent }: ConversationClientProps) {
   const router = useRouter();
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState(!!embedded);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const [composeChannel, setComposeChannel] = useState<ComposeChannel>("EMAIL");
   const [replySubject, setReplySubject] = useState("");
   const [whatsappStatus, setWhatsappStatus] = useState<{
@@ -181,10 +190,17 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
 
   // ─── Marquer la conversation comme lue à l'ouverture ───
   useEffect(() => {
-    markConversationAsRead(lead.id).catch(() => {
-      // Silent fail - pas critique
-    });
+    markConversationAsRead(lead.id)
+      .then(() => { if (onRead) onRead(); })
+      .catch(() => { /* Silent fail - pas critique */ });
   }, [lead.id]);
+
+  // ─── Auto-scroll en bas du fil (mode embedded = chat) ───
+  useEffect(() => {
+    if (embedded && messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [embedded, messages.length]);
 
   const handleSendWhatsApp = async (text: string) => {
     if (!text.trim()) return;
@@ -193,7 +209,11 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
       await sendWhatsAppFromInbox(lead.id, text);
       toast.success("Message envoyé à " + lead.firstName);
       setWhatsappText("");
-      setComposing(false);
+      if (embedded) {
+        if (onMessageSent) onMessageSent(); // recharge le fil du volet droit
+      } else {
+        setComposing(false);
+      }
       router.refresh();
     } catch (err: any) {
       const msg = err.message || "";
@@ -208,18 +228,33 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
   };
 
   return (
-    <div className="pb-32">
-      {/* Header sticky */}
-      <div className="sticky top-0 z-30 bg-white border-b border-gray-200 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-4">
+    <div className={cn(embedded ? "flex flex-col h-full min-h-0 bg-white" : "pb-32")}>
+      {/* Header */}
+      <div className={cn(
+        "z-30 bg-white border-b border-gray-200",
+        embedded ? "shrink-0 px-4 py-3" : "sticky top-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 mb-4"
+      )}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Link
-              href="/inbox"
-              className="p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0"
-              aria-label="Retour à l'inbox"
-            >
-              <ArrowLeft size={18} />
-            </Link>
+            {embedded ? (
+              onBack ? (
+                <button
+                  onClick={onBack}
+                  className="p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0 lg:hidden"
+                  aria-label="Retour à l'inbox"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+              ) : null
+            ) : (
+              <Link
+                href="/inbox"
+                className="p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0"
+                aria-label="Retour à l'inbox"
+              >
+                <ArrowLeft size={18} />
+              </Link>
+            )}
             <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 text-sm font-bold flex items-center justify-center shrink-0">
               {getInitials(lead.firstName + " " + lead.lastName)}
             </div>
@@ -255,7 +290,12 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
       </div>
 
       {/* Messages */}
-      <div className="space-y-4 max-w-4xl mx-auto">
+      <div
+        ref={embedded ? messagesRef : undefined}
+        className={cn(
+          embedded ? "flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4 bg-gray-50" : "space-y-4 max-w-4xl mx-auto"
+        )}
+      >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Mail size={32} className="text-gray-300 mb-3" />
@@ -275,7 +315,11 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
                   setComposeChannel("EMAIL");
                   setComposing(true);
                   setTimeout(() => {
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                    if (embedded) {
+                      if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+                    } else {
+                      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                    }
                   }, 100);
                 }}
               />
@@ -284,10 +328,13 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
         )}
       </div>
 
-      {/* Composer sticky bottom */}
+      {/* Composer — bas du volet (embedded) ou barre fixe (pleine page) */}
       {composing && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-2xl">
-          <div className="max-w-4xl mx-auto p-3 sm:p-4">
+        <div className={cn(
+          "bg-white border-t border-gray-200",
+          embedded ? "shrink-0 lg:max-h-[48%] overflow-y-auto" : "fixed bottom-0 left-0 right-0 z-40 shadow-2xl"
+        )}>
+          <div className={cn("p-3 sm:p-4", !embedded && "max-w-4xl mx-auto")}>
             <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
               <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-0.5 border border-gray-200">
                 <button
@@ -333,7 +380,15 @@ export function ConversationClient({ lead, messages }: ConversationClientProps) 
                 leadEmail={lead.email}
                 initialSubject={replySubject}
                 compact
-                onSent={() => { setComposing(false); setReplySubject(""); router.refresh(); }}
+                onSent={() => {
+                  setReplySubject("");
+                  if (embedded) {
+                    if (onMessageSent) onMessageSent(); // recharge le fil du volet droit (le compositeur reste ouvert)
+                  } else {
+                    setComposing(false);
+                  }
+                  router.refresh();
+                }}
                 onClose={() => { setComposing(false); setReplySubject(""); }}
               />
             )}

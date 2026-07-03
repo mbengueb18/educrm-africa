@@ -371,16 +371,10 @@ function formatEmailHtml(body: string, subject: string, senderName: string): str
     })
     .join("");
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
-    '<body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#f8f9fa;padding:40px 0;">' +
-    '<div style="max-width:580px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
-    '<div style="background:#1B4F72;padding:24px 32px;">' +
-    '<h1 style="margin:0;color:white;font-size:18px;font-weight:600;">' + subject + "</h1>" +
-    "</div>" +
-    '<div style="padding:32px;">' + paragraphs + "</div>" +
-    '<div style="padding:16px 32px;background:#f8f9fa;border-top:1px solid #e5e7eb;">' +
-    '<p style="margin:0;font-size:12px;color:#9CA3AF;">Envoye par ' + senderName + " via TalibCRM</p>" +
-    "</div></div></body></html>";
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
+    '<body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#ffffff;margin:0;padding:0;color:#2C3E50;">' +
+    '<div style="width:100%;padding:28px 32px;font-size:14px;line-height:1.6;">' + paragraphs + "</div>" +
+    "</body></html>";
 }
 
 function stripHtmlForText(html: string): string {

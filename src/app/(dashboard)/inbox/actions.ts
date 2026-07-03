@@ -16,13 +16,23 @@ export async function sendEmailToLead(
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  const lead = await prisma.lead.findUnique({
-    where: { id: leadId },
-    select: { email: true, firstName: true, lastName: true },
-  });
+  const [lead, sender, org] = await Promise.all([
+    prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { email: true, firstName: true, lastName: true },
+    }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }),
+    prisma.organization.findUnique({ where: { id: session.user.organizationId }, select: { name: true } }),
+  ]);
 
   if (!lead) throw new Error("Lead introuvable");
   if (!lead.email) throw new Error("Ce lead n'a pas d'adresse email");
+
+  // Expéditeur aligné sur les campagnes : "Nom user — Nom org" + admission@talibcrm.com.
+  // Si l'utilisateur a connecté sa boîte Gmail, preferUserMailbox enverra depuis SON email
+  // (ces valeurs ne servent alors que de repli Resend).
+  const fromName = [sender?.name, org?.name].filter(Boolean).join(" — ") || undefined;
+  const fromEmail = process.env.EMAIL_FROM_CAMPAIGN || "admission@talibcrm.com";
 
   const result = await sendEmail({
     to: lead.email,
@@ -35,6 +45,8 @@ export async function sendEmailToLead(
     attachments,
     isHtml,
     preferUserMailbox: true,
+    fromName,
+    fromEmail,
   });
 
   revalidatePath("/pipeline");
@@ -135,7 +147,11 @@ export async function getInboxMessages(params?: {
       lead: {
         select: {
           id: true, firstName: true, lastName: true, email: true, phone: true,
+          whatsapp: true, score: true,
           assignedTo: { select: { id: true, name: true } },
+          stage: { select: { id: true, name: true, color: true } },
+          pipeline: { select: { id: true, name: true } },
+          program: { select: { id: true, name: true } },
         },
       },
       sentBy: { select: { id: true, name: true } },
@@ -145,7 +161,7 @@ export async function getInboxMessages(params?: {
 
   // 3. Group by lead
   var grouped: Record<string, {
-    lead: { id: string; firstName: string; lastName: string; email: string | null; phone: string; assignedTo: { id: string; name: string } | null };
+    lead: typeof messages[0]["lead"];
     messages: typeof messages;
     lastMessage: typeof messages[0];
     unreadCount: number;
