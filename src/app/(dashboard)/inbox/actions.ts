@@ -224,6 +224,17 @@ export async function addLeadNote(leadId: string, content: string) {
   return { success: true };
 }
 
+// ─── Nom de l'organisation (pour dynamiser les modèles : {{ecole}}) ───
+export async function getOrgName(): Promise<string> {
+  const session = await auth();
+  if (!session?.user) return "";
+  const org = await prisma.organization.findUnique({
+    where: { id: session.user.organizationId },
+    select: { name: true },
+  });
+  return org?.name || "";
+}
+
 // ─── Get email templates ───
 export async function getEmailTemplates() {
   const session = await auth();

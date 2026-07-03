@@ -57,6 +57,18 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
     }
   }
 
+  // Variable organisation ({{ecole}} / {{organisation}}) — indépendante du lead.
+  // On n'interroge la base que si le texte contient réellement la variable.
+  if (/\{\{(ecole|organisation)\}\}/i.test(subject) || /\{\{(ecole|organisation)\}\}/i.test(body)) {
+    const orgForVars = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+    const orgNameVar = orgForVars?.name || "";
+    subject = subject.replace(/\{\{ecole\}\}/gi, orgNameVar).replace(/\{\{organisation\}\}/gi, orgNameVar);
+    body = body.replace(/\{\{ecole\}\}/gi, orgNameVar).replace(/\{\{organisation\}\}/gi, orgNameVar);
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   const senderEmail = params.fromEmail || process.env.EMAIL_FROM || "noreply@talibcrm.com";
   const senderName = params.fromName || process.env.EMAIL_FROM_NAME || "TalibCRM";

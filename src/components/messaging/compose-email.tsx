@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { sendEmailToLead, getEmailTemplates } from "@/app/(dashboard)/inbox/actions";
+import { sendEmailToLead, getEmailTemplates, getOrgName } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
 import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ interface ComposeEmailProps {
 const QUICK_TEMPLATES = [
   {
     name: "Bienvenue",
-    subject: "Bienvenue a ISM Dakar — Votre demande de renseignements",
+    subject: "Bienvenue a {{ecole}} — Votre demande de renseignements",
     body: "Bonjour {{prenom}},\n\nMerci pour votre interet pour nos formations. Nous avons bien recu votre demande et un membre de notre equipe d'admission vous contactera tres prochainement.\n\nN'hesitez pas a nous contacter si vous avez des questions.\n\nCordialement,\nL'equipe d'admission",
   },
   {
@@ -54,7 +54,7 @@ const QUICK_TEMPLATES = [
   },
   {
     name: "Admission acceptee",
-    subject: "Felicitations ! Votre admission a ISM Dakar",
+    subject: "Felicitations ! Votre admission a {{ecole}}",
     body: "Bonjour {{prenom}},\n\nNous avons le plaisir de vous informer que votre candidature a ete acceptee.\n\nPour finaliser votre inscription, merci de proceder au reglement des frais d'inscription et de nous transmettre les documents suivants :\n\n- Photo d'identite\n- Copie du dernier diplome\n\nNous vous accueillerons avec plaisir a la rentree.\n\nCordialement,\nL'equipe d'admission",
   },
 ];
@@ -71,13 +71,24 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   const [isPending, startTransition] = useTransition();
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [orgName, setOrgName] = useState("");
 
-  // Load saved templates on mount
+  // Load saved templates + nom de l'organisation on mount
   useEffect(function() {
     getEmailTemplates().then(function(templates) {
       setSavedTemplates(templates as any);
     }).catch(function() {});
+    getOrgName().then(setOrgName).catch(function() {});
   }, []);
+
+  // Remplace les variables {{prenom}} et {{ecole}} dans un texte de modèle
+  const fillVars = (text: string): string => {
+    var firstName = leadName.split(" ")[0] || "";
+    return (text || "")
+      .replace(/\{\{prenom\}\}/gi, firstName)
+      .replace(/\{\{ecole\}\}/gi, orgName || "notre établissement")
+      .replace(/\{\{organisation\}\}/gi, orgName || "notre établissement");
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -136,22 +147,21 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   }
 
   const applyQuickTemplate = (template: typeof QUICK_TEMPLATES[0]) => {
-    var firstName = leadName.split(" ")[0] || "";
-    setSubject(template.subject);
-    setBody(template.body.replace(/\{\{prenom\}\}/gi, firstName));
+    setSubject(fillVars(template.subject));
+    setBody(fillVars(template.body));
     setShowTemplates(false);
     setMode("text");
   };
 
   const applySavedTemplate = (template: SavedTemplate) => {
-    setSubject(template.subject || "");
+    setSubject(fillVars(template.subject || ""));
     if (template.blocks && template.blocks.length > 0) {
       setBlocks(template.blocks);
-      setHtml(template.body);
+      setHtml(fillVars(template.body));
       setBrandColor(template.brandColor || "#1B4F72");
       setMode("visual");
     } else {
-      setBody(template.body);
+      setBody(fillVars(template.body));
       setMode("text");
     }
     setShowTemplates(false);
@@ -295,7 +305,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
 
           <div className="flex flex-wrap gap-1.5 items-center">
             <span className="text-[10px] text-gray-400">Variables :</span>
-            {["{{prenom}}", "{{nom}}", "{{email}}"].map((v) => (
+            {["{{prenom}}", "{{nom}}", "{{email}}", "{{ecole}}"].map((v) => (
               <button
                 key={v}
                 onClick={() => setBody(body + " " + v)}
