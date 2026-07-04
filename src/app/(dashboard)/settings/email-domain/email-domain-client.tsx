@@ -7,9 +7,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft, Globe, ShieldCheck, Loader2, Copy, Check, RefreshCw,
-  Trash2, AlertTriangle, Lock, CheckCircle2, Mail, Link2,
+  Trash2, AlertTriangle, Lock, CheckCircle2, Mail, Inbox,
 } from "lucide-react";
-import { addEmailDomain, refreshEmailDomainStatus, updateEmailSender, removeEmailDomain } from "./actions";
+import {
+  addEmailDomain, refreshEmailDomainStatus, updateEmailSender, removeEmailDomain,
+  enableInbound, refreshInboundStatus, disableInbound,
+} from "./actions";
 
 type DnsRecord = { purpose: string; type: string; name: string; value: string; priority?: number | null; status?: string };
 type Config = {
@@ -19,6 +22,10 @@ type Config = {
   status: "PENDING" | "VERIFIED" | "FAILED";
   dnsRecords: DnsRecord[] | null;
   verifiedAt: string | Date | null;
+  inboundSubdomain?: string;
+  inboundStatus?: "PENDING" | "VERIFIED" | "FAILED" | null;
+  inboundMxRecords?: DnsRecord[] | null;
+  inboundVerifiedAt?: string | Date | null;
 } | null;
 
 export function EmailDomainClient({ config, canUse, orgName, upgradeTarget }: {
@@ -300,12 +307,156 @@ function VerifiedCard({ config, pending, startTransition, onDone }: any) {
         )}
       </div>
 
-      {/* Phase 2 — réception */}
-      <div className="px-5 py-4 border-t border-dashed border-gray-200 bg-gray-50/50 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <Link2 size={14} /> Recevoir les réponses sur votre domaine <span className="text-[10px] font-bold bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded">Phase 2 — bientôt</span>
-        </div>
-      </div>
+      {/* Réception (Phase 2) */}
+      <ReceptionSection config={config} pending={pending} startTransition={startTransition} onDone={onDone} />
+    </div>
+  );
+}
+
+// ─── Réception : recevoir les réponses sur reply.<domaine> ───
+function ReceptionSection({ config, pending, startTransition, onDone }: any) {
+  const status: string | null = config.inboundStatus || null;
+  const replyDomain = (config.inboundSubdomain || "reply") + "." + config.domain;
+  const records: DnsRecord[] = config.inboundMxRecords || [];
+
+  const enable = () => startTransition(async () => {
+    try { const r = await enableInbound(); toast.success(r.status === "VERIFIED" ? "Réception active ✓" : "Réception configurée — ajoutez l'enregistrement MX"); onDone(); }
+    catch (e: any) { toast.error(e.message || "Erreur"); }
+  });
+  const refresh = () => startTransition(async () => {
+    try { const r = await refreshInboundStatus(); toast[r.status === "VERIFIED" ? "success" : "message"](r.status === "VERIFIED" ? "Réception vérifiée ✓" : "Toujours en attente — la propagation DNS peut prendre du temps"); onDone(); }
+    catch (e: any) { toast.error(e.message || "Erreur"); }
+  });
+  const disable = () => {
+    if (!confirm("Désactiver la réception ? Les réponses repartiront via l'adresse technique TalibCRM.")) return;
+    startTransition(async () => {
+      try { await disableInbound(); toast.success("Réception désactivée"); onDone(); }
+      catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
+
+  const inboundDate = config.inboundVerifiedAt ? new Date(config.inboundVerifiedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "—";
+
+  return (
+    <div className="border-t border-dashed border-gray-200 bg-gray-50/50 px-5 py-5">
+      {/* ── État 1 : à activer ── */}
+      {!status && (
+        <>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><Inbox size={17} /></div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">Recevoir les réponses sur votre domaine</p>
+              <p className="text-xs text-gray-500 mt-0.5 max-w-lg">
+                Aujourd'hui, quand un prospect répond, le message revient via l'adresse technique de TalibCRM. Activez la réception pour recevoir les réponses sur <b>{replyDomain}</b>, à votre image.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            <button onClick={enable} disabled={pending} className="btn-primary py-2 px-4 text-sm">
+              {pending ? <Loader2 size={15} className="animate-spin" /> : <Inbox size={15} />} Activer la réception
+            </button>
+            <span className="text-[11px] text-gray-400">Un enregistrement MX à ajouter. Sans risque pour votre messagerie existante.</span>
+          </div>
+        </>
+      )}
+
+      {/* ── État 2 : en attente / échec (MX à ajouter) ── */}
+      {status && status !== "VERIFIED" && (
+        <>
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><Inbox size={17} /></div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                Réception
+                <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", status === "FAILED" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600")}>
+                  {status === "FAILED" ? "Échec" : "En attente DNS"}
+                </span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Ajoutez l'enregistrement <b>MX</b> ci-dessous sur <b>{replyDomain}</b>, puis rafraîchissez.</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl p-3 text-xs flex gap-2.5 mb-4 bg-amber-50 border border-amber-200 text-amber-900">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <div>Ajoutez ce MX <b>uniquement sur le sous-domaine <code className="bg-white/60 px-1 rounded">{config.inboundSubdomain || "reply"}</code></b> — le MX de votre domaine racine (votre messagerie actuelle) n'est pas touché.</div>
+          </div>
+
+          <div className="border border-gray-200 rounded-xl overflow-x-auto bg-white">
+            <table className="w-full text-xs min-w-[520px]">
+              <thead>
+                <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-200">
+                  <th className="text-left px-3 py-2 font-semibold uppercase text-[10px] tracking-wider">Type</th>
+                  <th className="text-left px-3 py-2 font-semibold uppercase text-[10px] tracking-wider">Nom / Hôte</th>
+                  <th className="text-left px-3 py-2 font-semibold uppercase text-[10px] tracking-wider">Valeur</th>
+                  <th className="text-left px-3 py-2 font-semibold uppercase text-[10px] tracking-wider">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {records.length === 0 ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">Aucun enregistrement — rafraîchissez.</td></tr>
+                ) : records.map((r, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2.5 align-top">
+                      <span className="font-mono text-[11px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">{r.type}</span>
+                      <div className="text-[10px] text-gray-400 mt-1">Réception{r.priority != null ? " · prio " + r.priority : ""}</div>
+                    </td>
+                    <td className="px-3 py-2.5 align-top"><CopyCell text={r.name} /></td>
+                    <td className="px-3 py-2.5 align-top"><CopyCell text={r.value} /></td>
+                    <td className="px-3 py-2.5 align-top">
+                      <span className={cn("text-[10px] font-bold", (r.status || "").toLowerCase() === "verified" ? "text-emerald-600" : "text-amber-600")}>
+                        {(r.status || "").toLowerCase() === "verified" ? "✓ Détecté" : "… En attente"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            <button onClick={refresh} disabled={pending} className="btn-primary py-2 px-4 text-sm">
+              {pending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Rafraîchir le statut
+            </button>
+            <button onClick={disable} disabled={pending} className="text-xs text-red-600 hover:text-red-700 font-medium inline-flex items-center gap-1.5">
+              <Trash2 size={13} /> Désactiver la réception
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── État 3 : réception active ── */}
+      {status === "VERIFIED" && (
+        <>
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><Inbox size={17} /></div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                Réception <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">Active</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Les réponses de vos prospects arrivent sur votre domaine et remontent dans la boîte de réception du bon prospect.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 mb-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0"><CheckCircle2 size={20} /></div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Les réponses arrivent via {replyDomain}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Chaque réponse est rattachée automatiquement au bon prospect.</p>
+            </div>
+          </div>
+
+          <div className="text-sm">
+            <Row k="Adresse de réponse" v={`reply+{prospect}@${replyDomain}`} mono />
+            <Row k="Enregistrement MX" v="✓ Détecté" />
+            <Row k="Activée le" v={inboundDate} />
+          </div>
+
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            <button onClick={refresh} disabled={pending} className="btn-secondary py-1.5 px-3 text-xs">{pending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Re-vérifier</button>
+            <button onClick={disable} disabled={pending} className="text-xs text-red-600 hover:text-red-700 font-medium inline-flex items-center gap-1.5"><Trash2 size={13} /> Désactiver la réception</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

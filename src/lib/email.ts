@@ -75,10 +75,12 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   // Priorité : domaine vérifié de l'organisation → params → env → noreply.
   let senderEmail = params.fromEmail || process.env.EMAIL_FROM || "noreply@talibcrm.com";
   let senderName = params.fromName || process.env.EMAIL_FROM_NAME || "TalibCRM";
+  // Domaine de réception per-org (si réception vérifiée) → sinon repli global plus bas.
+  let orgReplyDomain: string | null = null;
   try {
     const orgDomain = await prisma.orgEmailDomain.findUnique({
       where: { organizationId },
-      select: { domain: true, fromLocalPart: true, fromName: true, status: true },
+      select: { domain: true, fromLocalPart: true, fromName: true, status: true, inboundStatus: true, inboundSubdomain: true },
     });
     if (orgDomain && orgDomain.status === "VERIFIED") {
       senderEmail = orgDomain.fromLocalPart + "@" + orgDomain.domain;
@@ -92,11 +94,16 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         senderName = orgN?.name || senderName;
       }
     }
+    // Réception per-org : les réponses reviennent sur reply.<domaine> uniquement si VÉRIFIÉE.
+    if (orgDomain && orgDomain.inboundStatus === "VERIFIED") {
+      orgReplyDomain = (orgDomain.inboundSubdomain || "reply") + "." + orgDomain.domain;
+    }
   } catch {
     // repli silencieux sur les valeurs par défaut
   }
 
-  const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
+  // Domaine de réponse : celui de l'org si réception vérifiée, sinon le repli global.
+  const inboundDomain = orgReplyDomain || process.env.INBOUND_REPLY_DOMAIN;
 
   // Build Reply-To: prefer custom replyTo, otherwise use inbound pattern with leadId
   let finalReplyTo: string | undefined = replyTo;
