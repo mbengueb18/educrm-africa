@@ -66,6 +66,7 @@ model Organization {
   whatsappCampaigns   WhatsAppCampaign[]
   supportTickets SupportTicket[]
   emailDomain         OrgEmailDomain?
+  planChangeLogs      PlanChangeLog[]
 
   @@map("organizations")
 }
@@ -1583,6 +1584,43 @@ model WhatsAppCampaignRecipient {
   @@unique([campaignId, leadId])
   @@index([metaMessageId])
   @@map("whatsapp_campaign_recipients")
+}
+
+// ─── BACK-OFFICE PLATEFORME (découplé des organisations) ───
+
+model PlatformAdmin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         String    @default("SUPPORT") // OWNER | ADMIN | SUPPORT
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  planChanges PlanChangeLog[]
+
+  @@map("platform_admins")
+}
+
+// Audit des changements de plan effectués depuis le back-office
+model PlanChangeLog {
+  id             String    @id @default(cuid())
+  organizationId String
+  changedById    String? // PlatformAdmin auteur du changement
+  fromPlan       String
+  toPlan         String
+  temporaryUntil DateTime? // si activation temporaire (essai)
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  changedBy    PlatformAdmin? @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("plan_change_logs")
 }
 
 // ─── DOMAINE EMAIL PERSONNALISÉ (par organisation) ───

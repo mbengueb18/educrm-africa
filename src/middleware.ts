@@ -14,6 +14,28 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  var hostNoPort = hostname.split(":")[0];
+
+  // ─── BACK-OFFICE PLATEFORME (admin.talibcrm.com ; admin.localhost en dev) ───
+  var isAdminDomain = hostNoPort === "admin.talibcrm.com" || hostNoPort === "admin.localhost";
+  if (isAdminDomain) {
+    // Ce domaine ne sert QUE le back-office : on réécrit toute URL vers /backoffice/*
+    if (pathname.startsWith("/api/")) return NextResponse.next();
+    if (!pathname.startsWith("/backoffice")) {
+      var rewritten = pathname === "/" ? "/backoffice" : "/backoffice" + pathname;
+      return NextResponse.rewrite(new URL(rewritten, request.url));
+    }
+    return NextResponse.next();
+  }
+
+  // Sur les autres domaines, /backoffice n'est accessible qu'en dev local (pour tester)
+  if (pathname.startsWith("/backoffice")) {
+    if (hostNoPort !== "localhost" && hostNoPort !== "127.0.0.1") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
+  }
+
   // ─── MARKETING SITE (talibcrm.com) ───
   var isMarketingSite = hostname === "talibcrm.com" || hostname === "www.talibcrm.com";
 
