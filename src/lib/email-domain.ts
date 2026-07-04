@@ -108,3 +108,44 @@ export async function removeResendDomain(id: string): Promise<void> {
     // best-effort
   }
 }
+
+// ─── Réception (Phase 2) ──────────────────────────────────────────────────
+// La réception passe par un domaine Resend DISTINCT "reply.<domaine>" : on
+// isole ainsi l'enregistrement MX sur le sous-domaine, sans jamais toucher au
+// MX du domaine racine (messagerie existante de l'école préservée).
+
+export const INBOUND_SUBDOMAIN = "reply";
+
+export function inboundDomainFor(domain: string): string {
+  return INBOUND_SUBDOMAIN + "." + domain.toLowerCase();
+}
+
+// Ne garde que les enregistrements MX (réception) parmi les records renvoyés.
+export function mxOnly(records: DnsRecord[]): DnsRecord[] {
+  return (records || []).filter((r) => (r.type || "").toUpperCase() === "MX");
+}
+
+// Active la réception (et coupe l'envoi) sur un domaine Resend.
+// `capabilities` n'est pas typé dans le SDK → appel REST direct pour garantir l'envoi du champ.
+async function setResendCapabilities(id: string, capabilities: { sending?: "enabled" | "disabled"; receiving?: "enabled" | "disabled" }): Promise<void> {
+  if (!apiKey) throw new Error("RESEND_API_KEY manquant — configurez la clé Resend.");
+  const res = await fetch("https://api.resend.com/domains/" + id, {
+    method: "PATCH",
+    headers: { Authorization: "Bearer " + apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ capabilities }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error("Activation de la réception côté Resend échouée. " + detail);
+  }
+}
+
+// Crée (ou réutilise) le domaine "reply.<domaine>" côté Resend, en mode réception seule.
+export async function findOrCreateInboundDomain(domain: string): Promise<ResendDomainResult> {
+  const replyDomain = inboundDomainFor(domain);
+  const rd = await findOrCreateResendDomain(replyDomain);
+  // Réception seule : un seul MX requis, pas de SPF/DKIM (pas d'envoi depuis ce sous-domaine).
+  await setResendCapabilities(rd.id, { sending: "disabled", receiving: "enabled" });
+  // Relire pour récupérer les enregistrements de réception (MX) générés.
+  return await getResendDomain(rd.id);
+}

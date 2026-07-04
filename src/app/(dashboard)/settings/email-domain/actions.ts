@@ -9,6 +9,8 @@ import {
   getResendDomain,
   verifyResendDomain,
   removeResendDomain,
+  findOrCreateInboundDomain,
+  mxOnly,
   mapStatus,
 } from "@/lib/email-domain";
 
@@ -137,7 +139,87 @@ export async function removeEmailDomain() {
     where: { organizationId: session.user.organizationId },
   });
   if (config?.resendDomainId) await removeResendDomain(config.resendDomainId);
+  // Retire aussi le domaine de réception associé, le cas échéant.
+  if (config?.inboundResendDomainId) await removeResendDomain(config.inboundResendDomainId);
   await prisma.orgEmailDomain.deleteMany({ where: { organizationId: session.user.organizationId } });
+  revalidatePath("/settings/email-domain");
+  return { success: true };
+}
+
+// ─── Réception (Phase 2) ───────────────────────────────────────────────────
+
+// Activer la réception : crée le domaine "reply.<domaine>" côté Resend (réception seule).
+export async function enableInbound() {
+  const session = await requireAdmin();
+  const organizationId = session.user.organizationId;
+
+  const gate = await canAccessFeature(organizationId, "EMAIL_CUSTOM_DOMAIN");
+  if (!gate.allowed) throw new Error("Fonctionnalité non incluse dans votre plan.");
+
+  const config = await prisma.orgEmailDomain.findUnique({ where: { organizationId } });
+  if (!config) throw new Error("Ajoutez d'abord un domaine d'envoi.");
+  if (config.status !== "VERIFIED") throw new Error("Vérifiez d'abord votre domaine d'envoi.");
+
+  const rd = await findOrCreateInboundDomain(config.domain);
+  const status = mapStatus(rd.status);
+
+  await prisma.orgEmailDomain.update({
+    where: { organizationId },
+    data: {
+      inboundResendDomainId: rd.id,
+      inboundMxRecords: mxOnly(rd.records) as any,
+      inboundStatus: status,
+      inboundVerifiedAt: status === "VERIFIED" ? new Date() : null,
+    },
+  });
+
+  revalidatePath("/settings/email-domain");
+  return { success: true, status };
+}
+
+// Rafraîchir le statut de réception depuis Resend.
+export async function refreshInboundStatus() {
+  const session = await requireAdmin();
+  const config = await prisma.orgEmailDomain.findUnique({
+    where: { organizationId: session.user.organizationId },
+  });
+  if (!config?.inboundResendDomainId) throw new Error("Réception non configurée.");
+
+  await verifyResendDomain(config.inboundResendDomainId);
+  const rd = await getResendDomain(config.inboundResendDomainId);
+  const status = mapStatus(rd.status);
+
+  await prisma.orgEmailDomain.update({
+    where: { organizationId: session.user.organizationId },
+    data: {
+      inboundMxRecords: mxOnly(rd.records) as any,
+      inboundStatus: status,
+      inboundVerifiedAt: status === "VERIFIED" ? (config.inboundVerifiedAt || new Date()) : null,
+    },
+  });
+
+  revalidatePath("/settings/email-domain");
+  return { success: true, status };
+}
+
+// Désactiver la réception : retire le domaine "reply.<domaine>" côté Resend et remet le repli global.
+export async function disableInbound() {
+  const session = await requireAdmin();
+  const config = await prisma.orgEmailDomain.findUnique({
+    where: { organizationId: session.user.organizationId },
+  });
+  if (config?.inboundResendDomainId) await removeResendDomain(config.inboundResendDomainId);
+
+  await prisma.orgEmailDomain.update({
+    where: { organizationId: session.user.organizationId },
+    data: {
+      inboundResendDomainId: null,
+      inboundMxRecords: [] as any,
+      inboundStatus: null,
+      inboundVerifiedAt: null,
+    },
+  });
+
   revalidatePath("/settings/email-domain");
   return { success: true };
 }

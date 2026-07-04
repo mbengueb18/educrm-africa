@@ -1635,6 +1635,14 @@ model OrgEmailDomain {
   resendDomainId String? // id du domaine côté Resend
   dnsRecords     Json? // enregistrements DNS renvoyés par Resend (à afficher)
   verifiedAt     DateTime?
+
+  // ─── Réception (Phase 2) — domaine Resend distinct "reply.<domaine>" pour isoler le MX du root ───
+  inboundSubdomain      String    @default("reply") // sous-domaine dédié à la réception (jamais le root)
+  inboundStatus         String? // null=désactivée | PENDING | VERIFIED | FAILED
+  inboundResendDomainId String? // id du domaine "reply.<domaine>" côté Resend
+  inboundMxRecords      Json? // enregistrement(s) MX à ajouter (réception)
+  inboundVerifiedAt     DateTime?
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
