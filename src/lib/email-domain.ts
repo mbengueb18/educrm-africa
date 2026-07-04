@@ -125,16 +125,6 @@ export function mxOnly(records: DnsRecord[]): DnsRecord[] {
   return (records || []).filter((r) => (r.type || "").toUpperCase() === "MX");
 }
 
-// Statut de RÉCEPTION basé sur le(s) MX uniquement.
-// Le domaine Resend reste "pending" tant que le DKIM (envoi, désactivé ici) n'est pas
-// ajouté ; or la réception ne dépend QUE de l'enregistrement MX. On s'appuie donc sur son statut.
-export function inboundStatusFromRecords(records: DnsRecord[], domainStatus: string): "PENDING" | "VERIFIED" | "FAILED" {
-  const mx = mxOnly(records);
-  if (mx.length > 0 && mx.every((r) => (r.status || "").toLowerCase() === "verified")) return "VERIFIED";
-  if ((domainStatus || "").toLowerCase() === "failed") return "FAILED";
-  return "PENDING";
-}
-
 // Active la réception (et coupe l'envoi) sur un domaine Resend.
 // `capabilities` n'est pas typé dans le SDK → appel REST direct pour garantir l'envoi du champ.
 async function setResendCapabilities(id: string, capabilities: { sending?: "enabled" | "disabled"; receiving?: "enabled" | "disabled" }): Promise<void> {

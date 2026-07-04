@@ -355,7 +355,7 @@ function ReceptionSection({ config, pending, startTransition, onDone }: any) {
             <button onClick={enable} disabled={pending} className="btn-primary py-2 px-4 text-sm">
               {pending ? <Loader2 size={15} className="animate-spin" /> : <Inbox size={15} />} Activer la réception
             </button>
-            <span className="text-[11px] text-gray-400">Un enregistrement MX à ajouter. Sans risque pour votre messagerie existante.</span>
+            <span className="text-[11px] text-gray-400">Quelques enregistrements DNS à ajouter sur un sous-domaine dédié. Sans risque pour votre messagerie existante.</span>
           </div>
         </>
       )}
@@ -372,13 +372,13 @@ function ReceptionSection({ config, pending, startTransition, onDone }: any) {
                   {status === "FAILED" ? "Échec" : "En attente DNS"}
                 </span>
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">Ajoutez l'enregistrement <b>MX</b> ci-dessous sur <b>{replyDomain}</b>, puis rafraîchissez.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Ajoutez les <b>enregistrements DNS</b> ci-dessous sur <b>{replyDomain}</b>, puis rafraîchissez.</p>
             </div>
           </div>
 
           <div className="rounded-xl p-3 text-xs flex gap-2.5 mb-4 bg-amber-50 border border-amber-200 text-amber-900">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <div>Ajoutez ce MX <b>uniquement sur le sous-domaine <code className="bg-white/60 px-1 rounded">{config.inboundSubdomain || "reply"}</code></b> — le MX de votre domaine racine (votre messagerie actuelle) n'est pas touché.</div>
+            <div>Ajoutez ces enregistrements <b>uniquement sur le sous-domaine <code className="bg-white/60 px-1 rounded">{config.inboundSubdomain || "reply"}</code></b> — le MX de votre domaine racine (votre messagerie actuelle) n'est pas touché.</div>
           </div>
 
           <div className="border border-gray-200 rounded-xl overflow-x-auto bg-white">
@@ -398,7 +398,7 @@ function ReceptionSection({ config, pending, startTransition, onDone }: any) {
                   <tr key={i}>
                     <td className="px-3 py-2.5 align-top">
                       <span className="font-mono text-[11px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">{r.type}</span>
-                      <div className="text-[10px] text-gray-400 mt-1">Réception{r.priority != null ? " · prio " + r.priority : ""}</div>
+                      <div className="text-[10px] text-gray-400 mt-1">{r.purpose || "Réception"}{r.priority != null ? " · prio " + r.priority : ""}</div>
                     </td>
                     <td className="px-3 py-2.5 align-top"><CopyCell text={r.name} /></td>
                     <td className="px-3 py-2.5 align-top"><CopyCell text={r.value} /></td>
