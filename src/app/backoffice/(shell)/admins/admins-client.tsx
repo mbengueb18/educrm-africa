@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
@@ -107,6 +107,23 @@ export function AdminsClient({ admins, currentId, isOwner }: { admins: Admin[]; 
 
 function RowMenu({ admin, currentId, act }: { admin: Admin; currentId: string; act: (fn: () => Promise<any>, ok?: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuW = 208; // w-52
+      const estH = admin.id !== currentId ? 84 : 44;
+      const openUp = r.bottom + estH + 8 > window.innerHeight;
+      setPos({
+        top: openUp ? r.top - estH - 4 : r.bottom + 4,
+        left: Math.max(8, r.right - menuW),
+      });
+    }
+    setOpen(!open);
+  };
+
   const resetPwd = () => {
     const pwd = prompt("Nouveau mot de passe (8 caractères min.) pour " + admin.name + " :");
     if (!pwd) return;
@@ -118,13 +135,14 @@ function RowMenu({ admin, currentId, act }: { admin: Admin; currentId: string; a
     if (!confirm("Supprimer l'admin " + admin.name + " ?")) return;
     act(() => deletePlatformAdmin(admin.id), "Admin supprimé");
   };
+
   return (
-    <div className="relative inline-block">
-      <button onClick={() => setOpen(!open)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><MoreHorizontal size={16} /></button>
+    <>
+      <button ref={btnRef} onClick={toggle} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><MoreHorizontal size={16} /></button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-52 animate-scale-in">
+          <div style={{ position: "fixed", top: pos.top, left: pos.left }} className="z-50 bg-white rounded-xl shadow-lg border border-gray-200 py-1 w-52 animate-scale-in">
             <button onClick={resetPwd} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-gray-700 hover:bg-gray-50"><KeyRound size={14} /> Réinitialiser le mot de passe</button>
             {admin.id !== currentId && (
               <button onClick={del} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-red-600 hover:bg-red-50"><Trash2 size={14} /> Supprimer</button>
@@ -132,7 +150,7 @@ function RowMenu({ admin, currentId, act }: { admin: Admin; currentId: string; a
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
 
