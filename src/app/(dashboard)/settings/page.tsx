@@ -16,6 +16,7 @@ import {
   MessageCircle,
   FileText,
   ClipboardList,
+  AtSign,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
@@ -30,6 +31,7 @@ const settingsMenu = [
   { label: "Intégrations", description: "API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
   { label: "Tracking Web", description: "Suivi des visiteurs, sources, parcours web", icon: Globe2, href: "/settings/web-tracking" },
   { label: "Templates email", description: "Créez vos modèles d'emails réutilisables", icon: Mail, href: "/settings/email-templates" },
+  { label: "Domaine email", description: "Envoyez vos emails depuis votre propre domaine", icon: AtSign, href: "/settings/email-domain" },
   { label: "WhatsApp", description: "Connexion à WhatsApp Cloud API", icon: MessageCircle, href: "/settings/whatsapp-integration" },
   { label: "Templates WhatsApp", description: "Modèles de messages approuvés par Meta", icon: FileText, href: "/settings/whatsapp-templates" },
   { label: "Workflows", description: "Automatisez vos actions commerciales", icon: Zap, href: "/workflows" },

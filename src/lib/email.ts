@@ -70,8 +70,32 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  const senderEmail = params.fromEmail || process.env.EMAIL_FROM || "noreply@talibcrm.com";
-  const senderName = params.fromName || process.env.EMAIL_FROM_NAME || "TalibCRM";
+
+  // ─── Expéditeur pour l'envoi Resend (repli quand pas d'envoi via Gmail) ───
+  // Priorité : domaine vérifié de l'organisation → params → env → noreply.
+  let senderEmail = params.fromEmail || process.env.EMAIL_FROM || "noreply@talibcrm.com";
+  let senderName = params.fromName || process.env.EMAIL_FROM_NAME || "TalibCRM";
+  try {
+    const orgDomain = await prisma.orgEmailDomain.findUnique({
+      where: { organizationId },
+      select: { domain: true, fromLocalPart: true, fromName: true, status: true },
+    });
+    if (orgDomain && orgDomain.status === "VERIFIED") {
+      senderEmail = orgDomain.fromLocalPart + "@" + orgDomain.domain;
+      if (orgDomain.fromName) {
+        senderName = orgDomain.fromName;
+      } else {
+        const orgN = await prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        });
+        senderName = orgN?.name || senderName;
+      }
+    }
+  } catch {
+    // repli silencieux sur les valeurs par défaut
+  }
+
   const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
 
   // Build Reply-To: prefer custom replyTo, otherwise use inbound pattern with leadId

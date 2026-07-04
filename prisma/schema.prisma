@@ -65,6 +65,7 @@ model Organization {
   whatsappTemplates   WhatsAppTemplate[]
   whatsappCampaigns   WhatsAppCampaign[]
   supportTickets SupportTicket[]
+  emailDomain         OrgEmailDomain?
 
   @@map("organizations")
 }
@@ -1582,6 +1583,27 @@ model WhatsAppCampaignRecipient {
   @@unique([campaignId, leadId])
   @@index([metaMessageId])
   @@map("whatsapp_campaign_recipients")
+}
+
+// ─── DOMAINE EMAIL PERSONNALISÉ (par organisation) ───
+
+model OrgEmailDomain {
+  id             String    @id @default(cuid())
+  organizationId String    @unique
+  domain         String    @unique // ex. bemtech.sn — unicité inter-organisation
+  fromLocalPart  String    @default("admission") // partie avant @ (admission@bemtech.sn)
+  fromName       String? // nom d'affichage (sinon = nom de l'organisation)
+  status         String    @default("PENDING") // PENDING | VERIFIED | FAILED
+  resendDomainId String? // id du domaine côté Resend
+  dnsRecords     Json? // enregistrements DNS renvoyés par Resend (à afficher)
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("org_email_domains")
 }
 
 model SupportTicket {
