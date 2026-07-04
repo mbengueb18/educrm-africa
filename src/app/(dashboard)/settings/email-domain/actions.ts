@@ -11,6 +11,7 @@ import {
   removeResendDomain,
   findOrCreateInboundDomain,
   mxOnly,
+  inboundStatusFromRecords,
   mapStatus,
 } from "@/lib/email-domain";
 
@@ -161,7 +162,7 @@ export async function enableInbound() {
   if (config.status !== "VERIFIED") throw new Error("Vérifiez d'abord votre domaine d'envoi.");
 
   const rd = await findOrCreateInboundDomain(config.domain);
-  const status = mapStatus(rd.status);
+  const status = inboundStatusFromRecords(rd.records, rd.status);
 
   await prisma.orgEmailDomain.update({
     where: { organizationId },
@@ -187,7 +188,7 @@ export async function refreshInboundStatus() {
 
   await verifyResendDomain(config.inboundResendDomainId);
   const rd = await getResendDomain(config.inboundResendDomainId);
-  const status = mapStatus(rd.status);
+  const status = inboundStatusFromRecords(rd.records, rd.status);
 
   await prisma.orgEmailDomain.update({
     where: { organizationId: session.user.organizationId },
