@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
@@ -120,6 +120,20 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
   var [editingTask, setEditingTask] = useState<Task | null>(null);
   var [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   var [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+
+  // Cache des détails prospect (comme l'inbox) : préchargement au survol → volet droit instantané.
+  var leadCacheRef = useRef<Map<string, any>>(new Map());
+  var inflightRef = useRef<Set<string>>(new Set());
+  var [, bumpCache] = useReducer(function(x: number) { return x + 1; }, 0);
+  var prefetchLead = useCallback(function(leadId?: string | null) {
+    if (!leadId) return;
+    if (leadCacheRef.current.has(leadId) || inflightRef.current.has(leadId)) return;
+    inflightRef.current.add(leadId);
+    getLeadDetail(leadId)
+      .then(function(data: any) { leadCacheRef.current.set(leadId!, data || null); })
+      .catch(function() {})
+      .finally(function() { inflightRef.current.delete(leadId!); bumpCache(); });
+  }, []);
   var router = useRouter();
 
   var filtered = useMemo(function() {
@@ -283,6 +297,7 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
                 return <TaskRow key={task.id} task={task} users={users}
                   selected={task.id === selectedTaskId}
                   onSelect={function() { handleSelectTask(task); }}
+                  onPrefetch={function() { prefetchLead(task.leadId); }}
                   onUpdate={function() { router.refresh(); }}
                   onEdit={function() { setEditingTask(task); }} />;
               })}
@@ -294,6 +309,8 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
         <div className="hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <TaskReviewPanel
             task={selectedTask}
+            leadCache={leadCacheRef.current}
+            prefetchLead={prefetchLead}
             onEdit={function() { if (selectedTask) setEditingTask(selectedTask); }}
             onUpdate={function() { router.refresh(); }}
           />
@@ -306,6 +323,8 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
           <TaskReviewPanel
             task={selectedTask}
             mobile
+            leadCache={leadCacheRef.current}
+            prefetchLead={prefetchLead}
             onClose={function() { setMobilePanelOpen(false); }}
             onEdit={function() { if (selectedTask) setEditingTask(selectedTask); }}
             onUpdate={function() { router.refresh(); }}
@@ -340,7 +359,7 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
 }
 
 // ─── Task Row ───
-function TaskRow({ task, users, onUpdate, onEdit, selected, onSelect }: { task: Task; users: any[]; onUpdate: () => void; onEdit: () => void; selected?: boolean; onSelect?: () => void }) {
+function TaskRow({ task, users, onUpdate, onEdit, selected, onSelect, onPrefetch }: { task: Task; users: any[]; onUpdate: () => void; onEdit: () => void; selected?: boolean; onSelect?: () => void; onPrefetch?: () => void }) {
   var [updating, setUpdating] = useState(false);
   var [showMenu, setShowMenu] = useState(false);
 
@@ -391,7 +410,7 @@ function TaskRow({ task, users, onUpdate, onEdit, selected, onSelect }: { task: 
   };
 
   return (
-    <div className={cn(
+    <div onMouseEnter={onPrefetch} onFocus={onPrefetch} className={cn(
       "px-3 sm:px-5 py-3 sm:py-3.5 transition-colors group border-l-[3px]",
       selected ? "bg-brand-50/60 border-brand-500" : "border-transparent hover:bg-gray-50/50",
       task.status === "DONE" && "opacity-60",
@@ -556,28 +575,23 @@ function messagePreview(content: string): string {
   return stripTaskHtml(body).slice(0, 240);
 }
 
-function TaskReviewPanel({ task, mobile, onClose, onEdit, onUpdate }: {
+function TaskReviewPanel({ task, mobile, onClose, onEdit, onUpdate, leadCache, prefetchLead }: {
   task: Task | null;
   mobile?: boolean;
   onClose?: () => void;
   onEdit: () => void;
   onUpdate: () => void;
+  leadCache: Map<string, any>;
+  prefetchLead: (leadId?: string | null) => void;
 }) {
-  var [lead, setLead] = useState<any>(null);
-  var [loading, setLoading] = useState(false);
   var [completing, setCompleting] = useState(false);
   var leadId = task?.leadId || null;
 
-  useEffect(function() {
-    if (!leadId) { setLead(null); return; }
-    var active = true;
-    setLoading(true);
-    getLeadDetail(leadId)
-      .then(function(data) { if (active) setLead(data); })
-      .catch(function() { if (active) setLead(null); })
-      .finally(function() { if (active) setLoading(false); });
-    return function() { active = false; };
-  }, [leadId]);
+  // Lecture depuis le cache partagé : instantané si déjà préchargé (survol ou sélection précédente).
+  useEffect(function() { if (leadId) prefetchLead(leadId); }, [leadId, prefetchLead]);
+  var hasCached = !!leadId && leadCache.has(leadId);
+  var lead = hasCached ? leadCache.get(leadId as string) : null;
+  var loading = !!leadId && !hasCached;
 
   if (!task) {
     return (
@@ -652,7 +666,18 @@ function TaskReviewPanel({ task, mobile, onClose, onEdit, onUpdate }: {
           <p className="text-sm">Cette tâche n'est pas liée à un prospect.</p>
         </div>
       ) : loading ? (
-        <div className="px-4 py-16 text-center"><Loader2 size={26} className="animate-spin text-brand-500 mx-auto" /></div>
+        <div className="px-4 sm:px-5 pb-10">
+          {task.lead && (
+            <div className="flex items-center gap-3 py-3">
+              <div className="w-12 h-12 rounded-xl bg-brand-600 text-white text-base font-bold flex items-center justify-center shrink-0">{getInitials((task.lead.firstName + " " + task.lead.lastName).trim())}</div>
+              <div className="min-w-0">
+                <p className="text-base font-bold text-gray-900 truncate">{task.lead.firstName} {task.lead.lastName}</p>
+                {task.lead.phone && <p className="text-xs text-gray-500 truncate">{task.lead.phone}</p>}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-gray-400 text-xs mt-3"><Loader2 size={16} className="animate-spin text-brand-500" /> Chargement des échanges…</div>
+        </div>
       ) : !lead ? (
         <div className="px-4 py-10 text-center text-gray-400"><p className="text-sm">Prospect introuvable.</p></div>
       ) : (
