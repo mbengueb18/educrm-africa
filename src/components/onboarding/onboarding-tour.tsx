@@ -50,23 +50,26 @@ function findVisible(selector: string): HTMLElement | null {
   return els.find((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }) || null;
 }
 
-export function OnboardingTour() {
+export function OnboardingTour({ userId }: { userId: string }) {
   const router = useRouter();
   const [phase, setPhase] = useState<"welcome" | "tour" | null>(null);
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  const markSeen = useCallback(function () {
-    try { localStorage.setItem(SEEN_KEY, "1"); } catch {}
-  }, []);
+  // Mémorisation PAR UTILISATEUR (et non par navigateur) : chaque user voit le guide une fois.
+  const seenKey = SEEN_KEY + "_" + userId;
 
-  // Auto-affichage au 1er passage + écoute d'un événement de relance.
+  const markSeen = useCallback(function () {
+    try { localStorage.setItem(seenKey, "1"); } catch {}
+  }, [seenKey]);
+
+  // Auto-affichage au 1er passage de CET utilisateur + écoute d'un événement de relance.
   useEffect(function () {
-    try { if (!localStorage.getItem(SEEN_KEY)) setPhase("welcome"); } catch {}
-    var replay = function () { setStep(0); setPhase("welcome"); };
+    try { if (userId && !localStorage.getItem(seenKey)) setPhase("welcome"); } catch {}
+    var replay = function () { setStep(0); setRect(null); setPhase("welcome"); };
     window.addEventListener("talibcrm:start-tour", replay);
     return function () { window.removeEventListener("talibcrm:start-tour", replay); };
-  }, []);
+  }, [userId, seenKey]);
 
   // Navigation + repérage de la cible pour l'étape courante.
   useEffect(function () {

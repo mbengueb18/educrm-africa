@@ -85,7 +85,7 @@ export default async function DashboardLayout({
       </DashboardShell>
       <SupportBubble />
       <CallReturnPrompt />
-      <OnboardingTour />
+      <OnboardingTour userId={session.user.id} />
     </PermissionProvider>
   );
 }
