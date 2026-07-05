@@ -3,15 +3,15 @@
 import { useState, useMemo, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, FileText, Download, Link2, Trash2, Search, Plus, Loader2, X, Check, FolderOpen, Image as ImageIcon } from "lucide-react";
-import { deleteLibraryDocument, getLibraryDocumentUrl } from "./actions";
+import { Upload, FileText, Download, Link2, Trash2, Search, Plus, Loader2, X, Check, FolderOpen, Image as ImageIcon, Pencil } from "lucide-react";
+import { deleteLibraryDocument, getLibraryDocumentUrl, updateLibraryDocument } from "./actions";
 
 type Doc = {
   id: string; name: string; description: string | null; category: string;
   path: string; mimeType: string; size: number; uploadedByName: string; createdAt: string | Date;
 };
 
-const CATEGORIES = ["Brochure", "Programme", "Formulaire", "Tarifs", "Autre"];
+const CATEGORIES = ["Brochure", "Programme", "Formulaire", "Dossier de candidature", "Tarifs", "Autre"];
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return bytes + " o";
@@ -27,6 +27,7 @@ export function DocumentsClient({ documents }: { documents: Doc[] }) {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [editDoc, setEditDoc] = useState<Doc | null>(null);
   const [pending, startTransition] = useTransition();
 
   const cats = useMemo(() => {
@@ -103,6 +104,7 @@ export function DocumentsClient({ documents }: { documents: Doc[] }) {
                       <span className="text-[11px] text-gray-400">{formatSize(doc.size)}</span>
                     </div>
                   </div>
+                  <button onClick={() => setEditDoc(doc)} className="p-1.5 -mt-1 -mr-1 rounded-lg text-gray-300 hover:text-brand-600 hover:bg-gray-100 shrink-0" title="Modifier les infos"><Pencil size={14} /></button>
                 </div>
                 {doc.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{doc.description}</p>}
                 <p className="text-[11px] text-gray-400 mt-2 mb-3">Ajouté par {doc.uploadedByName} · {new Date(doc.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</p>
@@ -118,7 +120,64 @@ export function DocumentsClient({ documents }: { documents: Doc[] }) {
       )}
 
       {uploadOpen && <UploadModal onClose={(saved) => { setUploadOpen(false); if (saved) router.refresh(); }} />}
+      {editDoc && <EditModal doc={editDoc} onClose={(saved) => { setEditDoc(null); if (saved) router.refresh(); }} />}
     </div>
+  );
+}
+
+function EditModal({ doc, onClose }: { doc: Doc; onClose: (saved?: boolean) => void }) {
+  const [name, setName] = useState(doc.name);
+  const [category, setCategory] = useState(CATEGORIES.includes(doc.category) ? doc.category : "Autre");
+  const [description, setDescription] = useState(doc.description || "");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) { toast.error("Le nom est requis"); return; }
+    setSaving(true);
+    try {
+      await updateLibraryDocument(doc.id, { name, category, description });
+      toast.success("Document mis à jour");
+      onClose(true);
+    } catch (e: any) { toast.error(e.message || "Erreur"); setSaving(false); }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={() => onClose()} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <p className="text-sm font-bold text-gray-900">Modifier le document</p>
+            <button onClick={() => onClose()} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              <FileText size={14} className="text-gray-400 shrink-0" /> Le fichier n'est pas modifié — seules les informations le sont.
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Nom du document</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="input text-sm" placeholder="Brochure 2026" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Catégorie</label>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className="input text-sm">
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Description <span className="text-gray-400 font-normal">(option.)</span></label>
+                <input value={description} onChange={(e) => setDescription(e.target.value)} className="input text-sm" placeholder="Note interne…" />
+              </div>
+            </div>
+          </div>
+          <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+            <button onClick={() => onClose()} className="btn-secondary py-2 px-3 text-xs" disabled={saving}>Annuler</button>
+            <button onClick={submit} className="btn-primary py-2 px-4 text-xs" disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Enregistrer</button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

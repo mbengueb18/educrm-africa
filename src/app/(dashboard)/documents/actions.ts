@@ -19,6 +19,24 @@ export async function getLibraryDocuments() {
   });
 }
 
+export async function updateLibraryDocument(id: string, data: { name?: string; category?: string; description?: string | null }) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const doc = await prisma.libraryDocument.findUnique({ where: { id } });
+  if (!doc || doc.organizationId !== session.user.organizationId) throw new Error("Document introuvable");
+
+  await prisma.libraryDocument.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name.trim() || doc.name } : {}),
+      ...(data.category !== undefined ? { category: data.category.trim() || "Autre" } : {}),
+      ...(data.description !== undefined ? { description: (data.description || "").trim() || null } : {}),
+    },
+  });
+  revalidatePath("/documents");
+  return { success: true };
+}
+
 export async function deleteLibraryDocument(id: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
