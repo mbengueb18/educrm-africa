@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, getCampaignRecipientStats, type SegmentRule } from "../../actions";
+import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, scheduleCampaign, getCampaignRecipientStats, type SegmentRule } from "../../actions";
 import { SendConfirmModal } from "@/components/campaigns/send-confirm-modal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -135,6 +135,9 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   var [confirmOpen, setConfirmOpen] = useState(false);
   var [confirmStats, setConfirmStats] = useState<any>(null);
   var [loadingStats, setLoadingStats] = useState(false);
+  var [scheduleOpen, setScheduleOpen] = useState(false);
+  var [scheduleValue, setScheduleValue] = useState("");
+  var [scheduling, setScheduling] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -192,6 +195,36 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
         toast.error(e.message || "Erreur lors de l'envoi");
         setSending(false);
         setConfirmOpen(false);
+      }
+    })();
+  };
+
+  // ─── Programmer l'envoi ───
+  var openSchedule = function() {
+    if (!subject.trim()) { setActivePanel("content"); toast.error("Ajoutez un objet à l'email avant de programmer."); return; }
+    if (blocks.length === 0) { setActivePanel("content"); toast.error("Le contenu de l'email est vide."); return; }
+    var hasAudience = (audienceMode === "audience" && !!selectedAudienceId) || audienceMode === "rules";
+    if (!hasAudience) { setActivePanel("audience"); toast.error("Définissez l'audience de la campagne."); return; }
+    var d = new Date(Date.now() + 60 * 60 * 1000); // défaut : dans 1 h
+    var pad = function(n: number) { return String(n).padStart(2, "0"); };
+    setScheduleValue(d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()));
+    setScheduleOpen(true);
+  };
+
+  var confirmSchedule = function() {
+    if (!scheduleValue) { toast.error("Choisissez une date et une heure."); return; }
+    var when = new Date(scheduleValue);
+    if (isNaN(when.getTime()) || when.getTime() < Date.now() + 60 * 1000) { toast.error("Choisissez une date/heure au moins 1 minute dans le futur."); return; }
+    setScheduling(true);
+    (async function() {
+      try {
+        await doSave();
+        await scheduleCampaign(campaign.id, when.toISOString());
+        toast.success("Campagne programmée pour le " + when.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }));
+        window.location.href = "/campaigns";
+      } catch (e: any) {
+        toast.error(e.message || "Erreur lors de la programmation");
+        setScheduling(false);
       }
     })();
   };
@@ -353,7 +386,10 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
           <button onClick={function() { doSave(); toast.success("Sauvegardé"); }} className="btn-secondary py-1.5 text-xs">
             <Save size={13} /> Sauvegarder
           </button>
-          <button onClick={handleSend} disabled={sending} className="btn-primary py-1.5 text-xs">
+          <button onClick={openSchedule} disabled={sending || scheduling} className="btn-secondary py-1.5 text-xs">
+            <Clock size={13} /> Programmer
+          </button>
+          <button onClick={handleSend} disabled={sending || scheduling} className="btn-primary py-1.5 text-xs">
             {sending ? <><Loader2 size={13} className="animate-spin" /> Envoi...</> : <><Send size={13} /> Envoyer</>}
           </button>
         </div>
@@ -1061,6 +1097,33 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
           onCancel={function() { if (!sending) { setConfirmOpen(false); setConfirmStats(null); } }}
           onConfirm={confirmSend}
         />
+      )}
+
+      {/* Programmer l'envoi */}
+      {scheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={function() { if (!scheduling) setScheduleOpen(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-scale-in">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0"><Clock size={18} /></div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Programmer l'envoi</h3>
+                <p className="text-xs text-gray-500 mt-0.5">La campagne partira automatiquement à la date choisie.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <label className="text-xs font-medium text-gray-600 mb-1.5 block">Date et heure d'envoi</label>
+              <input type="datetime-local" value={scheduleValue} onChange={function(e) { setScheduleValue(e.target.value); }} className="input text-sm" />
+              <p className="text-[11px] text-gray-400 mt-2">Les destinataires seront calculés au moment de l'envoi, selon l'audience à jour.</p>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
+              <button onClick={function() { setScheduleOpen(false); }} disabled={scheduling} className="btn-secondary py-1.5 px-4 text-xs">Annuler</button>
+              <button onClick={confirmSchedule} disabled={scheduling} className="btn-primary py-1.5 px-4 text-xs">
+                {scheduling ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />} Programmer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

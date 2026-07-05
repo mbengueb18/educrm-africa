@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
+import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,10 +15,46 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  var stats = { sent: 0, failed: 0, campaignsCompleted: 0 };
+  var stats = { sent: 0, failed: 0, campaignsCompleted: 0, campaignsStarted: 0 };
 
   try {
-    // Campagnes en cours d'envoi
+    // ─── Campagnes PROGRAMMÉES arrivées à échéance → on matérialise les destinataires ───
+    // (l'audience est calculée maintenant, à l'envoi, pour refléter les derniers changements)
+    var dueScheduled = await prisma.emailCampaign.findMany({
+      where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
+      take: 5,
+    });
+    for (var sc of dueScheduled) {
+      try {
+        var scRules = (sc.segmentRules as any) || [];
+        var scQuery = await getCampaignLeadsQuery(sc.organizationId, sc.audienceId, scRules);
+        var scWhere = { ...scQuery.where, email: { not: null } };
+        var scLeads = await prisma.lead.findMany({ where: scWhere, select: { id: true, email: true } });
+
+        if (scLeads.length === 0) {
+          // Aucun destinataire → on clôture sans envoi
+          await prisma.emailCampaign.update({
+            where: { id: sc.id },
+            data: { status: "SENT", sentAt: new Date(), completedAt: new Date(), totalRecipients: 0 },
+          });
+          continue;
+        }
+
+        await prisma.emailCampaignRecipient.createMany({
+          data: scLeads.map(function(l) { return { campaignId: sc.id, leadId: l.id, email: l.email as string, status: "PENDING" as const }; }),
+          skipDuplicates: true,
+        });
+        await prisma.emailCampaign.update({
+          where: { id: sc.id },
+          data: { status: "SENDING", sentAt: new Date(), totalRecipients: scLeads.length },
+        });
+        stats.campaignsStarted++;
+      } catch (e) {
+        console.error("[Cron Campaigns] Promotion campagne programmée échouée", sc.id, e);
+      }
+    }
+
+    // Campagnes en cours d'envoi (inclut celles qu'on vient de promouvoir)
     var sendingCampaigns = await prisma.emailCampaign.findMany({
       where: { status: "SENDING" },
       take: 5,

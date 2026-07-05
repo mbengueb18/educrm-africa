@@ -5,51 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
-import { buildLeadWhere } from "@/lib/lead-filters";
+import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
 
 // ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
-async function getCampaignLeadsQuery(
-  organizationId: string,
-  audienceId: string | null,
-  rules: any
-): Promise<{
-  where: any;
-  fromAudience: boolean;
-  audienceName?: string;
-}> {
-  // Mode AUDIENCE : on récupère les leadIds depuis AudienceMember
-  if (audienceId) {
-    var audience = await prisma.audience.findFirst({
-      where: { id: audienceId, organizationId: organizationId },
-      select: { id: true, name: true, type: true },
-    });
-    if (!audience) throw new Error("Audience introuvable");
-    if (audience.type === "DYNAMIC") {
-      throw new Error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes");
-    }
-
-    var members = await prisma.audienceMember.findMany({
-      where: { audienceId: audienceId },
-      select: { leadId: true },
-    });
-    var leadIds = members.map(function(m) { return m.leadId; });
-
-    return {
-      where: {
-        organizationId: organizationId,
-        id: { in: leadIds.length > 0 ? leadIds : ["__NO_LEADS__"] },
-        isConverted: false,
-      },
-      fromAudience: true,
-      audienceName: audience.name,
-    };
-  }
-
-  // Mode RÈGLES (nouveau moteur récursif, rétrocompatible avec l'ancien format plat)
-  var where = await buildLeadWhere(rules, organizationId);
-  return { where: where, fromAudience: false };
-}
-
 // ─── Helper : Count leads with/without email for an audience or rules ───
 async function getRecipientStats(
   organizationId: string,
@@ -301,6 +259,49 @@ export async function sendCampaign(campaignId: string) {
 
   // Retourne tout de suite : l'envoi se fait en arrière-plan
   return { queued: leads.length, total: leads.length };
+}
+
+// ─── Programmer l'envoi d'une campagne à une date/heure ultérieure ───
+export async function scheduleCampaign(campaignId: string, scheduledAtISO: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var campaign = await prisma.emailCampaign.findUnique({ where: { id: campaignId } });
+  if (!campaign || campaign.organizationId !== session.user.organizationId) throw new Error("Campagne introuvable");
+  if (campaign.status !== "DRAFT") throw new Error("Cette campagne ne peut plus être programmée.");
+
+  var when = new Date(scheduledAtISO);
+  if (isNaN(when.getTime())) throw new Error("Date invalide.");
+  if (when.getTime() < Date.now() + 60 * 1000) throw new Error("Choisissez une date au moins 1 minute dans le futur.");
+
+  // Les destinataires seront calculés à l'échéance (par le cron), sur l'audience à jour.
+  await prisma.emailCampaign.update({
+    where: { id: campaignId },
+    data: { status: "SCHEDULED", scheduledAt: when },
+  });
+
+  revalidatePath("/campaigns");
+  revalidatePath("/campaigns/" + campaignId);
+  return { success: true, scheduledAt: when };
+}
+
+// ─── Annuler la programmation (repasse en brouillon) ───
+export async function cancelScheduledCampaign(campaignId: string) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var campaign = await prisma.emailCampaign.findUnique({ where: { id: campaignId } });
+  if (!campaign || campaign.organizationId !== session.user.organizationId) throw new Error("Campagne introuvable");
+  if (campaign.status !== "SCHEDULED") throw new Error("Cette campagne n'est pas programmée.");
+
+  await prisma.emailCampaign.update({
+    where: { id: campaignId },
+    data: { status: "DRAFT", scheduledAt: null },
+  });
+
+  revalidatePath("/campaigns");
+  revalidatePath("/campaigns/" + campaignId);
+  return { success: true };
 }
 
 // ─── Delete campaign ───

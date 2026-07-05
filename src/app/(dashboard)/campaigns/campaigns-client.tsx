@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { createCampaign, sendCampaign, deleteCampaign, previewSegment, getCampaignRecipientStats, getCampaignProgress, type SegmentRule } from "./actions";
+import { createCampaign, sendCampaign, deleteCampaign, cancelScheduledCampaign, previewSegment, getCampaignRecipientStats, getCampaignProgress, type SegmentRule } from "./actions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,7 @@ interface Campaign {
   bouncedCount: number;
   failedCount: number;
   sentAt: Date | null;
+  scheduledAt: Date | null;
   createdAt: Date;
   createdBy: { name: string } | null;
   _count: { recipients: number };
@@ -48,6 +49,7 @@ const SOURCE_OPTIONS = [
 
 const STATUS_STYLES: Record<string, { label: string; color: string; icon: typeof Send }> = {
   DRAFT: { label: "Brouillon", color: "badge-gray", icon: Clock },
+  SCHEDULED: { label: "Programmée", color: "badge-blue", icon: Clock },
   SENDING: { label: "En cours", color: "badge-amber", icon: Loader2 },
   SENT: { label: "Envoyé", color: "badge-green", icon: CheckCircle },
   CANCELLED: { label: "Annule", color: "badge-red", icon: XCircle },
@@ -139,6 +141,15 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
     });
   };
 
+  // Annule la programmation → repasse en brouillon
+  var handleCancelSchedule = function(id: string) {
+    if (!confirm("Annuler la programmation ? La campagne repassera en brouillon.")) return;
+    startTransition(async function() {
+      try { await cancelScheduledCampaign(id); toast.success("Programmation annulée"); router.refresh(); }
+      catch (e: any) { toast.error(e.message); }
+    });
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6">
@@ -226,6 +237,11 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                       {campaign.createdBy ? "Par " + campaign.createdBy.name + " — " : ""}
                       {campaign.sentAt ? "Envoye le " + formatDate(campaign.sentAt) : "Créé le " + formatDate(campaign.createdAt)}
                     </p>
+                    {campaign.status === "SCHEDULED" && campaign.scheduledAt && (
+                      <p className="text-xs text-brand-600 font-medium mt-1 flex items-center gap-1">
+                        <Clock size={12} /> Envoi programmé le {new Date(campaign.scheduledAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -241,6 +257,11 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                           <Trash2 size={15} />
                         </button>
                       </>
+                    )}
+                    {campaign.status === "SCHEDULED" && (
+                      <button onClick={function() { handleCancelSchedule(campaign.id); }} disabled={isPending} className="btn-secondary py-1.5 px-3 text-xs">
+                        <X size={13} /> Annuler l'envoi
+                      </button>
                     )}
                     {campaign.status === "SENT" && (
                       <Link
