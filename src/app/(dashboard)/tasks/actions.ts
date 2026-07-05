@@ -4,6 +4,39 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+// ─── Détail ALLÉGÉ pour le volet de revue des tâches (entête + historique uniquement) ───
+// Contrairement à getLeadDetail (fiche complète), on ne charge ni rendez-vous, ni tâches,
+// ni documents, ni _count, ni pièces jointes, et on filtre les activités EN BASE → bien plus rapide.
+export async function getLeadReview(leadId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: {
+      id: true, firstName: true, lastName: true, phone: true, whatsapp: true, email: true, score: true,
+      stage: { select: { name: true, color: true } },
+      program: { select: { name: true } },
+      assignedTo: { select: { name: true } },
+      messages: {
+        orderBy: { sentAt: "desc" }, take: 15,
+        select: { channel: true, direction: true, content: true, sentAt: true },
+      },
+      calls: {
+        orderBy: { calledAt: "desc" }, take: 15,
+        select: { direction: true, calledAt: true, outcome: true, duration: true, notes: true },
+      },
+      activities: {
+        where: { type: { in: ["NOTE_ADDED", "LEAD_STAGE_CHANGED", "LEAD_ASSIGNED", "LEAD_CONVERTED"] } },
+        orderBy: { createdAt: "desc" }, take: 25,
+        select: { type: true, createdAt: true, description: true },
+      },
+    },
+  });
+  if (!lead) throw new Error("Prospect introuvable");
+  return lead;
+}
+
 // ─── Get all tasks ───
 export async function getTasks(filters?: {
   assignedToId?: string;

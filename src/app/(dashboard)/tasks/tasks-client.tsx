@@ -14,8 +14,7 @@ import {
   MessageCircle, Star, GraduationCap, History, StickyNote, Inbox,
   Check, MessageSquare, Bot,
 } from "lucide-react";
-import { createTask, updateTask, deleteTask } from "./actions";
-import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
+import { createTask, updateTask, deleteTask, getLeadReview } from "./actions";
 
 type Task = {
   id: string;
@@ -129,7 +128,7 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
     if (!leadId) return;
     if (leadCacheRef.current.has(leadId) || inflightRef.current.has(leadId)) return;
     inflightRef.current.add(leadId);
-    getLeadDetail(leadId)
+    getLeadReview(leadId)
       .then(function(data: any) { leadCacheRef.current.set(leadId!, data || null); })
       .catch(function() {})
       .finally(function() { inflightRef.current.delete(leadId!); bumpCache(); });
