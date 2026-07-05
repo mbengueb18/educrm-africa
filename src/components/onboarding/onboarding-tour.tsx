@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Inbox, ListTodo, Phone, Bell, X, ArrowRight, ArrowLeft, Check, PlayCircle } from "lucide-react";
+import { Sparkles, Inbox, ListTodo, Phone, PhoneCall, Bell, X, ArrowRight, ArrowLeft, Check, PlayCircle } from "lucide-react";
 
 // Bump la version pour re-déclencher l'accueil après de futures nouveautés.
 const SEEN_KEY = "talibcrm_onboarding_v1";
@@ -27,9 +27,14 @@ const STEPS: Step[] = [
     body: "En cliquant une tâche, la fiche du prospect et l'historique des échanges s'affichent à droite. Vous préparez votre rappel sans jamais perdre la tâche.",
   },
   {
+    selector: 'a[href="/pipeline"]', route: "/pipeline", icon: PhoneCall,
+    title: "Enregistrez vos appels en 1 clic",
+    body: "Depuis une fiche prospect ou une tâche, cliquez « Appeler ». À votre retour dans l'app, une fenêtre vous propose de consigner l'appel : résultat (décroché, pas de réponse…), durée et notes.",
+  },
+  {
     selector: 'a[href="/calls"]', route: "/calls", icon: Phone,
-    title: "Appels & enregistrement",
-    body: "Après un appel lancé via « Appeler », une fenêtre s'ouvre pour consigner le résultat (décroché, durée, notes). Et ici, une recherche vous aide à retrouver le bon prospect.",
+    title: "Historique des appels & recherche",
+    body: "Retrouvez tous vos appels sur la page Appels. Pour en enregistrer un manuellement, une barre de recherche vous aide à retrouver le bon prospect (par nom ou numéro).",
   },
   {
     selector: '[data-tour="notifications"]', icon: Bell,
@@ -41,7 +46,7 @@ const STEPS: Step[] = [
 const FEATURES = [
   { icon: Inbox, title: "Boîte de réception 2 volets", desc: "Traitez vos conversations plus vite." },
   { icon: ListTodo, title: "Revue du prospect dans les tâches", desc: "Préparez vos rappels sans perdre le fil." },
-  { icon: Phone, title: "Enregistrement des appels", desc: "Un suivi propre en quelques secondes." },
+  { icon: PhoneCall, title: "Enregistrement des appels", desc: "Cliquez « Appeler » → notez l'appel au retour." },
   { icon: Bell, title: "Notifications personnalisées", desc: "Seulement vos tâches à vous." },
 ];
 
