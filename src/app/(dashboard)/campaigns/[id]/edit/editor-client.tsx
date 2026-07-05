@@ -11,8 +11,9 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle, FileText
+  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle, FileText, FolderOpen, Search
 } from "lucide-react";
+import { getLibraryDocuments } from "@/app/(dashboard)/documents/actions";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
 import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
@@ -107,6 +108,27 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   var [loadingAudiences, setLoadingAudiences] = useState(false);
   var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
   var [uploadingAttachment, setUploadingAttachment] = useState(false);
+  // Bibliothèque de documents (pièce jointe sans ré-upload)
+  var [libraryOpen, setLibraryOpen] = useState(false);
+  var [libraryDocs, setLibraryDocs] = useState<any[]>([]);
+  var [libraryLoading, setLibraryLoading] = useState(false);
+  var [librarySearch, setLibrarySearch] = useState("");
+
+  var openLibrary = function() {
+    setLibraryOpen(true);
+    if (libraryDocs.length === 0) {
+      setLibraryLoading(true);
+      getLibraryDocuments().then(function(d) { setLibraryDocs(d as any); }).catch(function() {}).finally(function() { setLibraryLoading(false); });
+    }
+  };
+  var addFromLibrary = function(doc: any) {
+    setAttachments(function(prev: any[]) {
+      if (prev.some(function(a) { return a.path === doc.path; })) return prev;
+      return prev.concat([{ path: doc.path, filename: doc.name, contentType: doc.mimeType, size: doc.size }]);
+    });
+    toast.success("« " + doc.name + " » joint");
+    setLibraryOpen(false);
+  };
   var [previewLoading, setPreviewLoading] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
@@ -426,6 +448,61 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
               >
                 {previewMode ? <><Code size={13} /> Mode edition</> : <><Eye size={13} /> Aperçu email</>}
               </button>
+            </div>
+
+            {/* Pièces jointes */}
+            <div className="max-w-[620px] mx-auto mt-6 mb-2 bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><FileText size={14} className="text-gray-400" /> Pièces jointes</h3>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={openLibrary} className="btn-secondary py-1 px-2 text-xs"><FolderOpen size={12} /> Bibliothèque</button>
+                  <label className="btn-secondary py-1 px-2 text-xs cursor-pointer">
+                    {uploadingAttachment ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Fichier
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={uploadingAttachment}
+                      onChange={async function(e) {
+                        var file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 25 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 25 Mo)"); return; }
+                        setUploadingAttachment(true);
+                        try {
+                          var fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("campaignId", campaign.id);
+                          var res = await fetch("/api/campaigns/attachments/upload", { method: "POST", body: fd });
+                          var data = await res.json();
+                          if (data.success) {
+                            setAttachments([...attachments, { path: data.path, filename: data.filename, contentType: data.contentType, size: data.size }]);
+                            toast.success("Fichier ajouté");
+                          } else {
+                            toast.error(data.error || "Erreur upload");
+                          }
+                        } catch { toast.error("Erreur upload"); }
+                        setUploadingAttachment(false);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+              {attachments.length === 0 ? (
+                <p className="text-xs text-gray-400">Aucune pièce jointe. Les fichiers seront envoyés avec chaque email de la campagne.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map(function(att, idx) {
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                        <FileText size={14} className="text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{att.filename}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{((att.size || 0) / 1024 / 1024).toFixed(1)} Mo</span>
+                        <button onClick={function() { setAttachments(attachments.filter(function(_, i) { return i !== idx; })); }} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={13} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -879,73 +956,55 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
               </div>
             )}
 
-            {/* Pièces jointes */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Pièces jointes</h3>
-                <label className="btn-secondary py-1 px-2 text-xs cursor-pointer">
-                  {uploadingAttachment ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                  Ajouter un fichier
-                  <input
-                    type="file"
-                    className="hidden"
-                    disabled={uploadingAttachment}
-                    onChange={async function(e) {
-                      var file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 25 * 1024 * 1024) {
-                        toast.error("Fichier trop volumineux (max 25 Mo)");
-                        return;
-                      }
-                      setUploadingAttachment(true);
-                      try {
-                        var fd = new FormData();
-                        fd.append("file", file);
-                        fd.append("campaignId", campaign.id);
-                        var res = await fetch("/api/campaigns/attachments/upload", { method: "POST", body: fd });
-                        var data = await res.json();
-                        if (data.success) {
-                          setAttachments([...attachments, { path: data.path, filename: data.filename, contentType: data.contentType, size: data.size }]);
-                          toast.success("Fichier ajouté");
-                        } else {
-                          toast.error(data.error || "Erreur upload");
-                        }
-                      } catch {
-                        toast.error("Erreur upload");
-                      }
-                      setUploadingAttachment(false);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-
-              {attachments.length === 0 ? (
-                <p className="text-xs text-gray-400">Aucune pièce jointe. Les fichiers seront envoyés avec chaque email.</p>
-              ) : (
-                <div className="space-y-2">
-                  {attachments.map(function(att, idx) {
-                    return (
-                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                        <FileText size={14} className="text-gray-400 shrink-0" />
-                        <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{att.filename}</span>
-                        <span className="text-[10px] text-gray-400 shrink-0">{(att.size / 1024 / 1024).toFixed(1)} Mo</span>
-                        <button
-                          onClick={function() { setAttachments(attachments.filter(function(_, i) { return i !== idx; })); }}
-                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* (Pièces jointes déplacées vers l'onglet « Contenu ») */}
           </div>
         </div>
       )}
        </div>
+
+      {/* Sélecteur : joindre un document de la bibliothèque */}
+      {libraryOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={function() { setLibraryOpen(false); }} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-2"><FolderOpen size={16} className="text-brand-600" /> Joindre depuis la bibliothèque</p>
+                <button onClick={function() { setLibraryOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              </div>
+              <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={librarySearch} onChange={function(e) { setLibrarySearch(e.target.value); }} placeholder="Rechercher un document…" className="input pl-9 text-sm" />
+                </div>
+              </div>
+              <div className="overflow-y-auto p-2">
+                {libraryLoading ? (
+                  <div className="py-10 text-center"><Loader2 size={22} className="animate-spin text-brand-500 mx-auto" /></div>
+                ) : (
+                  (function() {
+                    var q = librarySearch.trim().toLowerCase();
+                    var list = libraryDocs.filter(function(d) { return !q || (d.name + " " + (d.category || "")).toLowerCase().includes(q); });
+                    if (list.length === 0) return <p className="py-10 text-center text-sm text-gray-400">{libraryDocs.length === 0 ? "Aucun document dans la bibliothèque." : "Aucun résultat."}</p>;
+                    return list.map(function(d) {
+                      return (
+                        <button key={d.id} type="button" onClick={function() { addFromLibrary(d); }} className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50">
+                          <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><FileText size={16} /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{d.name}</p>
+                            <p className="text-[11px] text-gray-400">{d.category || "Autre"}</p>
+                          </div>
+                          <Check size={15} className="text-gray-300 shrink-0" />
+                        </button>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
