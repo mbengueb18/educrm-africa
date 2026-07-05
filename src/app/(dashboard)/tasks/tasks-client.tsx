@@ -15,6 +15,7 @@ import {
   Check, MessageSquare, Bot,
 } from "lucide-react";
 import { createTask, updateTask, deleteTask, getLeadReview } from "./actions";
+import { startCallTracking } from "@/lib/call-tracking";
 
 type Task = {
   id: string;
@@ -727,7 +728,9 @@ function LeadReview({ lead }: { lead: any }) {
 
       {/* Actions rapides */}
       <div className="px-4 mt-3 flex gap-2 flex-wrap">
-        <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs"><Phone size={13} /> Appeler</a>
+        <a href={"tel:" + lead.phone}
+          onClick={function() { startCallTracking({ id: lead.id, name: lead.firstName + " " + lead.lastName, phone: lead.phone }); }}
+          className="btn-secondary py-1.5 px-3 text-xs"><Phone size={13} /> Appeler</a>
         {waNumber && <a href={"https://wa.me/" + waNumber} target="_blank" rel="noopener noreferrer" className="btn-secondary py-1.5 px-3 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50"><MessageCircle size={13} /> WhatsApp</a>}
         {lead.email && <a href={"mailto:" + lead.email} className="btn-secondary py-1.5 px-3 text-xs"><Mail size={13} /> Email</a>}
         <Link href={"/leads/" + lead.id} className="btn-secondary py-1.5 px-3 text-xs"><ExternalLink size={13} /> Fiche complète</Link>

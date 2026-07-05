@@ -18,6 +18,7 @@ import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/acti
 import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
+import { startCallTracking } from "@/lib/call-tracking";
 import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
@@ -124,7 +125,9 @@ export function LeadDetailClient({
 
       {/* Quick actions bar */}
       <div className="flex items-center gap-2 mb-4 sm:mb-5 flex-wrap">
-        <a href={"tel:" + lead.phone} className="btn-secondary py-1.5 px-3 text-xs">
+        <a href={"tel:" + lead.phone}
+          onClick={function() { startCallTracking({ id: lead.id, name: lead.firstName + " " + lead.lastName, phone: lead.phone }); }}
+          className="btn-secondary py-1.5 px-3 text-xs">
           <Phone size={13} /> Appeler
         </a>
         {(lead.whatsapp || lead.phone) && (
