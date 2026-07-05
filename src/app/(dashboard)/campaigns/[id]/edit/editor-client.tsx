@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, type SegmentRule } from "../../actions";
+import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, getCampaignRecipientStats, type SegmentRule } from "../../actions";
+import { SendConfirmModal } from "@/components/campaigns/send-confirm-modal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -131,6 +132,9 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   };
   var [previewLoading, setPreviewLoading] = useState(false);
   var [sending, setSending] = useState(false);
+  var [confirmOpen, setConfirmOpen] = useState(false);
+  var [confirmStats, setConfirmStats] = useState<any>(null);
+  var [loadingStats, setLoadingStats] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -155,23 +159,39 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     setSaving(false);
   }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments]);
 
-  // ─── Envoi de la campagne directement depuis l'éditeur ───
+  // ─── Envoi de la campagne depuis l'éditeur (même flow que la liste : modal + stats) ───
   var handleSend = function() {
     if (!subject.trim()) { setActivePanel("content"); toast.error("Ajoutez un objet à l'email avant d'envoyer."); return; }
     if (blocks.length === 0) { setActivePanel("content"); toast.error("Le contenu de l'email est vide."); return; }
     var hasAudience = (audienceMode === "audience" && !!selectedAudienceId) || audienceMode === "rules";
     if (!hasAudience) { setActivePanel("audience"); toast.error("Définissez l'audience de la campagne."); return; }
-    if (!window.confirm("Envoyer cette campagne maintenant ? Cette action est irréversible.")) return;
+    setConfirmOpen(true);
+    setLoadingStats(true);
+    setConfirmStats(null);
+    (async function() {
+      try {
+        await doSave(); // persiste l'audience/le contenu avant de calculer les destinataires
+        var stats = await getCampaignRecipientStats(campaign.id);
+        setConfirmStats(stats);
+      } catch (e: any) {
+        toast.error(e.message || "Impossible de charger les destinataires");
+        setConfirmOpen(false);
+      }
+      setLoadingStats(false);
+    })();
+  };
+
+  var confirmSend = function() {
     setSending(true);
     (async function() {
       try {
-        await doSave(); // persiste le dernier état avant l'envoi
-        await sendCampaign(campaign.id);
-        toast.success("Campagne en cours d'envoi 🎉");
+        var result = await sendCampaign(campaign.id);
+        toast.success("Campagne lancée — " + result.queued + " email" + (result.queued > 1 ? "s" : "") + " en cours d'envoi");
         window.location.href = "/campaigns";
       } catch (e: any) {
         toast.error(e.message || "Erreur lors de l'envoi");
         setSending(false);
+        setConfirmOpen(false);
       }
     })();
   };
@@ -1029,6 +1049,18 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
             </div>
           </div>
         </>
+      )}
+
+      {/* Confirmation d'envoi (même modal que la liste des campagnes) */}
+      {confirmOpen && (
+        <SendConfirmModal
+          campaign={{ name: name }}
+          stats={confirmStats}
+          loading={loadingStats}
+          isPending={sending}
+          onCancel={function() { if (!sending) { setConfirmOpen(false); setConfirmStats(null); } }}
+          onConfirm={confirmSend}
+        />
       )}
     </>
   );
