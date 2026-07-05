@@ -22,10 +22,15 @@ export default async function DashboardLayout({
   var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var todayEnd = new Date(todayStart.getTime() + 86_400_000);
 
+  // Un commercial ne voit dans son bell que SES tâches. Les admins gardent la vue globale.
+  var isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
+  var assigneeFilter = isAdmin ? {} : { assignedToId: session.user.id };
+
   var [overdueTasks, dueTodayTasks] = await Promise.all([
     prisma.task.findMany({
       where: {
         organizationId: session.user.organizationId,
+        ...assigneeFilter,
         status: { in: ["TODO", "IN_PROGRESS"] },
         dueDate: { lt: now },
       },
@@ -39,6 +44,7 @@ export default async function DashboardLayout({
     prisma.task.findMany({
       where: {
         organizationId: session.user.organizationId,
+        ...assigneeFilter,
         status: { in: ["TODO", "IN_PROGRESS"] },
         dueDate: { gte: todayStart, lt: todayEnd },
       },
