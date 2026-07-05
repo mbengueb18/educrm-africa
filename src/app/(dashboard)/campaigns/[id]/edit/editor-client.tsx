@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, type SegmentRule } from "../../actions";
+import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, type SegmentRule } from "../../actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -130,6 +130,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     setLibraryOpen(false);
   };
   var [previewLoading, setPreviewLoading] = useState(false);
+  var [sending, setSending] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -153,6 +154,27 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     }
     setSaving(false);
   }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments]);
+
+  // ─── Envoi de la campagne directement depuis l'éditeur ───
+  var handleSend = function() {
+    if (!subject.trim()) { setActivePanel("content"); toast.error("Ajoutez un objet à l'email avant d'envoyer."); return; }
+    if (blocks.length === 0) { setActivePanel("content"); toast.error("Le contenu de l'email est vide."); return; }
+    var hasAudience = (audienceMode === "audience" && !!selectedAudienceId) || audienceMode === "rules";
+    if (!hasAudience) { setActivePanel("audience"); toast.error("Définissez l'audience de la campagne."); return; }
+    if (!window.confirm("Envoyer cette campagne maintenant ? Cette action est irréversible.")) return;
+    setSending(true);
+    (async function() {
+      try {
+        await doSave(); // persiste le dernier état avant l'envoi
+        await sendCampaign(campaign.id);
+        toast.success("Campagne en cours d'envoi 🎉");
+        window.location.href = "/campaigns";
+      } catch (e: any) {
+        toast.error(e.message || "Erreur lors de l'envoi");
+        setSending(false);
+      }
+    })();
+  };
 
   useEffect(function() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -305,12 +327,15 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={function() { doSave(); toast.success("Sauvegarde"); }} className="btn-secondary py-1.5 text-xs">
+          <Link href={"/campaigns"} className="btn-secondary py-1.5 text-xs">
+            <ArrowLeft size={13} /> Campagnes
+          </Link>
+          <button onClick={function() { doSave(); toast.success("Sauvegardé"); }} className="btn-secondary py-1.5 text-xs">
             <Save size={13} /> Sauvegarder
           </button>
-          <Link href={"/campaigns"} className="btn-primary py-1.5 text-xs">
-            <ArrowLeft size={13} /> Retour aux campagnes
-          </Link>
+          <button onClick={handleSend} disabled={sending} className="btn-primary py-1.5 text-xs">
+            {sending ? <><Loader2 size={13} className="animate-spin" /> Envoi...</> : <><Send size={13} /> Envoyer</>}
+          </button>
         </div>
       </div>
 
