@@ -186,8 +186,16 @@ export async function refreshInboundStatus() {
   });
   if (!config?.inboundResendDomainId) throw new Error("Réception non configurée.");
 
-  await verifyResendDomain(config.inboundResendDomainId);
-  const rd = await getResendDomain(config.inboundResendDomainId);
+  // Lire d'abord l'état STABILISÉ (sans déclencher verify) : un POST /verify remet
+  // transitoirement le DKIM en "pending", et une lecture immédiate capterait ce faux
+  // "pending" (course de timing → statut bloqué "en attente" à chaque refresh).
+  let rd = await getResendDomain(config.inboundResendDomainId);
+  if (inboundReady(rd.records, rd.status) !== "VERIFIED") {
+    // Pas encore prêt : on relance la vérification, on laisse Resend se stabiliser, puis on relit.
+    await verifyResendDomain(config.inboundResendDomainId);
+    await new Promise((r) => setTimeout(r, 4000));
+    rd = await getResendDomain(config.inboundResendDomainId);
+  }
   const status = inboundReady(rd.records, rd.status);
 
   await prisma.orgEmailDomain.update({
