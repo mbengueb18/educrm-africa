@@ -130,9 +130,18 @@ function UploadModal({ onClose }: { onClose: (saved?: boolean) => void }) {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Proposition de nom lisible à partir du fichier (modifiable par l'utilisateur).
+  const proposeName = (filename: string) =>
+    filename
+      .replace(/\.[^.]+$/, "")      // retire l'extension
+      .replace(/[_-]+/g, " ")        // tirets / underscores → espaces
+      .replace(/\s+/g, " ")          // espaces multiples
+      .trim()
+      .replace(/^./, (c) => c.toUpperCase()); // 1re lettre en majuscule
+
   const pick = (f: File | null) => {
     setFile(f);
-    if (f && !name) setName(f.name.replace(/\.[^.]+$/, ""));
+    if (f && !name.trim()) setName(proposeName(f.name));
   };
 
   const submit = async () => {
@@ -171,8 +180,9 @@ function UploadModal({ onClose }: { onClose: (saved?: boolean) => void }) {
             <input ref={inputRef} type="file" className="hidden" onChange={(e) => pick(e.target.files?.[0] || null)} />
 
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Nom</label>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Nom du document</label>
               <input value={name} onChange={(e) => setName(e.target.value)} className="input text-sm" placeholder="Brochure 2026" />
+              {file && <p className="text-[10px] text-gray-400 mt-1">Proposé d'après le fichier — modifiez-le si besoin.</p>}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
