@@ -136,7 +136,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
   var totalNotifs = unreadCount + overdueTasks.length + dueTodayTasks.length;
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-2 h-[var(--header-height)] px-3 sm:px-6 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+    <header className="sticky top-0 z-40 flex items-center justify-between gap-2 h-[var(--header-height)] px-3 sm:px-6 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
       {/* Mobile menu button — hidden on desktop */}
       <button
         onClick={onMenuClick}
