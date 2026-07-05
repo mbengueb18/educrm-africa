@@ -120,9 +120,24 @@ export function inboundDomainFor(domain: string): string {
   return INBOUND_SUBDOMAIN + "." + domain.toLowerCase();
 }
 
-// Ne garde que les enregistrements MX (réception) parmi les records renvoyés.
-export function mxOnly(records: DnsRecord[]): DnsRecord[] {
-  return (records || []).filter((r) => (r.type || "").toUpperCase() === "MX");
+// Enregistrements à faire ajouter pour la réception : DKIM (vérification de propriété)
+// + Receiving (MX). Le SPF ne concerne que l'envoi depuis ce sous-domaine, qu'on n'utilise
+// pas → on ne l'impose pas à l'utilisateur.
+export function inboundRecords(records: DnsRecord[]): DnsRecord[] {
+  return (records || []).filter((r) => r.purpose === "DKIM" || r.purpose === "Receiving");
+}
+
+// Réception prête quand la PROPRIÉTÉ (DKIM) ET la RÉCEPTION (MX) sont vérifiées,
+// indépendamment du SPF. Important : le `sending` doit rester ACTIVÉ côté Resend, sinon
+// le DKIM n'est jamais vérifié (c'est un mécanisme de signature d'envoi) et tout le
+// routage inbound reste bloqué.
+export function inboundReady(records: DnsRecord[], domainStatus: string): "PENDING" | "VERIFIED" | "FAILED" {
+  const isVer = (s?: string) => (s || "").toLowerCase() === "verified";
+  const dkimOk = (records || []).some((r) => r.purpose === "DKIM" && isVer(r.status));
+  const recvOk = (records || []).some((r) => r.purpose === "Receiving" && isVer(r.status));
+  if (dkimOk && recvOk) return "VERIFIED";
+  if ((domainStatus || "").toLowerCase() === "failed") return "FAILED";
+  return "PENDING";
 }
 
 // Active la réception (et coupe l'envoi) sur un domaine Resend.
@@ -140,12 +155,14 @@ async function setResendCapabilities(id: string, capabilities: { sending?: "enab
   }
 }
 
-// Crée (ou réutilise) le domaine "reply.<domaine>" côté Resend, en mode réception seule.
+// Crée (ou réutilise) le domaine "reply.<domaine>" côté Resend, avec réception activée.
 export async function findOrCreateInboundDomain(domain: string): Promise<ResendDomainResult> {
   const replyDomain = inboundDomainFor(domain);
   const rd = await findOrCreateResendDomain(replyDomain);
-  // Réception seule : un seul MX requis, pas de SPF/DKIM (pas d'envoi depuis ce sous-domaine).
-  await setResendCapabilities(rd.id, { sending: "disabled", receiving: "enabled" });
-  // Relire pour récupérer les enregistrements de réception (MX) générés.
+  // On active À LA FOIS l'envoi et la réception : le sending doit rester activé pour que
+  // Resend vérifie le DKIM (preuve de propriété), sans quoi le domaine n'est jamais vérifié
+  // et le routage inbound est bloqué. On n'envoie pas réellement depuis ce sous-domaine.
+  await setResendCapabilities(rd.id, { sending: "enabled", receiving: "enabled" });
+  // Relire pour récupérer les enregistrements générés (DKIM + Receiving).
   return await getResendDomain(rd.id);
 }

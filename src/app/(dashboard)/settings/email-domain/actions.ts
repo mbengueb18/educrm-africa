@@ -10,6 +10,8 @@ import {
   verifyResendDomain,
   removeResendDomain,
   findOrCreateInboundDomain,
+  inboundRecords,
+  inboundReady,
   mapStatus,
 } from "@/lib/email-domain";
 
@@ -160,13 +162,13 @@ export async function enableInbound() {
   if (config.status !== "VERIFIED") throw new Error("Vérifiez d'abord votre domaine d'envoi.");
 
   const rd = await findOrCreateInboundDomain(config.domain);
-  const status = mapStatus(rd.status); // réception active seulement quand le domaine reply.* est vérifié (DKIM + MX)
+  const status = inboundReady(rd.records, rd.status); // prêt quand DKIM + réception (MX) vérifiés
 
   await prisma.orgEmailDomain.update({
     where: { organizationId },
     data: {
       inboundResendDomainId: rd.id,
-      inboundMxRecords: rd.records as any, // tous les enregistrements du sous-domaine (DKIM de vérif + MX)
+      inboundMxRecords: inboundRecords(rd.records) as any, // DKIM + Receiving (le SPF d'envoi n'est pas imposé)
       inboundStatus: status,
       inboundVerifiedAt: status === "VERIFIED" ? new Date() : null,
     },
@@ -186,12 +188,12 @@ export async function refreshInboundStatus() {
 
   await verifyResendDomain(config.inboundResendDomainId);
   const rd = await getResendDomain(config.inboundResendDomainId);
-  const status = mapStatus(rd.status);
+  const status = inboundReady(rd.records, rd.status);
 
   await prisma.orgEmailDomain.update({
     where: { organizationId: session.user.organizationId },
     data: {
-      inboundMxRecords: rd.records as any,
+      inboundMxRecords: inboundRecords(rd.records) as any,
       inboundStatus: status,
       inboundVerifiedAt: status === "VERIFIED" ? (config.inboundVerifiedAt || new Date()) : null,
     },
