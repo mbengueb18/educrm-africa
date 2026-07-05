@@ -166,6 +166,7 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
         {/* Notifications */}
         <div className="relative">
           <button
+            data-tour="notifications"
             onClick={function() { setShowNotifs(!showNotifs); }}
             className="relative p-2.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
           >
