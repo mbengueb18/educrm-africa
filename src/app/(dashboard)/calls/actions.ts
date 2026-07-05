@@ -4,6 +4,32 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+// ─── Recherche de leads (pour rattacher un appel au bon prospect) ───
+export async function searchLeads(query: string) {
+  const session = await auth();
+  if (!session?.user) return [];
+  const q = (query || "").trim();
+  if (q.length < 2) return [];
+
+  const words = q.split(/\s+/).filter(Boolean);
+  // Chaque mot doit matcher nom/prénom/téléphone/email (AND entre les mots).
+  const and = words.map((w) => ({
+    OR: [
+      { firstName: { contains: w, mode: "insensitive" as const } },
+      { lastName: { contains: w, mode: "insensitive" as const } },
+      { phone: { contains: w } },
+      { email: { contains: w, mode: "insensitive" as const } },
+    ],
+  }));
+
+  return prisma.lead.findMany({
+    where: { organizationId: session.user.organizationId, isConverted: false, AND: and },
+    select: { id: true, firstName: true, lastName: true, phone: true },
+    orderBy: { updatedAt: "desc" },
+    take: 15,
+  });
+}
+
 // ─── Get all calls ───
 export async function getCalls(filters?: {
   calledById?: string;

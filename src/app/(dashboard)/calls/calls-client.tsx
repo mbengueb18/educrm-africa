@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatRelative, formatPhone, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import {
   Voicemail, UserX, ThumbsDown, RotateCcw, CheckCircle2, BarChart3,
   Timer, Target, TrendingUp,
 } from "lucide-react";
-import { logCall, updateCall, deleteCall } from "./actions";
+import { logCall, updateCall, deleteCall, searchLeads } from "./actions";
 
 type Call = {
   id: string;
@@ -349,6 +349,85 @@ function MiniStat({ label, value, icon: Icon, color, highlight }: { label: strin
 }
 
 // ─── Call Form Modal (Create + Edit) ───
+// ─── Sélecteur de lead avec recherche serveur (consignation d'appel) ───
+function LeadSearchPicker({ initialLead, onSelect }: {
+  initialLead: { id: string; firstName: string; lastName: string; phone: string } | null;
+  onSelect: (lead: { id: string; firstName: string; lastName: string; phone: string } | null) => void;
+}) {
+  var [picked, setPicked] = useState(initialLead);
+  var [query, setQuery] = useState("");
+  var [results, setResults] = useState<{ id: string; firstName: string; lastName: string; phone: string }[]>([]);
+  var [open, setOpen] = useState(false);
+  var [loading, setLoading] = useState(false);
+  var boxRef = useRef<HTMLDivElement>(null);
+
+  // Recherche serveur debouncée (≥ 2 caractères)
+  useEffect(function() {
+    if (query.trim().length < 2) { setResults([]); setLoading(false); return; }
+    var active = true;
+    setLoading(true);
+    var t = setTimeout(function() {
+      searchLeads(query)
+        .then(function(r) { if (active) { setResults(r as any); setLoading(false); } })
+        .catch(function() { if (active) setLoading(false); });
+    }, 250);
+    return function() { active = false; clearTimeout(t); };
+  }, [query]);
+
+  // Fermer le menu au clic extérieur
+  useEffect(function() {
+    var onDoc = function(e: MouseEvent) { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return function() { document.removeEventListener("mousedown", onDoc); };
+  }, []);
+
+  var choose = function(lead: { id: string; firstName: string; lastName: string; phone: string }) {
+    setPicked(lead); onSelect(lead); setQuery(""); setResults([]); setOpen(false);
+  };
+  var clear = function() { setPicked(null); onSelect(null); setQuery(""); setResults([]); };
+
+  if (picked) {
+    return (
+      <div className="flex items-center gap-2 input text-sm py-1.5 pr-1.5">
+        <span className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center shrink-0">{getInitials(picked.firstName + " " + picked.lastName)}</span>
+        <span className="flex-1 min-w-0 truncate text-gray-900">{picked.firstName} {picked.lastName}</span>
+        <button type="button" onClick={clear} className="p-1 rounded hover:bg-gray-100 text-gray-400 shrink-0"><X size={14} /></button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <div className="relative">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" value={query}
+          onChange={function(e) { setQuery(e.target.value); setOpen(true); }}
+          onFocus={function() { setOpen(true); }}
+          placeholder="Rechercher un lead…" className="input text-sm pl-8" />
+        {loading && <Loader2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-500 animate-spin" />}
+      </div>
+      {open && query.trim().length >= 2 && (
+        <div className="absolute z-20 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg max-h-56 overflow-y-auto">
+          {results.length === 0 ? (
+            <p className="px-3 py-3 text-xs text-gray-400 text-center">{loading ? "Recherche…" : "Aucun lead trouvé"}</p>
+          ) : results.map(function(l) {
+            return (
+              <button key={l.id} type="button" onClick={function() { choose(l); }}
+                className="w-full text-left flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50">
+                <span className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center shrink-0">{getInitials(l.firstName + " " + l.lastName)}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm text-gray-900 truncate">{l.firstName} {l.lastName}</span>
+                  {l.phone && <span className="block text-[11px] text-gray-400">{formatPhone(l.phone)}</span>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CallFormModal({ mode, call, onClose, users, leads, currentUserId }: {
   mode: "create" | "edit";
   call?: Call;
@@ -369,13 +448,10 @@ function CallFormModal({ mode, call, onClose, users, leads, currentUserId }: {
   );
   var [saving, setSaving] = useState(false);
 
-  // Auto-fill phone when lead is selected
-  var handleLeadChange = function(newLeadId: string) {
-    setLeadId(newLeadId);
-    if (newLeadId) {
-      var lead = leads.find(function(l) { return l.id === newLeadId; });
-      if (lead && !phoneNumber) setPhoneNumber(lead.phone);
-    }
+  // Sélection d'un lead via la recherche → rattache l'appel et pré-remplit le numéro si vide.
+  var handleLeadSelect = function(lead: { id: string; firstName: string; lastName: string; phone: string } | null) {
+    setLeadId(lead ? lead.id : "");
+    if (lead && !phoneNumber.trim()) setPhoneNumber(lead.phone);
   };
 
   var handleSubmit = async function() {
@@ -451,10 +527,7 @@ function CallFormModal({ mode, call, onClose, users, leads, currentUserId }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Lead (optionnel)</label>
-              <select value={leadId} onChange={function(e) { handleLeadChange(e.target.value); }} className="input text-sm">
-                <option value="">Aucun lead</option>
-                {leads.map(function(l) { return <option key={l.id} value={l.id}>{l.firstName} {l.lastName}</option>; })}
-              </select>
+              <LeadSearchPicker initialLead={call?.lead || null} onSelect={handleLeadSelect} />
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Numéro *</label>
