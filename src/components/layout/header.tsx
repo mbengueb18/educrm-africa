@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2, Menu, BellRing, CheckCheck } from "lucide-react";
+import { Bell, Search, Plus, ChevronDown, AlertTriangle, Clock, ListTodo, CheckCircle2, Menu, BellRing, CheckCheck, Sparkles } from "lucide-react";
 import { getInitials, formatRelative } from "@/lib/utils";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -161,7 +161,15 @@ export function Header({ user, overdueTasks = [], dueTodayTasks = [], onMenuClic
       </div>
 
       <div className="flex items-center gap-2">
-        
+        {/* Revoir la visite guidée */}
+        <button
+          onClick={function() { window.dispatchEvent(new CustomEvent("talibcrm:start-tour")); }}
+          className="hidden sm:inline-flex p-2.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-brand-600 transition-colors"
+          title="Revoir la visite guidée"
+          aria-label="Revoir la visite guidée"
+        >
+          <Sparkles size={19} />
+        </button>
 
         {/* Notifications */}
         <div className="relative">
