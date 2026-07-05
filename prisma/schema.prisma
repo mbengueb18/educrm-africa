@@ -781,6 +781,26 @@ model Document {
   @@map("documents")
 }
 
+// Bibliothèque de documents de l'école (niveau organisation) — brochures, programmes,
+// formulaires… téléversés une fois puis partagés avec prospects/étudiants.
+// Auteur dénormalisé (pas de FK) pour une migration simple, sans contrainte.
+model LibraryDocument {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  category       String   @default("Autre")
+  path           String // chemin de stockage Supabase (bucket email-attachments, prefixe library/)
+  mimeType       String
+  size           Int // octets
+  uploadedById   String
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("library_documents")
+}
+
 enum DocumentType {
   ID_CARD
   DIPLOMA
