@@ -19,7 +19,7 @@ const STEPS: Step[] = [
   {
     selector: 'a[href="/inbox"]', route: "/inbox", icon: Inbox,
     title: "Boîte de réception repensée",
-    body: "Vos conversations en vue 2 volets : la liste à gauche, l'échange complet à droite — sans changer de page. Affichage instantané et recherche jusque dans le contenu des messages.",
+    body: "Vos conversations en vue 2 volets : la liste à gauche, l'échange complet à droite — sans changer de page. Affichage instantané, recherche jusque dans le contenu des messages, et un filtre pour n'afficher que vos conversations.",
   },
   {
     selector: 'a[href="/tasks"]', route: "/tasks", icon: ListTodo,
@@ -38,8 +38,8 @@ const STEPS: Step[] = [
   },
   {
     selector: '[data-tour="notifications"]', icon: Bell,
-    title: "Vos notifications, rien que les vôtres",
-    body: "La cloche n'affiche désormais que VOS tâches en retard et du jour — fini le bruit des tâches des collègues.",
+    title: "Notifications & rappels de tâches",
+    body: "La cloche n'affiche que VOS tâches (en retard et du jour). Et quand une tâche a un rappel, vous êtes prévenu à l'heure : une notification dans l'app (avec un son) + un email.",
   },
 ];
 
@@ -47,7 +47,7 @@ const FEATURES = [
   { icon: Inbox, title: "Boîte de réception 2 volets", desc: "Traitez vos conversations plus vite." },
   { icon: ListTodo, title: "Revue du prospect dans les tâches", desc: "Préparez vos rappels sans perdre le fil." },
   { icon: PhoneCall, title: "Enregistrement des appels", desc: "Cliquez « Appeler » → notez l'appel au retour." },
-  { icon: Bell, title: "Notifications personnalisées", desc: "Seulement vos tâches à vous." },
+  { icon: Bell, title: "Notifications & rappels", desc: "Vos tâches + une alerte (son + email) à l'heure." },
 ];
 
 function findVisible(selector: string): HTMLElement | null {
