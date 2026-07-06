@@ -113,7 +113,10 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   }
 
   // ─── Signature de l'expéditeur (auto, retirable via includeSignature=false) ───
-  // Point d'injection unique → couvre emails individuels ET campagnes, sans doublon.
+  // Calculée ici, puis injectée dans les versions HTML **et** texte de chaque canal
+  // (Gmail / Resend) → l'image/mise en forme reste visible même en mode "texte".
+  let signatureHtml = "";
+  let signatureText = "";
   if (params.includeSignature !== false && sentById) {
     try {
       const signer = await prisma.user.findUnique({
@@ -121,11 +124,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         select: { emailSignature: true, emailSignatureEnabled: true },
       });
       if (signer?.emailSignatureEnabled && signer.emailSignature && signer.emailSignature.trim()) {
-        if (params.isHtml) {
-          body = body + '<br><br><div style="color:#555555;font-size:13px;line-height:1.5">' + signer.emailSignature + "</div>";
-        } else {
-          body = body + "\n\n" + stripHtmlForText(signer.emailSignature);
-        }
+        signatureHtml = '<br><br><div style="color:#555555;font-size:13px;line-height:1.5">' + signer.emailSignature + "</div>";
+        signatureText = stripHtmlForText(signer.emailSignature);
       }
     } catch {
       // pas de signature en cas d'erreur
@@ -142,8 +142,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         select: { name: true },
       });
 
-      var gHtml = params.isHtml ? body : formatEmailHtml(body, subject, sender?.name || "TalibCRM");
-      var gText = params.isHtml ? stripHtmlForText(body) : body;
+      var gHtml = (params.isHtml ? body : formatEmailHtml(body, subject, sender?.name || "TalibCRM")) + signatureHtml;
+      var gText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
       var gmailResult = await sendViaGmail({
         userId: sentById,
@@ -280,8 +280,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       }
     }
 
-    const finalHtml = params.isHtml ? body : formatEmailHtml(body, subject, senderName);
-    const finalText = params.isHtml ? stripHtmlForText(body) : body;
+    const finalHtml = (params.isHtml ? body : formatEmailHtml(body, subject, senderName)) + signatureHtml;
+    const finalText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
     const { data, error } = await resend.emails.send({
       from: senderName + " <" + senderEmail + ">",
