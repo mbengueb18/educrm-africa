@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { createCampaign, sendCampaign, deleteCampaign, previewSegment, getCampaignRecipientStats, getCampaignProgress, type SegmentRule } from "./actions";
+import { createCampaign, sendCampaign, deleteCampaign, cancelScheduledCampaign, previewSegment, getCampaignRecipientStats, getCampaignProgress, type SegmentRule } from "./actions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import {
   CheckCircle, XCircle, Filter, Target,
 } from "lucide-react";
 import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
+import { SendConfirmModal } from "@/components/campaigns/send-confirm-modal";
 import { quickCreateCampaign } from "./actions";
 
 interface Campaign {
@@ -27,6 +28,7 @@ interface Campaign {
   bouncedCount: number;
   failedCount: number;
   sentAt: Date | null;
+  scheduledAt: Date | null;
   createdAt: Date;
   createdBy: { name: string } | null;
   _count: { recipients: number };
@@ -47,6 +49,7 @@ const SOURCE_OPTIONS = [
 
 const STATUS_STYLES: Record<string, { label: string; color: string; icon: typeof Send }> = {
   DRAFT: { label: "Brouillon", color: "badge-gray", icon: Clock },
+  SCHEDULED: { label: "Programmée", color: "badge-blue", icon: Clock },
   SENDING: { label: "En cours", color: "badge-amber", icon: Loader2 },
   SENT: { label: "Envoyé", color: "badge-green", icon: CheckCircle },
   CANCELLED: { label: "Annule", color: "badge-red", icon: XCircle },
@@ -138,6 +141,15 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
     });
   };
 
+  // Annule la programmation → repasse en brouillon
+  var handleCancelSchedule = function(id: string) {
+    if (!confirm("Annuler la programmation ? La campagne repassera en brouillon.")) return;
+    startTransition(async function() {
+      try { await cancelScheduledCampaign(id); toast.success("Programmation annulée"); router.refresh(); }
+      catch (e: any) { toast.error(e.message); }
+    });
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6">
@@ -225,6 +237,11 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                       {campaign.createdBy ? "Par " + campaign.createdBy.name + " — " : ""}
                       {campaign.sentAt ? "Envoye le " + formatDate(campaign.sentAt) : "Créé le " + formatDate(campaign.createdAt)}
                     </p>
+                    {campaign.status === "SCHEDULED" && campaign.scheduledAt && (
+                      <p className="text-xs text-brand-600 font-medium mt-1 flex items-center gap-1">
+                        <Clock size={12} /> Envoi programmé le {new Date(campaign.scheduledAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -240,6 +257,11 @@ export function CampaignsClient({ campaigns, stages, programs }: CampaignsClient
                           <Trash2 size={15} />
                         </button>
                       </>
+                    )}
+                    {campaign.status === "SCHEDULED" && (
+                      <button onClick={function() { handleCancelSchedule(campaign.id); }} disabled={isPending} className="btn-secondary py-1.5 px-3 text-xs">
+                        <X size={13} /> Annuler l'envoi
+                      </button>
                     )}
                     {campaign.status === "SENT" && (
                       <Link
@@ -633,148 +655,5 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
 
 }
 
-// ─── Modal de confirmation d'envoi avec gestion des leads sans email ───
-function SendConfirmModal({ campaign, stats, loading, isPending, onCancel, onConfirm }: {
-  campaign: Campaign;
-  stats: {
-    total: number;
-    withEmail: number;
-    withoutEmail: number;
-    fromAudience: boolean;
-    audienceName?: string;
-  } | null;
-  loading: boolean;
-  isPending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  var hasNoRecipients = stats !== null && stats.withEmail === 0;
-  var hasIgnoredLeads = stats !== null && stats.withoutEmail > 0;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scale-in">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
-              <Send size={18} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-gray-900">Envoyer la campagne ?</h3>
-              <p className="text-xs text-gray-500 truncate mt-0.5">"{campaign.name}"</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="px-5 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-8 text-gray-400">
-              <Loader2 size={20} className="animate-spin mr-2" />
-              <span className="text-sm">Calcul des destinataires...</span>
-            </div>
-          ) : stats ? (
-            <>
-              {/* Source de la campagne */}
-              {stats.fromAudience && stats.audienceName && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg mb-4">
-                  <Target size={13} className="text-brand-600 shrink-0" />
-                  <p className="text-xs text-brand-800">
-                    Audience : <span className="font-semibold">{stats.audienceName}</span>
-                  </p>
-                </div>
-              )}
-
-              {/* Stats principales */}
-              <div className="space-y-3 mb-4">
-                {/* Avec email */}
-                <div className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border",
-                  hasNoRecipients
-                    ? "bg-red-50 border-red-200"
-                    : "bg-emerald-50 border-emerald-200"
-                )}>
-                  <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
-                    hasNoRecipients ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600"
-                  )}>
-                    {hasNoRecipients ? <XCircle size={18} /> : <CheckCircle size={18} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900">
-                      <span className={hasNoRecipients ? "text-red-700" : "text-emerald-700"}>
-                        {stats.withEmail}
-                      </span>
-                      <span className="text-gray-600 font-normal"> destinataire{stats.withEmail > 1 ? "s" : ""}</span>
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      {hasNoRecipients
-                        ? "Aucun lead ne recevra cet email"
-                        : "recevront cet email"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Sans email (warning) */}
-                {hasIgnoredLeads && (
-                  <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-                      <AlertTriangle size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-amber-900">
-                        {stats.withoutEmail} lead{stats.withoutEmail > 1 ? "s" : ""} sans email
-                      </p>
-                      <p className="text-[11px] text-amber-700">
-                        Seront ignoré{stats.withoutEmail > 1 ? "s" : ""}. Renseignez leur email pour les inclure.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Total */}
-              <div className="text-center text-xs text-gray-500 pt-3 border-t border-gray-100">
-                Audience totale : <span className="font-semibold text-gray-700">{stats.total} lead{stats.total > 1 ? "s" : ""}</span>
-              </div>
-
-              {/* Warning final */}
-              {!hasNoRecipients && (
-                <p className="text-[11px] text-gray-500 mt-4 text-center">
-                  Cette action est irréversible. Les emails seront envoyés immédiatement.
-                </p>
-              )}
-            </>
-          ) : null}
-        </div>
-
-        {/* Footer actions */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
-          <button
-            onClick={onCancel}
-            disabled={isPending}
-            className="btn-secondary py-1.5 px-4 text-xs"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading || isPending || hasNoRecipients}
-            className="btn-primary py-1.5 px-4 text-xs"
-          >
-            {isPending ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Send size={12} />
-            )}
-            {stats && stats.withEmail > 0
-              ? `Envoyer (${stats.withEmail} email${stats.withEmail > 1 ? "s" : ""})`
-              : "Envoyer"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// (SendConfirmModal déplacé dans @/components/campaigns/send-confirm-modal pour être
+//  réutilisé par la liste ET l'éditeur de campagne — même flow d'envoi.)

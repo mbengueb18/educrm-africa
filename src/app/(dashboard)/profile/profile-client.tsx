@@ -7,9 +7,10 @@ import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import {
   User, Mail, Phone, Shield, Building2, MapPin, Calendar,
-  Pencil, Check, X, Loader2, Key, Eye, EyeOff, LogOut,
+  Pencil, Check, X, Loader2, Key, Eye, EyeOff, LogOut, PenLine,
 } from "lucide-react";
 import { updateProfile, changePassword } from "./actions";
+import { SignatureEditor } from "./signature-editor";
 
 interface ProfileClientProps {
   user: {
@@ -49,7 +50,7 @@ export function ProfileClient({ user }: ProfileClientProps) {
   var [showCurrentPwd, setShowCurrentPwd] = useState(false);
   var [showNewPwd, setShowNewPwd] = useState(false);
   var [changingPwd, setChangingPwd] = useState(false);
-  var [activeTab, setActiveTab] = useState<"info" | "security" | "integrations">("info");
+  var [activeTab, setActiveTab] = useState<"info" | "security" | "integrations" | "signature">("info");
 
   var router = useRouter();
 
@@ -193,6 +194,7 @@ export function ProfileClient({ user }: ProfileClientProps) {
         <div className="flex border-t border-gray-100 px-3 sm:px-6 overflow-x-auto no-scrollbar">
           {[
             { key: "info" as const, label: "Informations", icon: User },
+            { key: "signature" as const, label: "Signature", icon: PenLine },
             { key: "security" as const, label: "Sécurité", icon: Key },
             { key: "integrations" as const, label: "Intégrations", icon: Calendar },
           ].map(function(tab) {
@@ -251,6 +253,17 @@ export function ProfileClient({ user }: ProfileClientProps) {
                 <InfoField icon={Calendar} label="Dernière connexion" value={user.lastLoginAt ? formatDate(user.lastLoginAt) : "Première visite"} muted={!user.lastLoginAt} />
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "signature" && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4 sm:mb-6">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2"><PenLine size={16} className="shrink-0" /> Signature email</h3>
+          </div>
+          <div className="p-4 sm:p-6">
+            <SignatureEditor />
           </div>
         </div>
       )}

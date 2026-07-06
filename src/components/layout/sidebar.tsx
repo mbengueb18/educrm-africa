@@ -21,6 +21,7 @@ import {
   Zap,
   Users,
   MessageCircle,
+  FileText,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
@@ -101,6 +102,12 @@ const navItems: NavItem[] = [
     href: "/students",
     icon: GraduationCap,
     permission: "students:view" as Permission,
+  },
+  {
+    label: "Documents",
+    href: "/documents",
+    icon: FileText,
+    permission: "leads:view" as Permission,
   },
   /* {
     label: "Paiements",

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, type SegmentRule } from "../../actions";
+import { updateCampaignDraft, previewSegment, getAvailableAudiencesForCampaign, sendCampaign, scheduleCampaign, getCampaignRecipientStats, type SegmentRule } from "../../actions";
+import { SendConfirmModal } from "@/components/campaigns/send-confirm-modal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -11,8 +12,9 @@ import {
   Type, Heading1, Square, Image, Video, Minus, Columns2,
   Trash2, GripVertical, ChevronUp, ChevronDown, Code,
   AlignLeft, AlignCenter, AlignRight, Palette, Check, Clock,
-  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle, FileText
+  MousePointer, Link2, LayoutGrid, Mail, Filter, CheckCircle, FileText, FolderOpen, Search
 } from "lucide-react";
+import { getLibraryDocuments } from "@/app/(dashboard)/documents/actions";
 import { RichTextBlock } from "@/components/messaging/rich-text-block";
 import { SectionBlock, SectionLayoutPicker, createSectionColumns, sectionToHtml, SECTION_LAYOUTS, type SectionColumn } from "@/components/messaging/section-block";
 import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
@@ -107,7 +109,36 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   var [loadingAudiences, setLoadingAudiences] = useState(false);
   var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
   var [uploadingAttachment, setUploadingAttachment] = useState(false);
+  var [includeSignature, setIncludeSignature] = useState<boolean>((campaign as any).includeSignature !== false);
+  // Bibliothèque de documents (pièce jointe sans ré-upload)
+  var [libraryOpen, setLibraryOpen] = useState(false);
+  var [libraryDocs, setLibraryDocs] = useState<any[]>([]);
+  var [libraryLoading, setLibraryLoading] = useState(false);
+  var [librarySearch, setLibrarySearch] = useState("");
+
+  var openLibrary = function() {
+    setLibraryOpen(true);
+    if (libraryDocs.length === 0) {
+      setLibraryLoading(true);
+      getLibraryDocuments().then(function(d) { setLibraryDocs(d as any); }).catch(function() {}).finally(function() { setLibraryLoading(false); });
+    }
+  };
+  var addFromLibrary = function(doc: any) {
+    setAttachments(function(prev: any[]) {
+      if (prev.some(function(a) { return a.path === doc.path; })) return prev;
+      return prev.concat([{ path: doc.path, filename: doc.name, contentType: doc.mimeType, size: doc.size }]);
+    });
+    toast.success("« " + doc.name + " » joint");
+    setLibraryOpen(false);
+  };
   var [previewLoading, setPreviewLoading] = useState(false);
+  var [sending, setSending] = useState(false);
+  var [confirmOpen, setConfirmOpen] = useState(false);
+  var [confirmStats, setConfirmStats] = useState<any>(null);
+  var [loadingStats, setLoadingStats] = useState(false);
+  var [scheduleOpen, setScheduleOpen] = useState(false);
+  var [scheduleValue, setScheduleValue] = useState("");
+  var [scheduling, setScheduling] = useState(false);
   var selectedBlock = blocks.find(function(b) { return b.id === selectedBlockId; });
   var activeEditorApiRef = useRef<{ insertVariable: (v: string) => void } | null>(null);
 
@@ -124,13 +155,81 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
         segmentRules: audienceMode === "rules" ? filterGroup : [],
         audienceId: audienceMode === "audience" ? selectedAudienceId : null,
         attachments: attachments,
+        includeSignature: includeSignature,
       });
       setLastSaved(new Date());
     } catch (e) {
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments]);
+  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments, includeSignature]);
+
+  // ─── Envoi de la campagne depuis l'éditeur (même flow que la liste : modal + stats) ───
+  var handleSend = function() {
+    if (!subject.trim()) { setActivePanel("content"); toast.error("Ajoutez un objet à l'email avant d'envoyer."); return; }
+    if (blocks.length === 0) { setActivePanel("content"); toast.error("Le contenu de l'email est vide."); return; }
+    var hasAudience = (audienceMode === "audience" && !!selectedAudienceId) || audienceMode === "rules";
+    if (!hasAudience) { setActivePanel("audience"); toast.error("Définissez l'audience de la campagne."); return; }
+    setConfirmOpen(true);
+    setLoadingStats(true);
+    setConfirmStats(null);
+    (async function() {
+      try {
+        await doSave(); // persiste l'audience/le contenu avant de calculer les destinataires
+        var stats = await getCampaignRecipientStats(campaign.id);
+        setConfirmStats(stats);
+      } catch (e: any) {
+        toast.error(e.message || "Impossible de charger les destinataires");
+        setConfirmOpen(false);
+      }
+      setLoadingStats(false);
+    })();
+  };
+
+  var confirmSend = function() {
+    setSending(true);
+    (async function() {
+      try {
+        var result = await sendCampaign(campaign.id);
+        toast.success("Campagne lancée — " + result.queued + " email" + (result.queued > 1 ? "s" : "") + " en cours d'envoi");
+        window.location.href = "/campaigns";
+      } catch (e: any) {
+        toast.error(e.message || "Erreur lors de l'envoi");
+        setSending(false);
+        setConfirmOpen(false);
+      }
+    })();
+  };
+
+  // ─── Programmer l'envoi ───
+  var openSchedule = function() {
+    if (!subject.trim()) { setActivePanel("content"); toast.error("Ajoutez un objet à l'email avant de programmer."); return; }
+    if (blocks.length === 0) { setActivePanel("content"); toast.error("Le contenu de l'email est vide."); return; }
+    var hasAudience = (audienceMode === "audience" && !!selectedAudienceId) || audienceMode === "rules";
+    if (!hasAudience) { setActivePanel("audience"); toast.error("Définissez l'audience de la campagne."); return; }
+    var d = new Date(Date.now() + 60 * 60 * 1000); // défaut : dans 1 h
+    var pad = function(n: number) { return String(n).padStart(2, "0"); };
+    setScheduleValue(d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()));
+    setScheduleOpen(true);
+  };
+
+  var confirmSchedule = function() {
+    if (!scheduleValue) { toast.error("Choisissez une date et une heure."); return; }
+    var when = new Date(scheduleValue);
+    if (isNaN(when.getTime()) || when.getTime() < Date.now() + 60 * 1000) { toast.error("Choisissez une date/heure au moins 1 minute dans le futur."); return; }
+    setScheduling(true);
+    (async function() {
+      try {
+        await doSave();
+        await scheduleCampaign(campaign.id, when.toISOString());
+        toast.success("Campagne programmée pour le " + when.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }));
+        window.location.href = "/campaigns";
+      } catch (e: any) {
+        toast.error(e.message || "Erreur lors de la programmation");
+        setScheduling(false);
+      }
+    })();
+  };
 
   useEffect(function() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -138,7 +237,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments]);
+  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments, includeSignature]);
 
   // Aperçu live des destinataires (debounce 600ms)
   useEffect(function() {
@@ -283,12 +382,18 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={function() { doSave(); toast.success("Sauvegarde"); }} className="btn-secondary py-1.5 text-xs">
+          <Link href={"/campaigns"} className="btn-secondary py-1.5 text-xs">
+            <ArrowLeft size={13} /> Campagnes
+          </Link>
+          <button onClick={function() { doSave(); toast.success("Sauvegardé"); }} className="btn-secondary py-1.5 text-xs">
             <Save size={13} /> Sauvegarder
           </button>
-          <Link href={"/campaigns"} className="btn-primary py-1.5 text-xs">
-            <ArrowLeft size={13} /> Retour aux campagnes
-          </Link>
+          <button onClick={openSchedule} disabled={sending || scheduling} className="btn-secondary py-1.5 text-xs">
+            <Clock size={13} /> Programmer
+          </button>
+          <button onClick={handleSend} disabled={sending || scheduling} className="btn-primary py-1.5 text-xs">
+            {sending ? <><Loader2 size={13} className="animate-spin" /> Envoi...</> : <><Send size={13} /> Envoyer</>}
+          </button>
         </div>
       </div>
 
@@ -426,6 +531,65 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
               >
                 {previewMode ? <><Code size={13} /> Mode edition</> : <><Eye size={13} /> Aperçu email</>}
               </button>
+            </div>
+
+            {/* Pièces jointes */}
+            <div className="max-w-[620px] mx-auto mt-6 mb-2 bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><FileText size={14} className="text-gray-400" /> Pièces jointes</h3>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={openLibrary} className="btn-secondary py-1 px-2 text-xs"><FolderOpen size={12} /> Bibliothèque</button>
+                  <label className="btn-secondary py-1 px-2 text-xs cursor-pointer">
+                    {uploadingAttachment ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Fichier
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={uploadingAttachment}
+                      onChange={async function(e) {
+                        var file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 25 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 25 Mo)"); return; }
+                        setUploadingAttachment(true);
+                        try {
+                          var fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("campaignId", campaign.id);
+                          var res = await fetch("/api/campaigns/attachments/upload", { method: "POST", body: fd });
+                          var data = await res.json();
+                          if (data.success) {
+                            setAttachments([...attachments, { path: data.path, filename: data.filename, contentType: data.contentType, size: data.size }]);
+                            toast.success("Fichier ajouté");
+                          } else {
+                            toast.error(data.error || "Erreur upload");
+                          }
+                        } catch { toast.error("Erreur upload"); }
+                        setUploadingAttachment(false);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+              {attachments.length === 0 ? (
+                <p className="text-xs text-gray-400">Aucune pièce jointe. Les fichiers seront envoyés avec chaque email de la campagne.</p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map(function(att, idx) {
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                        <FileText size={14} className="text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{att.filename}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{((att.size || 0) / 1024 / 1024).toFixed(1)} Mo</span>
+                        <button onClick={function() { setAttachments(attachments.filter(function(_, i) { return i !== idx; })); }} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"><X size={13} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <label className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={includeSignature} onChange={function(e) { setIncludeSignature(e.target.checked); }} className="rounded border-gray-300 text-brand-600" />
+                Ajouter ma signature en bas de chaque email
+              </label>
             </div>
           </div>
 
@@ -879,73 +1043,94 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
               </div>
             )}
 
-            {/* Pièces jointes */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Pièces jointes</h3>
-                <label className="btn-secondary py-1 px-2 text-xs cursor-pointer">
-                  {uploadingAttachment ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                  Ajouter un fichier
-                  <input
-                    type="file"
-                    className="hidden"
-                    disabled={uploadingAttachment}
-                    onChange={async function(e) {
-                      var file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 25 * 1024 * 1024) {
-                        toast.error("Fichier trop volumineux (max 25 Mo)");
-                        return;
-                      }
-                      setUploadingAttachment(true);
-                      try {
-                        var fd = new FormData();
-                        fd.append("file", file);
-                        fd.append("campaignId", campaign.id);
-                        var res = await fetch("/api/campaigns/attachments/upload", { method: "POST", body: fd });
-                        var data = await res.json();
-                        if (data.success) {
-                          setAttachments([...attachments, { path: data.path, filename: data.filename, contentType: data.contentType, size: data.size }]);
-                          toast.success("Fichier ajouté");
-                        } else {
-                          toast.error(data.error || "Erreur upload");
-                        }
-                      } catch {
-                        toast.error("Erreur upload");
-                      }
-                      setUploadingAttachment(false);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-
-              {attachments.length === 0 ? (
-                <p className="text-xs text-gray-400">Aucune pièce jointe. Les fichiers seront envoyés avec chaque email.</p>
-              ) : (
-                <div className="space-y-2">
-                  {attachments.map(function(att, idx) {
-                    return (
-                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                        <FileText size={14} className="text-gray-400 shrink-0" />
-                        <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{att.filename}</span>
-                        <span className="text-[10px] text-gray-400 shrink-0">{(att.size / 1024 / 1024).toFixed(1)} Mo</span>
-                        <button
-                          onClick={function() { setAttachments(attachments.filter(function(_, i) { return i !== idx; })); }}
-                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* (Pièces jointes déplacées vers l'onglet « Contenu ») */}
           </div>
         </div>
       )}
        </div>
+
+      {/* Sélecteur : joindre un document de la bibliothèque */}
+      {libraryOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={function() { setLibraryOpen(false); }} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-2"><FolderOpen size={16} className="text-brand-600" /> Joindre depuis la bibliothèque</p>
+                <button onClick={function() { setLibraryOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              </div>
+              <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={librarySearch} onChange={function(e) { setLibrarySearch(e.target.value); }} placeholder="Rechercher un document…" className="input pl-9 text-sm" />
+                </div>
+              </div>
+              <div className="overflow-y-auto p-2">
+                {libraryLoading ? (
+                  <div className="py-10 text-center"><Loader2 size={22} className="animate-spin text-brand-500 mx-auto" /></div>
+                ) : (
+                  (function() {
+                    var q = librarySearch.trim().toLowerCase();
+                    var list = libraryDocs.filter(function(d) { return !q || (d.name + " " + (d.category || "")).toLowerCase().includes(q); });
+                    if (list.length === 0) return <p className="py-10 text-center text-sm text-gray-400">{libraryDocs.length === 0 ? "Aucun document dans la bibliothèque." : "Aucun résultat."}</p>;
+                    return list.map(function(d) {
+                      return (
+                        <button key={d.id} type="button" onClick={function() { addFromLibrary(d); }} className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50">
+                          <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><FileText size={16} /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{d.name}</p>
+                            <p className="text-[11px] text-gray-400">{d.category || "Autre"}</p>
+                          </div>
+                          <Check size={15} className="text-gray-300 shrink-0" />
+                        </button>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Confirmation d'envoi (même modal que la liste des campagnes) */}
+      {confirmOpen && (
+        <SendConfirmModal
+          campaign={{ name: name }}
+          stats={confirmStats}
+          loading={loadingStats}
+          isPending={sending}
+          onCancel={function() { if (!sending) { setConfirmOpen(false); setConfirmStats(null); } }}
+          onConfirm={confirmSend}
+        />
+      )}
+
+      {/* Programmer l'envoi */}
+      {scheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={function() { if (!scheduling) setScheduleOpen(false); }} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-scale-in">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0"><Clock size={18} /></div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Programmer l'envoi</h3>
+                <p className="text-xs text-gray-500 mt-0.5">La campagne partira automatiquement à la date choisie.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <label className="text-xs font-medium text-gray-600 mb-1.5 block">Date et heure d'envoi</label>
+              <input type="datetime-local" value={scheduleValue} onChange={function(e) { setScheduleValue(e.target.value); }} className="input text-sm" />
+              <p className="text-[11px] text-gray-400 mt-2">Les destinataires seront calculés au moment de l'envoi, selon l'audience à jour.</p>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2">
+              <button onClick={function() { setScheduleOpen(false); }} disabled={scheduling} className="btn-secondary py-1.5 px-4 text-xs">Annuler</button>
+              <button onClick={confirmSchedule} disabled={scheduling} className="btn-primary py-1.5 px-4 text-xs">
+                {scheduling ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />} Programmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

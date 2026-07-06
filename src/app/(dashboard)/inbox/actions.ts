@@ -11,7 +11,8 @@ export async function sendEmailToLead(
   subject: string,
   body: string,
   attachments?: { path: string; filename: string; contentType?: string; size?: number }[],
-  isHtml?: boolean
+  isHtml?: boolean,
+  includeSignature?: boolean
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -44,6 +45,7 @@ export async function sendEmailToLead(
     sentById: session.user.id,
     attachments,
     isHtml,
+    includeSignature,
     preferUserMailbox: true,
     fromName,
     fromEmail,

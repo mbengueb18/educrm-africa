@@ -3,9 +3,11 @@
 import { useState, useTransition, useEffect } from "react";
 import { sendEmailToLead, getEmailTemplates, getOrgName } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
-import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles } from "lucide-react";
+import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles, FolderOpen, Search, Check, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
+import { getLibraryDocuments } from "@/app/(dashboard)/documents/actions";
+import { getMyEmailSignature } from "@/app/(dashboard)/profile/actions";
 
 interface UploadedAttachment {
   path: string;
@@ -71,7 +73,55 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   const [isPending, startTransition] = useTransition();
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [addSignature, setAddSignature] = useState(true);
   const [orgName, setOrgName] = useState("");
+  const [sigHtml, setSigHtml] = useState("");
+  const [sigEnabled, setSigEnabled] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Charge la signature de l'utilisateur (pour l'aperçu)
+  useEffect(function() {
+    getMyEmailSignature().then(function(d: any) {
+      setSigHtml(d?.signature || "");
+      setSigEnabled(d?.enabled !== false);
+    }).catch(function() {});
+  }, []);
+
+  var escapeHtml = function(s: string) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  var buildPreview = function() {
+    var contentHtml = mode === "visual"
+      ? html
+      : (body || "").split("\n").map(function(l) {
+          return l.trim() ? '<p style="margin:0 0 12px;line-height:1.6;color:#2C3E50">' + escapeHtml(l) + "</p>" : '<p style="margin:0 0 12px">&nbsp;</p>';
+        }).join("");
+    var sig = (addSignature && sigEnabled && sigHtml.trim())
+      ? '<div style="color:#555555;font-size:13px;line-height:1.5;margin-top:18px">' + sigHtml + "</div>"
+      : "";
+    return contentHtml + sig;
+  };
+  // Bibliothèque de documents (pièce jointe sans ré-upload)
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryDocs, setLibraryDocs] = useState<any[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState("");
+
+  const openLibrary = function() {
+    setLibraryOpen(true);
+    if (libraryDocs.length === 0) {
+      setLibraryLoading(true);
+      getLibraryDocuments().then(function(d) { setLibraryDocs(d as any); }).catch(function() {}).finally(function() { setLibraryLoading(false); });
+    }
+  };
+  const addFromLibrary = function(doc: any) {
+    setAttachments(function(prev) {
+      if (prev.some(function(a) { return a.path === doc.path; })) return prev;
+      return prev.concat([{ path: doc.path, filename: doc.name, size: doc.size, contentType: doc.mimeType }]);
+    });
+    toast.success("« " + doc.name + " » joint");
+    setLibraryOpen(false);
+  };
 
   // Load saved templates + nom de l'organisation on mount
   useEffect(function() {
@@ -184,7 +234,8 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           attachments.length > 0 ? attachments.map(function(a) {
             return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
           }) : undefined,
-          isHtml
+          isHtml,
+          addSignature
         );
         if (result.success) {
           toast.success(result.demoMode
@@ -369,19 +420,101 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             )}
             <input type="file" multiple onChange={handleFileUpload} disabled={uploading || isPending} className="hidden" />
           </label>
+          <button type="button" onClick={openLibrary} disabled={uploading || isPending} className="btn-secondary py-1.5 text-xs">
+            <FolderOpen size={13} /> Bibliothèque
+          </button>
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none ml-1" title="Ajouter votre signature en bas de l'email">
+            <input type="checkbox" checked={addSignature} onChange={function(e) { setAddSignature(e.target.checked); }} className="rounded border-gray-300 text-brand-600" />
+            Ma signature
+          </label>
         </div>
-        <button
-          onClick={handleSend}
-          disabled={isPending || uploading || !subject.trim() || (mode === "text" ? !body.trim() : !html.trim())}
-          className="btn-primary py-1.5 text-xs"
-        >
-          {isPending ? (
-            <><Loader2 size={14} className="animate-spin" /> Envoi...</>
-          ) : (
-            <><Send size={14} /> Envoyer</>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={function() { setPreviewOpen(true); }} disabled={mode === "text" ? !body.trim() : !html.trim()} className="btn-secondary py-1.5 text-xs">
+            <Eye size={14} /> Visualiser
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={isPending || uploading || !subject.trim() || (mode === "text" ? !body.trim() : !html.trim())}
+            className="btn-primary py-1.5 text-xs"
+          >
+            {isPending ? (
+              <><Loader2 size={14} className="animate-spin" /> Envoi...</>
+            ) : (
+              <><Send size={14} /> Envoyer</>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Sélecteur : joindre un document de la bibliothèque */}
+      {libraryOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" onClick={function() { setLibraryOpen(false); }} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-2"><FolderOpen size={16} className="text-brand-600" /> Joindre depuis la bibliothèque</p>
+                <button onClick={function() { setLibraryOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              </div>
+              <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={librarySearch} onChange={function(e) { setLibrarySearch(e.target.value); }} placeholder="Rechercher un document…" className="input pl-9 text-sm" />
+                </div>
+              </div>
+              <div className="overflow-y-auto p-2">
+                {libraryLoading ? (
+                  <div className="py-10 text-center"><Loader2 size={22} className="animate-spin text-brand-500 mx-auto" /></div>
+                ) : (
+                  (function() {
+                    var q = librarySearch.trim().toLowerCase();
+                    var list = libraryDocs.filter(function(d) { return !q || (d.name + " " + (d.category || "")).toLowerCase().includes(q); });
+                    if (list.length === 0) return <p className="py-10 text-center text-sm text-gray-400">{libraryDocs.length === 0 ? "Aucun document dans la bibliothèque." : "Aucun résultat."}</p>;
+                    return list.map(function(d) {
+                      return (
+                        <button key={d.id} type="button" onClick={function() { addFromLibrary(d); }} className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50">
+                          <div className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><FileText size={16} /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{d.name}</p>
+                            <p className="text-[11px] text-gray-400">{d.category || "Autre"}</p>
+                          </div>
+                          <Check size={15} className="text-gray-300 shrink-0" />
+                        </button>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Aperçu de l'email avant envoi */}
+      {previewOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={function() { setPreviewOpen(false); }} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 flex items-center gap-2"><Eye size={15} className="text-brand-600" /> Aperçu de l'email</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">{subject || "(sans objet)"}</p>
+                </div>
+                <button onClick={function() { setPreviewOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+              </div>
+              <div className="overflow-y-auto p-5" style={{ background: "#f4f6f8" }}>
+                <div style={{ maxWidth: 600, margin: "0 auto", background: "#ffffff", border: "1px solid #e6eaee", borderRadius: 12, padding: "24px 28px", color: "#2C3E50", fontSize: 14, lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "break-word" }}
+                  dangerouslySetInnerHTML={{ __html: buildPreview() }} />
+              </div>
+              <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2 shrink-0">
+                <p className="text-[11px] text-gray-400">{"Les variables ({{prenom}}…) seront remplacées à l'envoi."}</p>
+                <button onClick={function() { setPreviewOpen(false); }} className="btn-secondary py-1.5 px-4 text-xs">Fermer</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

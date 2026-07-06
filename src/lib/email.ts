@@ -25,6 +25,7 @@ interface SendEmailParams {
   fromName?: string;
   fromEmail?: string;
   isCampaign?: boolean;
+  includeSignature?: boolean; // ajoute la signature de l'expéditeur (défaut: oui)
 }
 
 interface EmailResult {
@@ -111,6 +112,26 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
     finalReplyTo = "reply+" + leadId + "@" + inboundDomain;
   }
 
+  // ─── Signature de l'expéditeur (auto, retirable via includeSignature=false) ───
+  // Calculée ici, puis injectée dans les versions HTML **et** texte de chaque canal
+  // (Gmail / Resend) → l'image/mise en forme reste visible même en mode "texte".
+  let signatureHtml = "";
+  let signatureText = "";
+  if (params.includeSignature !== false && sentById) {
+    try {
+      const signer = await prisma.user.findUnique({
+        where: { id: sentById },
+        select: { emailSignature: true, emailSignatureEnabled: true },
+      });
+      if (signer?.emailSignatureEnabled && signer.emailSignature && signer.emailSignature.trim()) {
+        signatureHtml = '<br><br><div style="color:#555555;font-size:13px;line-height:1.5">' + signer.emailSignature + "</div>";
+        signatureText = stripHtmlForText(signer.emailSignature);
+      }
+    } catch {
+      // pas de signature en cas d'erreur
+    }
+  }
+
   // ─── Envoi 1-to-1 via la boîte Gmail de l'utilisateur (si connectée) ───
   // Placé AVANT le mode démo : Gmail est un vrai canal d'envoi, indépendant de Resend.
   if (params.preferUserMailbox && sentById) {
@@ -121,8 +142,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         select: { name: true },
       });
 
-      var gHtml = params.isHtml ? body : formatEmailHtml(body, subject, sender?.name || "TalibCRM");
-      var gText = params.isHtml ? stripHtmlForText(body) : body;
+      var gHtml = params.isHtml ? (body + signatureHtml) : formatEmailHtml(body, subject, sender?.name || "TalibCRM", signatureHtml);
+      var gText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
       var gmailResult = await sendViaGmail({
         userId: sentById,
@@ -259,8 +280,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       }
     }
 
-    const finalHtml = params.isHtml ? body : formatEmailHtml(body, subject, senderName);
-    const finalText = params.isHtml ? stripHtmlForText(body) : body;
+    const finalHtml = params.isHtml ? (body + signatureHtml) : formatEmailHtml(body, subject, senderName, signatureHtml);
+    const finalText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
     const { data, error } = await resend.emails.send({
       from: senderName + " <" + senderEmail + ">",
@@ -405,19 +426,25 @@ function replaceVariables(text: string, lead: { firstName: string; lastName: str
     .replace(/\{\{email\}\}/gi, lead.email);
 }
 
-function formatEmailHtml(body: string, subject: string, senderName: string): string {
+// Template des emails envoyés (mode texte) — conteneur centré 600px, pas de débordement.
+function formatEmailHtml(body: string, subject: string, senderName: string, signatureHtml: string = ""): string {
   const paragraphs = body
     .split("\n")
     .map(function(line) {
       if (!line.trim()) return '<p style="margin:0 0 12px;">&nbsp;</p>';
-      return '<p style="margin:0 0 12px;line-height:1.6;color:#2C3E50;">' + line + "</p>";
+      return '<p style="margin:0 0 12px;line-height:1.6;color:#2C3E50;word-break:break-word;overflow-wrap:break-word;">' + line + "</p>";
     })
     .join("");
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
-    '<body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#ffffff;margin:0;padding:0;color:#2C3E50;">' +
-    '<div style="width:100%;padding:28px 32px;font-size:14px;line-height:1.6;">' + paragraphs + "</div>" +
-    "</body></html>";
+  const sig = signatureHtml ? '<div style="max-width:100%;overflow:hidden;">' + signatureHtml + "</div>" : "";
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    "<style>img{max-width:100%;height:auto;}</style></head>" +
+    '<body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2C3E50;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;"><tr><td align="center" style="padding:24px 12px;">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e6eaee;border-radius:12px;">' +
+    '<tr><td style="padding:28px 32px;font-size:14px;line-height:1.6;color:#2C3E50;">' + paragraphs + sig + "</td></tr>" +
+    "</table></td></tr></table></body></html>";
 }
 
 function stripHtmlForText(html: string): string {

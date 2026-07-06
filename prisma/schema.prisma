@@ -204,6 +204,8 @@ model User {
   avatar         String?
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
+  emailSignature        String?  @db.Text // signature HTML ajoutée automatiquement aux emails
+  emailSignatureEnabled Boolean  @default(true)
   organizationId String
   campusId       String? // null = access to all campuses
   createdAt      DateTime  @default(now())
@@ -781,6 +783,26 @@ model Document {
   @@map("documents")
 }
 
+// Bibliothèque de documents de l'école (niveau organisation) — brochures, programmes,
+// formulaires… téléversés une fois puis partagés avec prospects/étudiants.
+// Auteur dénormalisé (pas de FK) pour une migration simple, sans contrainte.
+model LibraryDocument {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  category       String   @default("Autre")
+  path           String // chemin de stockage Supabase (bucket email-attachments, prefixe library/)
+  mimeType       String
+  size           Int // octets
+  uploadedById   String
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("library_documents")
+}
+
 enum DocumentType {
   ID_CARD
   DIPLOMA
@@ -920,6 +942,7 @@ model EmailCampaign {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   audienceId      String?
+  includeSignature Boolean            @default(true) // ajouter la signature de l'expéditeur en bas de chaque email
   audience        Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
   createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])
