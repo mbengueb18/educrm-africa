@@ -47,6 +47,7 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/login") ||
       pathname.startsWith("/api/") ||
       pathname.startsWith("/public") ||
+      pathname.startsWith("/f/") ||
       pathname.startsWith("/_next");
 
     if (!allowedOnMarketing) {
@@ -78,7 +79,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/register") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/public");
+    pathname.startsWith("/public") ||
+    pathname.startsWith("/f/");
 
   var token =
     request.cookies.get("authjs.session-token")?.value ||

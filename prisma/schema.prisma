@@ -803,6 +803,43 @@ model LibraryDocument {
   @@map("library_documents")
 }
 
+// Constructeur de formulaires : formulaires personnalisés (site web / lien / webinaire)
+model Form {
+  id               String   @id @default(cuid())
+  organizationId   String
+  name             String
+  slug             String   @unique // global → URL /f/<slug>
+  description      String?
+  fields           Json // [{ id, type, label, name, required, placeholder?, help?, options[]?, width? }]
+  settings         Json? // { submitLabel, successMode, successMessage, redirectUrl, color, buttonColor, bgColor, textColor, radius, logo, customCss }
+  routing          Json? // { pipelineStageId?, assignToId?, tags[] }
+  status           String   @default("DRAFT") // DRAFT | PUBLISHED
+  submissionsCount Int      @default(0)
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  submissions FormSubmission[]
+
+  @@index([organizationId])
+  @@map("forms")
+}
+
+model FormSubmission {
+  id             String   @id @default(cuid())
+  formId         String
+  organizationId String
+  leadId         String? // lead créé à partir de cette soumission
+  data           Json // valeurs brutes soumises
+  createdAt      DateTime @default(now())
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([organizationId])
+  @@map("form_submissions")
+}
+
 enum DocumentType {
   ID_CARD
   DIPLOMA

@@ -22,6 +22,7 @@ import {
   Users,
   MessageCircle,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
@@ -107,6 +108,12 @@ const navItems: NavItem[] = [
     label: "Documents",
     href: "/documents",
     icon: FileText,
+    permission: "leads:view" as Permission,
+  },
+  {
+    label: "Formulaires",
+    href: "/forms",
+    icon: ClipboardList,
     permission: "leads:view" as Permission,
   },
   /* {
