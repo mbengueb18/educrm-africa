@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Inbox, ListTodo, Phone, PhoneCall, Bell, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone } from "lucide-react";
+import { Sparkles, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone } from "lucide-react";
 
 // Bump la version pour re-déclencher l'accueil après de futures nouveautés.
 const SEEN_KEY = "talibcrm_onboarding_v2";
@@ -16,31 +16,6 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  {
-    selector: 'a[href="/inbox"]', route: "/inbox", icon: Inbox,
-    title: "Boîte de réception repensée",
-    body: "Vos conversations en vue 2 volets : la liste à gauche, l'échange complet à droite — sans changer de page. Affichage instantané, recherche jusque dans le contenu des messages, et un filtre pour n'afficher que vos conversations.",
-  },
-  {
-    selector: 'a[href="/tasks"]', route: "/tasks", icon: ListTodo,
-    title: "Tâches + revue du prospect",
-    body: "En cliquant une tâche, la fiche du prospect et l'historique des échanges s'affichent à droite. Vous préparez votre rappel sans jamais perdre la tâche.",
-  },
-  {
-    selector: 'a[href="/pipeline"]', route: "/pipeline", icon: PhoneCall,
-    title: "Enregistrez vos appels en 1 clic",
-    body: "Depuis une fiche prospect ou une tâche, cliquez « Appeler ». À votre retour dans l'app, une fenêtre vous propose de consigner l'appel : résultat (décroché, pas de réponse…), durée et notes.",
-  },
-  {
-    selector: 'a[href="/calls"]', route: "/calls", icon: Phone,
-    title: "Historique des appels & recherche",
-    body: "Retrouvez tous vos appels sur la page Appels. Pour en enregistrer un manuellement, une barre de recherche vous aide à retrouver le bon prospect (par nom ou numéro).",
-  },
-  {
-    selector: '[data-tour="notifications"]', icon: Bell,
-    title: "Notifications & rappels de tâches",
-    body: "La cloche n'affiche que VOS tâches (en retard et du jour). Et quand une tâche a un rappel, vous êtes prévenu à l'heure : une notification dans l'app (avec un son) + un email.",
-  },
   {
     selector: 'a[href="/documents"]', route: "/documents", icon: FileText,
     title: "Bibliothèque de documents",
