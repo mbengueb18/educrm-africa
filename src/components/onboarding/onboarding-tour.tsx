@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Inbox, ListTodo, Phone, PhoneCall, Bell, X, ArrowRight, ArrowLeft, Check, PlayCircle } from "lucide-react";
+import { Sparkles, Inbox, ListTodo, Phone, PhoneCall, Bell, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone } from "lucide-react";
 
 // Bump la version pour re-déclencher l'accueil après de futures nouveautés.
-const SEEN_KEY = "talibcrm_onboarding_v1";
+const SEEN_KEY = "talibcrm_onboarding_v2";
 
 type Step = {
   selector?: string; // élément à surligner (facultatif → bulle centrée)
@@ -41,13 +41,27 @@ const STEPS: Step[] = [
     title: "Notifications & rappels de tâches",
     body: "La cloche n'affiche que VOS tâches (en retard et du jour). Et quand une tâche a un rappel, vous êtes prévenu à l'heure : une notification dans l'app (avec un son) + un email.",
   },
+  {
+    selector: 'a[href="/documents"]', route: "/documents", icon: FileText,
+    title: "Bibliothèque de documents",
+    body: "Téléversez une fois vos brochures, programmes, formulaires, dossiers de candidature… puis partagez-les : en pièce jointe (bouton « Bibliothèque » dans un email ou une campagne), par lien copiable, ou en téléchargement.",
+  },
+  {
+    selector: 'a[href="/campaigns"]', route: "/campaigns", icon: Megaphone,
+    title: "Campagnes : envoi direct & programmation",
+    body: "Envoyez une campagne directement depuis l'éditeur — ou programmez son départ à la date et l'heure de votre choix, via le bouton « Programmer ».",
+  },
+  {
+    route: "/profile", icon: PenLine,
+    title: "Votre signature email",
+    body: "Dans Mon profil → onglet « Signature », créez votre signature (avec logo/image) : elle s'ajoute automatiquement à vos emails et campagnes. Le bouton « Visualiser » vous montre l'email complet avant l'envoi.",
+  },
 ];
 
 const FEATURES = [
-  { icon: Inbox, title: "Boîte de réception 2 volets", desc: "Traitez vos conversations plus vite." },
-  { icon: ListTodo, title: "Revue du prospect dans les tâches", desc: "Préparez vos rappels sans perdre le fil." },
-  { icon: PhoneCall, title: "Enregistrement des appels", desc: "Cliquez « Appeler » → notez l'appel au retour." },
-  { icon: Bell, title: "Notifications & rappels", desc: "Vos tâches + une alerte (son + email) à l'heure." },
+  { icon: FileText, title: "Bibliothèque de documents", desc: "Partagez brochures & formulaires en 1 clic." },
+  { icon: PenLine, title: "Signature email", desc: "Ajoutée automatiquement à vos envois." },
+  { icon: Megaphone, title: "Campagnes programmables", desc: "Envoi direct ou planifié à la date voulue." },
 ];
 
 function findVisible(selector: string): HTMLElement | null {
@@ -132,7 +146,7 @@ export function OnboardingTour({ userId }: { userId: string }) {
           <div className="px-6 pt-7 pb-5 bg-gradient-to-br from-brand-600 to-brand-700 text-white text-center">
             <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-3"><Sparkles size={24} /></div>
             <h2 className="text-xl font-extrabold tracking-tight">Du nouveau sur TalibCRM 👋</h2>
-            <p className="text-sm text-white/85 mt-1">4 améliorations pour vous faire gagner du temps au quotidien.</p>
+            <p className="text-sm text-white/85 mt-1">Documents partagés, signature email, campagnes programmables… découvrez les nouveautés.</p>
           </div>
           <div className="p-5 space-y-2.5">
             {FEATURES.map(function (f, i) {
