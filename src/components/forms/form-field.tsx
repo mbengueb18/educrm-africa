@@ -77,6 +77,8 @@ export function FormFieldView({ field, value, onChange, preview, slug }: {
     );
   } else if (f.type === "file") {
     control = <FileFieldControl value={value} onChange={set} preview={preview} slug={slug} />;
+  } else if (f.type === "tel" || f.type === "whatsapp") {
+    control = <PhoneControl value={value} onChange={set} preview={preview} />;
   } else {
     const typeMap: Record<string, string> = { text: "text", email: "email", tel: "tel", whatsapp: "tel", number: "number", url: "url", date: "date", time: "time" };
     control = <input className="tf-input" type={typeMap[f.type] || "text"} value={value || ""} onChange={(e) => set(e.target.value)} placeholder={f.placeholder} {...common} />;
@@ -87,6 +89,38 @@ export function FormFieldView({ field, value, onChange, preview, slug }: {
       {label}
       {control}
       {help}
+    </div>
+  );
+}
+
+const DIAL_CODES = [
+  { c: "+221", f: "🇸🇳", n: "Sénégal" }, { c: "+225", f: "🇨🇮", n: "Côte d'Ivoire" },
+  { c: "+223", f: "🇲🇱", n: "Mali" }, { c: "+226", f: "🇧🇫", n: "Burkina Faso" },
+  { c: "+229", f: "🇧🇯", n: "Bénin" }, { c: "+228", f: "🇹🇬", n: "Togo" },
+  { c: "+227", f: "🇳🇪", n: "Niger" }, { c: "+224", f: "🇬🇳", n: "Guinée" },
+  { c: "+237", f: "🇨🇲", n: "Cameroun" }, { c: "+241", f: "🇬🇦", n: "Gabon" },
+  { c: "+242", f: "🇨🇬", n: "Congo" }, { c: "+243", f: "🇨🇩", n: "RD Congo" },
+  { c: "+235", f: "🇹🇩", n: "Tchad" }, { c: "+222", f: "🇲🇷", n: "Mauritanie" },
+  { c: "+212", f: "🇲🇦", n: "Maroc" }, { c: "+213", f: "🇩🇿", n: "Algérie" },
+  { c: "+216", f: "🇹🇳", n: "Tunisie" }, { c: "+33", f: "🇫🇷", n: "France" },
+  { c: "+32", f: "🇧🇪", n: "Belgique" }, { c: "+1", f: "🇨🇦", n: "USA / Canada" },
+];
+
+function PhoneControl({ value, onChange, preview }: { value?: any; onChange: (v: any) => void; preview?: boolean }) {
+  const parse = (v: any) => {
+    const s = String(v || "").trim();
+    const match = DIAL_CODES.slice().sort((a, b) => b.c.length - a.c.length).find((d) => s.startsWith(d.c));
+    if (match) return { code: match.c, num: s.slice(match.c.length).trim() };
+    return { code: "+221", num: s };
+  };
+  const [st, setSt] = useState(() => parse(value));
+  const emit = (code: string, num: string) => { setSt({ code, num }); onChange(num.trim() ? code + " " + num.trim() : ""); };
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <select className="tf-input" value={st.code} disabled={preview} onChange={(e) => emit(e.target.value, st.num)} style={{ flex: "0 0 auto", width: "auto", minWidth: 96 }}>
+        {DIAL_CODES.map((d) => <option key={d.c} value={d.c}>{d.f} {d.c}</option>)}
+      </select>
+      <input className="tf-input" type="tel" value={st.num} disabled={preview} onChange={(e) => emit(st.code, e.target.value)} placeholder="77 000 00 00" style={{ flex: 1 }} />
     </div>
   );
 }
