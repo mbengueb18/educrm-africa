@@ -120,10 +120,10 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
 
         {/* Canvas */}
         <div className="overflow-y-auto p-6 bg-gray-100">
-          <div className="max-w-[460px] mx-auto bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="max-w-[620px] mx-auto bg-white rounded-2xl border border-gray-200 p-7 sm:p-8">
             <style>{formBaseCss(settings)}</style>
             {settings.showLogo !== false && settings.logo && <img src={settings.logo} alt="" style={{ height: 40, marginBottom: 10 }} />}
-            <div className="talib-form">
+            <div className="talib-form" style={{ maxWidth: "none" }}>
               {fields.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Ajoutez des champs depuis la palette →</p>}
               {fields.map((f) => (
                 <div key={f.id} onClick={() => { setSelId(f.id); setTab("champ"); }}
