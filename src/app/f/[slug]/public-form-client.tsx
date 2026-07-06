@@ -83,10 +83,10 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
 
                 {rows.map((row, ri) => row.length === 2 ? (
                   <div className="tf-row" key={ri}>
-                    {row.map((f) => <FormFieldView key={f.id} field={f} value={values[f.name]} onChange={set} />)}
+                    {row.map((f) => <FormFieldView key={f.id} field={f} value={values[f.name]} onChange={set} slug={form.slug} />)}
                   </div>
                 ) : (
-                  <FormFieldView key={row[0].id} field={row[0]} value={values[row[0].name]} onChange={set} />
+                  <FormFieldView key={row[0].id} field={row[0]} value={values[row[0].name]} onChange={set} slug={form.slug} />
                 ))}
 
                 {/* honeypot */}

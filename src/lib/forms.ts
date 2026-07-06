@@ -2,7 +2,7 @@
 
 export type FieldType =
   | "text" | "textarea" | "email" | "tel" | "whatsapp" | "number" | "url" | "date" | "time"
-  | "select" | "radio" | "checkboxes" | "boolean" | "consent"
+  | "select" | "radio" | "checkboxes" | "boolean" | "consent" | "file"
   | "hidden" | "heading" | "paragraph" | "divider";
 
 export type FormField = {
@@ -89,7 +89,7 @@ export const DEFAULT_LABELS: Record<FieldType, string> = {
   text: "Texte", textarea: "Message", email: "Email", tel: "Téléphone",
   whatsapp: "WhatsApp", number: "Nombre", url: "Lien", date: "Date", time: "Heure",
   select: "Liste déroulante", radio: "Choix unique", checkboxes: "Cases à cocher",
-  boolean: "Oui / Non", consent: "Consentement", hidden: "Champ caché",
+  boolean: "Oui / Non", consent: "Consentement", file: "Fichier joint", hidden: "Champ caché",
   heading: "Titre", paragraph: "Paragraphe", divider: "Séparateur",
 };
 

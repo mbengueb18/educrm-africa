@@ -25,7 +25,7 @@ const PALETTE: { cat: string; items: { t: FieldType; k: string; lbl: string }[] 
     { t: "checkboxes", k: "☑️", lbl: "Cases à cocher" }, { t: "boolean", k: "🔀", lbl: "Oui / Non" },
   ]},
   { cat: "Avancé", items: [
-    { t: "consent", k: "✅", lbl: "Consentement" }, { t: "hidden", k: "🙈", lbl: "Champ caché" },
+    { t: "file", k: "📎", lbl: "Fichier joint" }, { t: "consent", k: "✅", lbl: "Consentement" }, { t: "hidden", k: "🙈", lbl: "Champ caché" },
   ]},
   { cat: "Mise en page", items: [
     { t: "heading", k: "🅷", lbl: "Titre" }, { t: "paragraph", k: "¶", lbl: "Paragraphe" }, { t: "divider", k: "➖", lbl: "Séparateur" },
