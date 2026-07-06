@@ -209,6 +209,12 @@ function GeneralSettings({ settings, onPatch }: { settings: FormSettings; onPatc
       {settings.successMode === "redirect"
         ? <><Lbl>URL de redirection</Lbl><Inp value={settings.redirectUrl || ""} onChange={(e: any) => onPatch({ redirectUrl: e.target.value })} placeholder="https://…" /></>
         : <><Lbl>Message</Lbl><textarea className="input text-sm mb-3" rows={3} value={settings.successMessage || ""} onChange={(e) => onPatch({ successMessage: e.target.value })} /></>}
+
+      <div className="border-t border-gray-100 mt-2 pt-3">
+        <Lbl>Notification par email</Lbl>
+        <Inp type="email" value={settings.notifyEmail || ""} onChange={(e: any) => onPatch({ notifyEmail: e.target.value })} placeholder="commercial@ecole.sn" />
+        <p className="text-[10px] text-gray-400 -mt-1">Un email est envoyé à cette adresse à chaque soumission. Laissez vide pour désactiver.</p>
+      </div>
     </div>
   );
 }

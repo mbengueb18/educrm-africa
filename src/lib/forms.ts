@@ -32,6 +32,7 @@ export type FormSettings = {
   logo?: string;
   showLogo?: boolean;
   customCss?: string;
+  notifyEmail?: string; // email averti à chaque soumission (vide = désactivé)
 };
 
 export type FormRouting = {

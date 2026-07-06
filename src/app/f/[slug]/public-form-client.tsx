@@ -17,6 +17,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
     return init;
   });
   const [hp, setHp] = useState(""); // honeypot anti-spam
+  const [mountTs] = useState(() => Date.now()); // time-trap anti-bot
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +48,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
       const res = await fetch("/api/forms/" + form.slug + "/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, hp, utm, referrer: document.referrer || "" }),
+        body: JSON.stringify({ values, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur");
