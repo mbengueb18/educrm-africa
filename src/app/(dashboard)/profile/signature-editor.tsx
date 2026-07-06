@@ -38,6 +38,7 @@ export function SignatureEditor() {
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [imgWidth, setImgWidth] = useState(300);
   const [resetKey, setResetKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -63,7 +64,7 @@ export function SignatureEditor() {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const d = await res.json();
       if (!res.ok || !d.success) throw new Error(d.error || "Upload échoué");
-      setHtml((prev) => prev + '<br><img src="' + d.url + '" style="max-height:90px;margin-top:6px" />');
+      setHtml((prev) => prev + '<br><img src="' + d.url + '" style="width:' + imgWidth + 'px;max-width:100%;height:auto;margin-top:6px" />');
       setResetKey((k) => k + 1);
       toast.success("Image ajoutée à la signature");
     } catch (e: any) {
@@ -104,8 +105,14 @@ export function SignatureEditor() {
           </button>
           <span className="text-sm font-medium text-gray-700">Activer ma signature</span>
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={generate} className="btn-secondary py-1.5 px-3 text-xs"><Sparkles size={13} /> Générer</button>
+          <select value={imgWidth} onChange={(e) => setImgWidth(Number(e.target.value))} className="input text-xs py-1 w-28" title="Taille de l'image à insérer">
+            <option value={160}>Petite</option>
+            <option value={300}>Moyenne</option>
+            <option value={480}>Grande</option>
+            <option value={600}>Pleine largeur</option>
+          </select>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary py-1.5 px-3 text-xs">
             {uploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />} Image / logo
           </button>
