@@ -140,6 +140,7 @@ export async function GET(request: NextRequest) {
           fromName: campaignFromName,
           fromEmail: campaignFromEmail,
           isCampaign: true,
+          includeSignature: (campaign as any).includeSignature !== false,
           attachments: attachments.length > 0
             ? attachments.map(function(a) {
                 return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };

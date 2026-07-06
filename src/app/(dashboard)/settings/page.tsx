@@ -17,6 +17,7 @@ import {
   FileText,
   ClipboardList,
   AtSign,
+  PenLine,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
@@ -32,6 +33,7 @@ const settingsMenu = [
   { label: "Tracking Web", description: "Suivi des visiteurs, sources, parcours web", icon: Globe2, href: "/settings/web-tracking" },
   { label: "Templates email", description: "Créez vos modèles d'emails réutilisables", icon: Mail, href: "/settings/email-templates" },
   { label: "Domaine email", description: "Envoyez vos emails depuis votre propre domaine", icon: AtSign, href: "/settings/email-domain" },
+  { label: "Signature email", description: "Signature ajoutée automatiquement à vos emails", icon: PenLine, href: "/settings/email-signature" },
   { label: "WhatsApp", description: "Connexion à WhatsApp Cloud API", icon: MessageCircle, href: "/settings/whatsapp-integration" },
   { label: "Templates WhatsApp", description: "Modèles de messages approuvés par Meta", icon: FileText, href: "/settings/whatsapp-templates" },
   { label: "Workflows", description: "Automatisez vos actions commerciales", icon: Zap, href: "/workflows" },

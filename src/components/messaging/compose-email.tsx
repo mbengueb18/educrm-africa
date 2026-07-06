@@ -72,6 +72,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   const [isPending, startTransition] = useTransition();
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [addSignature, setAddSignature] = useState(true);
   const [orgName, setOrgName] = useState("");
   // Bibliothèque de documents (pièce jointe sans ré-upload)
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -206,7 +207,8 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           attachments.length > 0 ? attachments.map(function(a) {
             return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
           }) : undefined,
-          isHtml
+          isHtml,
+          addSignature
         );
         if (result.success) {
           toast.success(result.demoMode
@@ -394,6 +396,10 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           <button type="button" onClick={openLibrary} disabled={uploading || isPending} className="btn-secondary py-1.5 text-xs">
             <FolderOpen size={13} /> Bibliothèque
           </button>
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none ml-1" title="Ajouter votre signature en bas de l'email">
+            <input type="checkbox" checked={addSignature} onChange={function(e) { setAddSignature(e.target.checked); }} className="rounded border-gray-300 text-brand-600" />
+            Ma signature
+          </label>
         </div>
         <button
           onClick={handleSend}

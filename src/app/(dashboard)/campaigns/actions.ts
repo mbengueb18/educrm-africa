@@ -110,6 +110,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   segmentRules?: any;
   audienceId?: string | null;
   attachments?: any[];
+  includeSignature?: boolean;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -126,6 +127,7 @@ export async function updateCampaignDraft(campaignId: string, data: {
   if (data.subject !== undefined) updateData.subject = data.subject;
   if (data.body !== undefined) updateData.body = data.body;
   if (data.attachments !== undefined) updateData.attachments = data.attachments;
+  if (data.includeSignature !== undefined) updateData.includeSignature = data.includeSignature;
 
   // Handle audienceId update (can be set or unset)
   var newAudienceId = data.audienceId !== undefined ? data.audienceId : currentCampaign.audienceId;

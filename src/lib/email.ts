@@ -25,6 +25,7 @@ interface SendEmailParams {
   fromName?: string;
   fromEmail?: string;
   isCampaign?: boolean;
+  includeSignature?: boolean; // ajoute la signature de l'expéditeur (défaut: oui)
 }
 
 interface EmailResult {
@@ -109,6 +110,26 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   let finalReplyTo: string | undefined = replyTo;
   if (!finalReplyTo && leadId && inboundDomain) {
     finalReplyTo = "reply+" + leadId + "@" + inboundDomain;
+  }
+
+  // ─── Signature de l'expéditeur (auto, retirable via includeSignature=false) ───
+  // Point d'injection unique → couvre emails individuels ET campagnes, sans doublon.
+  if (params.includeSignature !== false && sentById) {
+    try {
+      const signer = await prisma.user.findUnique({
+        where: { id: sentById },
+        select: { emailSignature: true, emailSignatureEnabled: true },
+      });
+      if (signer?.emailSignatureEnabled && signer.emailSignature && signer.emailSignature.trim()) {
+        if (params.isHtml) {
+          body = body + '<br><br><div style="color:#555555;font-size:13px;line-height:1.5">' + signer.emailSignature + "</div>";
+        } else {
+          body = body + "\n\n" + stripHtmlForText(signer.emailSignature);
+        }
+      }
+    } catch {
+      // pas de signature en cas d'erreur
+    }
   }
 
   // ─── Envoi 1-to-1 via la boîte Gmail de l'utilisateur (si connectée) ───

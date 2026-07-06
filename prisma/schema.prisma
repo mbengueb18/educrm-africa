@@ -204,6 +204,8 @@ model User {
   avatar         String?
   isActive       Boolean   @default(true)
   lastLoginAt    DateTime?
+  emailSignature        String?  @db.Text // signature HTML ajoutée automatiquement aux emails
+  emailSignatureEnabled Boolean  @default(true)
   organizationId String
   campusId       String? // null = access to all campuses
   createdAt      DateTime  @default(now())
@@ -940,6 +942,7 @@ model EmailCampaign {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   audienceId      String?
+  includeSignature Boolean            @default(true) // ajouter la signature de l'expéditeur en bas de chaque email
   audience        Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
   createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])

@@ -109,6 +109,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   var [loadingAudiences, setLoadingAudiences] = useState(false);
   var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
   var [uploadingAttachment, setUploadingAttachment] = useState(false);
+  var [includeSignature, setIncludeSignature] = useState<boolean>((campaign as any).includeSignature !== false);
   // Bibliothèque de documents (pièce jointe sans ré-upload)
   var [libraryOpen, setLibraryOpen] = useState(false);
   var [libraryDocs, setLibraryDocs] = useState<any[]>([]);
@@ -154,13 +155,14 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
         segmentRules: audienceMode === "rules" ? filterGroup : [],
         audienceId: audienceMode === "audience" ? selectedAudienceId : null,
         attachments: attachments,
+        includeSignature: includeSignature,
       });
       setLastSaved(new Date());
     } catch (e) {
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments]);
+  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments, includeSignature]);
 
   // ─── Envoi de la campagne depuis l'éditeur (même flow que la liste : modal + stats) ───
   var handleSend = function() {
@@ -235,7 +237,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments]);
+  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments, includeSignature]);
 
   // Aperçu live des destinataires (debounce 600ms)
   useEffect(function() {
@@ -584,6 +586,10 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
                   })}
                 </div>
               )}
+              <label className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={includeSignature} onChange={function(e) { setIncludeSignature(e.target.checked); }} className="rounded border-gray-300 text-brand-600" />
+                Ajouter ma signature en bas de chaque email
+              </label>
             </div>
           </div>
 
