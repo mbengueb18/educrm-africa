@@ -1,8 +1,6 @@
 // src/lib/plans/usage.ts
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 /**
  * Helpers de comptage de l'usage actuel d'une organisation
