@@ -57,7 +57,7 @@ export async function updateOrganization(data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name.trim();
@@ -88,7 +88,7 @@ export async function createCampus(data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   await prisma.campus.create({
     data: {
@@ -110,7 +110,7 @@ export async function updateCampus(campusId: string, data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name.trim();
@@ -128,7 +128,7 @@ export async function updateCampus(campusId: string, data: {
 export async function deleteCampus(campusId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var campus = await prisma.campus.findFirst({
     where: { id: campusId, organizationId: session.user.organizationId },
@@ -159,7 +159,7 @@ export async function createProgram(data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   await prisma.program.create({
   data: {
@@ -196,7 +196,7 @@ export async function updateProgram(programId: string, data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var updateData: any = {};
   if (data.name !== undefined) updateData.name = data.name.trim();
@@ -218,7 +218,7 @@ export async function updateProgram(programId: string, data: {
 export async function deleteProgram(programId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var program = await prisma.program.findFirst({
     where: { id: programId, organizationId: session.user.organizationId },
@@ -241,7 +241,7 @@ export async function createAcademicYear(data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var orgId = session.user.organizationId;
 
@@ -271,7 +271,7 @@ export async function updateAcademicYear(yearId: string, data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var orgId = session.user.organizationId;
 
@@ -312,7 +312,7 @@ export async function updateAcademicYear(yearId: string, data: {
 export async function setCurrentAcademicYear(yearId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   var orgId = session.user.organizationId;
 

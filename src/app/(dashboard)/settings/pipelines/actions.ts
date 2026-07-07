@@ -61,7 +61,7 @@ export async function createPipeline(input: {
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 
@@ -149,7 +149,7 @@ export async function updatePipeline(
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const pipeline = await prisma.pipeline.findFirst({
     where: { id: pipelineId, organizationId: session.user.organizationId },
@@ -175,7 +175,7 @@ export async function updatePipeline(
 export async function setDefaultPipeline(pipelineId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 
@@ -199,7 +199,7 @@ export async function setDefaultPipeline(pipelineId: string) {
 export async function deletePipeline(pipelineId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 
@@ -253,7 +253,7 @@ export async function createStage(
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 
@@ -293,7 +293,7 @@ export async function updateStage(
 ) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const stage = await prisma.pipelineStage.findFirst({
     where: { id: stageId, organizationId: session.user.organizationId },
@@ -318,7 +318,7 @@ export async function updateStage(
 export async function deleteStage(stageId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const stage = await prisma.pipelineStage.findFirst({
     where: { id: stageId, organizationId: session.user.organizationId },
@@ -339,7 +339,7 @@ export async function deleteStage(stageId: string) {
 export async function reorderStages(pipelineId: string, stageIds: string[]) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 
@@ -392,7 +392,7 @@ export async function reorderStages(pipelineId: string, stageIds: string[]) {
 export async function toggleActivePipeline(pipelineId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   const orgId = session.user.organizationId;
 

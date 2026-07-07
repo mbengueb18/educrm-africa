@@ -39,7 +39,7 @@ export async function createUser(data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   // ✅ NOUVEAU : vérifier la limite du plan AVANT toute autre opération
   try {
@@ -76,7 +76,7 @@ export async function updateUser(userId: string, data: {
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
 
   // ✅ NOUVEAU : si on réactive un utilisateur, vérifier la limite
   if (data.isActive === true) {
@@ -120,7 +120,7 @@ export async function updateUser(userId: string, data: {
 export async function resetUserPassword(userId: string, newPassword: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
   if (newPassword.length < 6) throw new Error("Min. 6 caractères");
   var hash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
@@ -131,7 +131,7 @@ export async function resetUserPassword(userId: string, newPassword: string) {
 export async function deleteUser(userId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN") throw new Error("Réservé aux administrateurs");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
   if (session.user.id === userId) throw new Error("Impossible de supprimer votre propre compte");
   await prisma.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } });
   await prisma.task.updateMany({ where: { assignedToId: userId }, data: { assignedToId: session.user.id } });
