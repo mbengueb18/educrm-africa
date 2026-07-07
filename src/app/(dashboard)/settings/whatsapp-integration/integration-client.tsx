@@ -11,6 +11,7 @@ import {
   deleteIntegration,
   testConnection,
 } from "./actions";
+import { OnboardingWizard } from "./onboarding-wizard";
 import {
   MessageCircle, Save, Loader2, Eye, EyeOff, CheckCircle, AlertCircle,
   Copy, Check, Trash2, BookOpen, ExternalLink, AlertTriangle, Power, Zap,
@@ -56,6 +57,7 @@ export function IntegrationClient({ integration, webhookUrl }: Props) {
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [showAppSecret, setShowAppSecret] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
 
   // ─── Generate random verify token ───
   const generateVerifyToken = () => {
@@ -239,6 +241,24 @@ export function IntegrationClient({ integration, webhookUrl }: Props) {
         )}
       </div>
 
+      {/* Wizard d'onboarding guidé (première configuration) */}
+      {!isConfigured && (
+        <div className="mb-6">
+          <OnboardingWizard webhookUrl={webhookUrl} onDone={() => router.refresh()} />
+          <div className="mt-3 text-center">
+            <button
+              onClick={() => setShowManual((v) => !v)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              {showManual ? "Masquer la configuration manuelle" : "Configuration manuelle avancée"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sections manuelles : visibles si déjà configuré (édition) ou repli expert */}
+      {(isConfigured || showManual) && (
+        <>
       {/* Webhook URL section */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <h2 className="text-sm font-bold text-gray-900 mb-1">URL Webhook (à configurer côté Meta)</h2>
@@ -407,6 +427,8 @@ export function IntegrationClient({ integration, webhookUrl }: Props) {
             </p>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -33,6 +33,60 @@ export async function getIntegration() {
   });
 }
 
+// ─── Auto-découverte des numéros WhatsApp d'un WABA ───
+// Valide (Access Token + WABA ID) ET récupère les numéros + leur Phone Number ID,
+// pour éviter à l'école de chercher son Phone Number ID à la main.
+export async function discoverPhoneNumbers(data: {
+  whatsappBusinessAccountId: string;
+  accessToken: string;
+}) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Permission refusée. Seul un administrateur peut configurer WhatsApp.");
+  }
+
+  await assertCanUseWhatsAppBusinessAPI(session.user.organizationId);
+
+  const waba = data.whatsappBusinessAccountId?.trim();
+  const token = data.accessToken?.trim();
+  if (!waba) throw new Error("Le WhatsApp Business Account ID est requis");
+  if (!token) throw new Error("L'Access Token est requis");
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v22.0/${waba}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || "Impossible de récupérer les numéros du compte");
+    }
+
+    const json = await res.json();
+    const numbers = (json.data || []).map((n: any) => ({
+      id: n.id as string,
+      displayPhoneNumber: (n.display_phone_number as string) || "",
+      verifiedName: (n.verified_name as string) || "",
+      qualityRating: (n.quality_rating as string) || null,
+      codeVerificationStatus: (n.code_verification_status as string) || null,
+    }));
+
+    if (numbers.length === 0) {
+      throw new Error(
+        "Aucun numéro WhatsApp trouvé sur ce compte. Ajoutez d'abord un numéro dans Meta Business Manager."
+      );
+    }
+
+    return { success: true, numbers };
+  } catch (e: any) {
+    throw new Error(
+      `Connexion Meta échouée : ${e.message}. Vérifiez votre Access Token et le WhatsApp Business Account ID.`
+    );
+  }
+}
+
 // ─── Create or update integration ───
 export async function saveIntegration(data: {
   phoneNumberId: string;
