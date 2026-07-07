@@ -37,7 +37,6 @@ type Task = {
 
 interface TasksClientProps {
   tasks: Task[];
-  stats: { total: number; todo: number; inProgress: number; done: number; overdue: number; dueToday: number };
   users: { id: string; name: string; avatar: string | null }[];
   leads: { id: string; firstName: string; lastName: string }[];
   currentUserId: string;
@@ -109,7 +108,7 @@ function calcReminderMinutes(dueDate: string, reminderAt: Date | null): string {
   return closest.value;
 }
 
-export function TasksClient({ tasks, stats, users, leads, currentUserId }: TasksClientProps) {
+export function TasksClient({ tasks, users, leads, currentUserId }: TasksClientProps) {
   var [search, setSearch] = useState("");
   var [filterStatus, setFilterStatus] = useState<string>("active");
   var [filterAssigned, setFilterAssigned] = useState<string>("");
@@ -136,7 +135,11 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
   }, []);
   var router = useRouter();
 
-  var filtered = useMemo(function() {
+  // Base commune : toutes les tâches filtrées par recherche + assigné + type + priorité,
+  // SANS l'onglet de statut. Les cartes de stats en dérivent (elles SONT la répartition
+  // par statut) → les filtres avancés s'appliquent aussi aux statistiques, pas seulement
+  // à la liste.
+  var statsBase = useMemo(function() {
     return tasks.filter(function(task) {
       if (search) {
         var q = search.toLowerCase();
@@ -145,6 +148,37 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
           (task.lead ? (task.lead.firstName + " " + task.lead.lastName).toLowerCase().includes(q) : false);
         if (!match) return false;
       }
+      if (filterAssigned === "me" && task.assignedToId !== currentUserId) return false;
+      if (filterAssigned && filterAssigned !== "me" && filterAssigned !== "" && task.assignedToId !== filterAssigned) return false;
+      if (filterType && task.type !== filterType) return false;
+      if (filterPriority && task.priority !== filterPriority) return false;
+      return true;
+    });
+  }, [tasks, search, filterAssigned, filterType, filterPriority, currentUserId]);
+
+  // Stats recalculées côté client sur la base filtrée (mêmes définitions que getTaskStats).
+  var stats = useMemo(function() {
+    var now = new Date();
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var todayEnd = new Date(todayStart.getTime() + 86_400_000);
+    var total = 0, todo = 0, inProgress = 0, done = 0, overdue = 0, dueToday = 0;
+    statsBase.forEach(function(t) {
+      if (t.status !== "CANCELLED") total++;
+      if (t.status === "TODO") todo++;
+      else if (t.status === "IN_PROGRESS") inProgress++;
+      else if (t.status === "DONE") done++;
+      if ((t.status === "TODO" || t.status === "IN_PROGRESS") && t.dueDate) {
+        var due = new Date(t.dueDate);
+        if (due < now) overdue++;
+        if (due >= todayStart && due < todayEnd) dueToday++;
+      }
+    });
+    return { total: total, todo: todo, inProgress: inProgress, done: done, overdue: overdue, dueToday: dueToday };
+  }, [statsBase]);
+
+  // Liste affichée = base filtrée + onglet de statut.
+  var filtered = useMemo(function() {
+    return statsBase.filter(function(task) {
       if (filterStatus === "active" && (task.status === "DONE" || task.status === "CANCELLED")) return false;
       if (filterStatus === "overdue") {
         if (task.status === "DONE" || task.status === "CANCELLED") return false;
@@ -152,13 +186,9 @@ export function TasksClient({ tasks, stats, users, leads, currentUserId }: Tasks
         return true;
       }
       if (filterStatus && filterStatus !== "active" && task.status !== filterStatus) return false;
-      if (filterAssigned === "me" && task.assignedToId !== currentUserId) return false;
-      if (filterAssigned && filterAssigned !== "me" && filterAssigned !== "" && task.assignedToId !== filterAssigned) return false;
-      if (filterType && task.type !== filterType) return false;
-      if (filterPriority && task.priority !== filterPriority) return false;
       return true;
     });
-  }, [tasks, search, filterStatus, filterAssigned, filterType, filterPriority, currentUserId]);
+  }, [statsBase, filterStatus]);
 
   var activeFiltersCount = [
     filterStatus !== "active" ? filterStatus : "",

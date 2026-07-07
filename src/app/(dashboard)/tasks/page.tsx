@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTasks, getTaskStats } from "./actions";
+import { getTasks } from "./actions";
 import { TasksClient } from "./tasks-client";
 
 export const metadata: Metadata = {
@@ -12,9 +12,8 @@ export default async function TasksPage() {
   var session = await auth();
   if (!session?.user) return null;
 
-  var [tasks, stats, users, leads] = await Promise.all([
+  var [tasks, users, leads] = await Promise.all([
     getTasks(),
-    getTaskStats(),
     prisma.user.findMany({
       where: { organizationId: session.user.organizationId, isActive: true, role: { in: ["ADMIN", "COMMERCIAL"] } },
       select: { id: true, name: true, avatar: true },
@@ -30,7 +29,6 @@ export default async function TasksPage() {
   return (
     <TasksClient
       tasks={tasks}
-      stats={stats}
       users={users}
       leads={leads}
       currentUserId={session.user.id}

@@ -182,13 +182,39 @@ export async function getCampaignDetail(campaignId: string) {
       createdBy: { select: { name: true } },
       recipients: {
         orderBy: { sentAt: "desc" },
-        take: 200,
+        take: 500,
       },
     },
   });
 
   if (!campaign) throw new Error("Campagne introuvable");
-  return campaign;
+
+  // Stats agrégées sur TOUS les destinataires (et pas seulement les 500 chargés pour le tableau).
+  // On s'appuie sur les horodatages (posés une seule fois, jamais effacés) → entonnoir cohérent
+  // même quand un destinataire passe de "delivered" à "opened" (son statut courant change, mais
+  // deliveredAt reste). Évite le sous-comptage des compteurs cumulés stockés sur la campagne.
+  var recipientWhere = { campaignId: campaignId };
+  var [total, sent, delivered, opened, clicked, bounced, failed, byStatus] = await Promise.all([
+    prisma.emailCampaignRecipient.count({ where: recipientWhere }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, sentAt: { not: null } } }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, deliveredAt: { not: null } } }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, openedAt: { not: null } } }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, clickedAt: { not: null } } }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, bouncedAt: { not: null } } }),
+    prisma.emailCampaignRecipient.count({ where: { ...recipientWhere, status: "FAILED" } }),
+    prisma.emailCampaignRecipient.groupBy({ by: ["status"], where: recipientWhere, _count: { _all: true } }),
+  ]);
+
+  var statusCounts: Record<string, number> = {};
+  byStatus.forEach(function(g) { statusCounts[g.status] = g._count._all; });
+
+  var recipientStats = {
+    total: total, sent: sent, delivered: delivered, opened: opened,
+    clicked: clicked, bounced: bounced, failed: failed, statusCounts: statusCounts,
+    loaded: campaign.recipients.length,
+  };
+
+  return { ...campaign, recipientStats: recipientStats };
 }
 
 // ─── Preview segment (count matching leads) ───

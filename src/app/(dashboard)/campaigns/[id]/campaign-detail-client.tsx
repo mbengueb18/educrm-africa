@@ -43,6 +43,19 @@ interface Campaign {
   failedCount: number;
   createdBy: { name: string } | null;
   recipients: Recipient[];
+  recipientStats: RecipientStats;
+}
+
+interface RecipientStats {
+  total: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  failed: number;
+  statusCounts: Record<string, number>;
+  loaded: number;
 }
 
 interface Props {
@@ -77,10 +90,13 @@ export function CampaignDetailClient({ campaign }: Props) {
   var statusStyle = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.DRAFT;
   var StatusIcon = statusStyle.icon;
 
-  var openRate = campaign.sentCount > 0 ? ((campaign.openedCount / campaign.sentCount) * 100).toFixed(1) : "0";
-  var clickRate = campaign.openedCount > 0 ? ((campaign.clickedCount / campaign.openedCount) * 100).toFixed(1) : "0";
-  var deliveryRate = campaign.sentCount > 0 ? ((campaign.deliveredCount / campaign.sentCount) * 100).toFixed(1) : "0";
-  var bounceRate = campaign.sentCount > 0 ? ((campaign.bouncedCount / campaign.sentCount) * 100).toFixed(1) : "0";
+  // Taux calculés sur les stats agrégées (tous les destinataires), pas sur les compteurs stockés
+  // qui peuvent dériver ou sous-compter.
+  var s = campaign.recipientStats;
+  var openRate = s.sent > 0 ? ((s.opened / s.sent) * 100).toFixed(1) : "0";
+  var clickRate = s.opened > 0 ? ((s.clicked / s.opened) * 100).toFixed(1) : "0";
+  var deliveryRate = s.sent > 0 ? ((s.delivered / s.sent) * 100).toFixed(1) : "0";
+  var bounceRate = s.sent > 0 ? ((s.bounced / s.sent) * 100).toFixed(1) : "0";
 
   return (
     <div>
@@ -122,7 +138,7 @@ export function CampaignDetailClient({ campaign }: Props) {
               <TabIcon size={16} className="hidden sm:block" />
               {tab.label}
               {tab.key === "recipients" && (
-                <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{campaign.recipients.length}</span>
+                <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{campaign.recipientStats.total}</span>
               )}
             </button>
           );
@@ -130,35 +146,35 @@ export function CampaignDetailClient({ campaign }: Props) {
       </div>
 
       {/* Tab content */}
-      {activeTab === "overview" && <OverviewTab campaign={campaign} openRate={openRate} clickRate={clickRate} deliveryRate={deliveryRate} bounceRate={bounceRate} />}
+      {activeTab === "overview" && <OverviewTab campaign={campaign} stats={s} openRate={openRate} clickRate={clickRate} deliveryRate={deliveryRate} bounceRate={bounceRate} />}
       {activeTab === "content" && <ContentTab campaign={campaign} />}
-      {activeTab === "recipients" && <RecipientsTab recipients={campaign.recipients} />}
+      {activeTab === "recipients" && <RecipientsTab recipients={campaign.recipients} stats={s} />}
     </div>
   );
 }
 
 // ─── Overview Tab ───
-function OverviewTab({ campaign, openRate, clickRate, deliveryRate, bounceRate }: {
-  campaign: Campaign; openRate: string; clickRate: string; deliveryRate: string; bounceRate: string;
+function OverviewTab({ campaign, stats, openRate, clickRate, deliveryRate, bounceRate }: {
+  campaign: Campaign; stats: RecipientStats; openRate: string; clickRate: string; deliveryRate: string; bounceRate: string;
 }) {
   return (
     <div className="space-y-6">
       {/* Key metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <MetricCard label="Taux d'ouverture" value={openRate + "%"} desc={campaign.openedCount + " / " + campaign.sentCount} color="text-blue-600" bg="bg-blue-50" icon={Eye} />
-        <MetricCard label="Taux de clic" value={clickRate + "%"} desc={campaign.clickedCount + " clics"} color="text-purple-600" bg="bg-purple-50" icon={MousePointer} />
-        <MetricCard label="Delivrabilite" value={deliveryRate + "%"} desc={campaign.deliveredCount + " delivres"} color="text-emerald-600" bg="bg-emerald-50" icon={CheckCircle} />
-        <MetricCard label="Taux de rebond" value={bounceRate + "%"} desc={campaign.bouncedCount + " rebonds"} color="text-red-500" bg="bg-red-50" icon={AlertTriangle} />
+        <MetricCard label="Taux d'ouverture" value={openRate + "%"} desc={stats.opened + " / " + stats.sent} color="text-blue-600" bg="bg-blue-50" icon={Eye} />
+        <MetricCard label="Taux de clic" value={clickRate + "%"} desc={stats.clicked + " clics"} color="text-purple-600" bg="bg-purple-50" icon={MousePointer} />
+        <MetricCard label="Delivrabilite" value={deliveryRate + "%"} desc={stats.delivered + " delivres"} color="text-emerald-600" bg="bg-emerald-50" icon={CheckCircle} />
+        <MetricCard label="Taux de rebond" value={bounceRate + "%"} desc={stats.bounced + " rebonds"} color="text-red-500" bg="bg-red-50" icon={AlertTriangle} />
       </div>
 
       {/* Funnel */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-5">Entonnoir de la campagne</h3>
         <div className="space-y-3">
-          <FunnelBar label="Envoyes" value={campaign.sentCount} max={campaign.totalRecipients} color="bg-brand-500" icon={Send} />
-          <FunnelBar label="Delivres" value={campaign.deliveredCount} max={campaign.totalRecipients} color="bg-emerald-500" icon={CheckCircle} />
-          <FunnelBar label="Ouverts" value={campaign.openedCount} max={campaign.totalRecipients} color="bg-blue-500" icon={Eye} />
-          <FunnelBar label="Cliques" value={campaign.clickedCount} max={campaign.totalRecipients} color="bg-purple-500" icon={MousePointer} />
+          <FunnelBar label="Envoyes" value={stats.sent} max={stats.total} color="bg-brand-500" icon={Send} />
+          <FunnelBar label="Delivres" value={stats.delivered} max={stats.total} color="bg-emerald-500" icon={CheckCircle} />
+          <FunnelBar label="Ouverts" value={stats.opened} max={stats.total} color="bg-blue-500" icon={Eye} />
+          <FunnelBar label="Cliques" value={stats.clicked} max={stats.total} color="bg-purple-500" icon={MousePointer} />
         </div>
       </div>
 
@@ -166,12 +182,12 @@ function OverviewTab({ campaign, openRate, clickRate, deliveryRate, bounceRate }
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Detail des statuts</h3>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          <StatMini label="Total" value={campaign.totalRecipients} color="text-gray-700" />
-          <StatMini label="Envoyes" value={campaign.sentCount} color="text-brand-600" />
-          <StatMini label="Delivres" value={campaign.deliveredCount} color="text-emerald-600" />
-          <StatMini label="Ouverts" value={campaign.openedCount} color="text-blue-600" />
-          <StatMini label="Cliques" value={campaign.clickedCount} color="text-purple-600" />
-          <StatMini label="Echoues" value={campaign.failedCount + campaign.bouncedCount} color="text-red-500" />
+          <StatMini label="Total" value={stats.total} color="text-gray-700" />
+          <StatMini label="Envoyes" value={stats.sent} color="text-brand-600" />
+          <StatMini label="Delivres" value={stats.delivered} color="text-emerald-600" />
+          <StatMini label="Ouverts" value={stats.opened} color="text-blue-600" />
+          <StatMini label="Cliques" value={stats.clicked} color="text-purple-600" />
+          <StatMini label="Echoues" value={stats.failed + stats.bounced} color="text-red-500" />
         </div>
       </div>
 
@@ -257,7 +273,7 @@ function ContentTab({ campaign }: { campaign: Campaign }) {
 }
 
 // ─── Recipients Tab ───
-function RecipientsTab({ recipients }: { recipients: Recipient[] }) {
+function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: RecipientStats }) {
   var [filterStatus, setFilterStatus] = useState<string>("");
   var [search, setSearch] = useState("");
 
@@ -267,11 +283,9 @@ function RecipientsTab({ recipients }: { recipients: Recipient[] }) {
     return true;
   });
 
-  // Status counts
-  var statusCounts: Record<string, number> = {};
-  for (var r of recipients) {
-    statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
-  }
+  // Compteurs par statut : agrégés sur TOUS les destinataires (pas seulement ceux chargés).
+  var statusCounts = stats.statusCounts;
+  var truncated = stats.total > stats.loaded;
 
   return (
     <div className="space-y-4">
@@ -283,7 +297,7 @@ function RecipientsTab({ recipients }: { recipients: Recipient[] }) {
             !filterStatus ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
           )}
         >
-          Tous ({recipients.length})
+          Tous ({stats.total})
         </button>
         {Object.entries(RECIPIENT_STATUS).map(function(entry) {
           var key = entry[0];
@@ -312,6 +326,13 @@ function RecipientsTab({ recipients }: { recipients: Recipient[] }) {
         value={search}
         onChange={function(e) { setSearch(e.target.value); }}
       />
+
+      {truncated && (
+        <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Les compteurs ci-dessus portent sur l'ensemble des {stats.total} destinataires. Le tableau
+          n'en affiche que les {stats.loaded} premiers (par date d'envoi).
+        </p>
+      )}
 
       {/* Mobile cards (< md) */}
       <div className="md:hidden bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
