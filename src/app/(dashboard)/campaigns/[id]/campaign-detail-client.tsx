@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn, formatDate, formatDateTime, getInitials } from "@/lib/utils";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowLeft, Send, CheckCircle, Eye, MousePointer, AlertTriangle,
   XCircle, Clock, Users, Mail, BarChart3, FileText, UserCheck,
-  Loader2, ChevronRight,
+  Loader2, ChevronRight, ChevronLeft,
 } from "lucide-react";
+import { getCampaignRecipients } from "../actions";
 
 interface Recipient {
   id: string;
@@ -55,7 +57,7 @@ interface RecipientStats {
   bounced: number;
   failed: number;
   statusCounts: Record<string, number>;
-  loaded: number;
+  pageSize: number;
 }
 
 interface Props {
@@ -148,7 +150,7 @@ export function CampaignDetailClient({ campaign }: Props) {
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab campaign={campaign} stats={s} openRate={openRate} clickRate={clickRate} deliveryRate={deliveryRate} bounceRate={bounceRate} />}
       {activeTab === "content" && <ContentTab campaign={campaign} />}
-      {activeTab === "recipients" && <RecipientsTab recipients={campaign.recipients} stats={s} />}
+      {activeTab === "recipients" && <RecipientsTab campaignId={campaign.id} initialRecipients={campaign.recipients} stats={s} />}
     </div>
   );
 }
@@ -273,26 +275,76 @@ function ContentTab({ campaign }: { campaign: Campaign }) {
 }
 
 // ─── Recipients Tab ───
-function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: RecipientStats }) {
+function RecipientsTab({ campaignId, initialRecipients, stats }: { campaignId: string; initialRecipients: Recipient[]; stats: RecipientStats }) {
+  var PAGE_SIZE = stats.pageSize || 50;
   var [filterStatus, setFilterStatus] = useState<string>("");
+  var [searchInput, setSearchInput] = useState("");
   var [search, setSearch] = useState("");
+  var [page, setPage] = useState(1);
+  var [recipients, setRecipients] = useState<Recipient[]>(initialRecipients);
+  var [total, setTotal] = useState(stats.total);
+  var [loading, setLoading] = useState(false);
 
-  var filtered = recipients.filter(function(r) {
-    if (filterStatus && r.status !== filterStatus) return false;
-    if (search && !r.email.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  // Compteurs par statut : agrégés sur TOUS les destinataires (pas seulement ceux chargés).
+  // Compteurs par statut : agrégés côté serveur sur TOUS les destinataires.
   var statusCounts = stats.statusCounts;
-  var truncated = stats.total > stats.loaded;
+
+  // Debounce de la recherche → retour à la page 1.
+  useEffect(function() {
+    var t = setTimeout(function() {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return function() { clearTimeout(t); };
+  }, [searchInput]);
+
+  // Vue par défaut (page 1, sans filtre ni recherche) : déjà fournie par le serveur (SSR) →
+  // aucune requête. Toute autre combinaison charge la page correspondante à la demande.
+  var isDefault = page === 1 && !filterStatus && !search;
+
+  useEffect(function() {
+    if (isDefault) {
+      setRecipients(initialRecipients);
+      setTotal(stats.total);
+      setLoading(false);
+      return;
+    }
+    var cancelled = false;
+    setLoading(true);
+    getCampaignRecipients(campaignId, {
+      page: page,
+      pageSize: PAGE_SIZE,
+      status: filterStatus || undefined,
+      search: search || undefined,
+    })
+      .then(function(res: any) {
+        if (cancelled) return;
+        setRecipients(res.recipients as Recipient[]);
+        setTotal(res.total);
+      })
+      .catch(function() {
+        if (!cancelled) toast.error("Impossible de charger les destinataires");
+      })
+      .finally(function() {
+        if (!cancelled) setLoading(false);
+      });
+    return function() { cancelled = true; };
+  }, [campaignId, page, filterStatus, search, isDefault, PAGE_SIZE, initialRecipients, stats.total]);
+
+  var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  var from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  var to = Math.min(page * PAGE_SIZE, total);
+
+  function selectStatus(key: string) {
+    setFilterStatus(filterStatus === key ? "" : key);
+    setPage(1);
+  }
 
   return (
     <div className="space-y-4">
       {/* Status filter pills */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={function() { setFilterStatus(""); }}
+          onClick={function() { setFilterStatus(""); setPage(1); }}
           className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
             !filterStatus ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
           )}
@@ -307,7 +359,7 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
           return (
             <button
               key={key}
-              onClick={function() { setFilterStatus(filterStatus === key ? "" : key); }}
+              onClick={function() { selectStatus(key); }}
               className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
                 filterStatus === key ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
               )}
@@ -319,24 +371,20 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
       </div>
 
       {/* Search */}
-      <input
-        type="text"
-        placeholder="Rechercher par email..."
-        className="input text-sm max-w-sm"
-        value={search}
-        onChange={function(e) { setSearch(e.target.value); }}
-      />
-
-      {truncated && (
-        <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-          Les compteurs ci-dessus portent sur l'ensemble des {stats.total} destinataires. Le tableau
-          n'en affiche que les {stats.loaded} premiers (par date d'envoi).
-        </p>
-      )}
+      <div className="relative max-w-sm">
+        <input
+          type="text"
+          placeholder="Rechercher par email..."
+          className="input text-sm"
+          value={searchInput}
+          onChange={function(e) { setSearchInput(e.target.value); }}
+        />
+        {loading && <Loader2 size={15} className="animate-spin text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />}
+      </div>
 
       {/* Mobile cards (< md) */}
-      <div className="md:hidden bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
-        {filtered.map(function(recipient) {
+      <div className={cn("md:hidden bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden transition-opacity", loading && "opacity-50")}>
+        {recipients.map(function(recipient) {
           var st = RECIPIENT_STATUS[recipient.status] || RECIPIENT_STATUS.PENDING;
           var StIcon = st.icon;
           return (
@@ -357,7 +405,7 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
             </div>
           );
         })}
-        {filtered.length === 0 && (
+        {!loading && recipients.length === 0 && (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-400">Aucun destinataire</p>
           </div>
@@ -365,7 +413,7 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
       </div>
 
       {/* Desktop table (>= md) */}
-      <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className={cn("hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity", loading && "opacity-50")}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -380,7 +428,7 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(function(recipient) {
+              {recipients.map(function(recipient) {
                 var st = RECIPIENT_STATUS[recipient.status] || RECIPIENT_STATUS.PENDING;
                 var StIcon = st.icon;
                 return (
@@ -403,11 +451,37 @@ function RecipientsTab({ recipients, stats }: { recipients: Recipient[]; stats: 
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 && (
+        {!loading && recipients.length === 0 && (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-400">Aucun destinataire</p>
           </div>
         )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <p className="text-xs text-gray-500">
+          {loading ? "Chargement…" : total === 0 ? "Aucun destinataire" : from + "–" + to + " sur " + total}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={function() { setPage(Math.max(1, page - 1)); }}
+            disabled={page <= 1 || loading}
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Page précédente"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-xs text-gray-600 px-2 whitespace-nowrap">Page {page} / {totalPages}</span>
+          <button
+            onClick={function() { setPage(Math.min(totalPages, page + 1)); }}
+            disabled={page >= totalPages || loading}
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Page suivante"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

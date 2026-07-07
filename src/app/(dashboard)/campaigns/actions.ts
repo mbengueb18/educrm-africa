@@ -7,6 +7,9 @@ import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
 import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
 
+// Nombre de destinataires par page dans le détail d'une campagne (pagination serveur).
+var RECIPIENTS_PAGE_SIZE = 50;
+
 // ─── Helper : Get leads for a campaign (audience-based OR rules-based) ───
 // ─── Helper : Count leads with/without email for an audience or rules ───
 async function getRecipientStats(
@@ -181,8 +184,10 @@ export async function getCampaignDetail(campaignId: string) {
     include: {
       createdBy: { select: { name: true } },
       recipients: {
-        orderBy: { sentAt: "desc" },
-        take: 500,
+        // Première page (SSR). Les pages suivantes sont chargées à la demande via
+        // getCampaignRecipients(). Tri stable (id en second) pour une pagination cohérente.
+        orderBy: [{ sentAt: "desc" }, { id: "asc" }],
+        take: RECIPIENTS_PAGE_SIZE,
       },
     },
   });
@@ -211,10 +216,54 @@ export async function getCampaignDetail(campaignId: string) {
   var recipientStats = {
     total: total, sent: sent, delivered: delivered, opened: opened,
     clicked: clicked, bounced: bounced, failed: failed, statusCounts: statusCounts,
-    loaded: campaign.recipients.length,
+    pageSize: RECIPIENTS_PAGE_SIZE,
   };
 
   return { ...campaign, recipientStats: recipientStats };
+}
+
+// ─── Get a paginated page of campaign recipients (filtre statut + recherche email) ───
+// Pagination côté serveur : on ne charge que 50 destinataires à la fois, et la recherche/
+// le filtre par statut portent sur l'ensemble du jeu de données (pas seulement la page).
+export async function getCampaignRecipients(campaignId: string, opts?: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  search?: string;
+}) {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  // Vérifie que la campagne appartient bien à l'organisation de l'utilisateur.
+  var owned = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!owned) throw new Error("Campagne introuvable");
+
+  var pageSize = Math.min(200, Math.max(1, opts?.pageSize || RECIPIENTS_PAGE_SIZE));
+  var page = Math.max(1, opts?.page || 1);
+
+  var where: any = { campaignId: campaignId };
+  if (opts?.status) where.status = opts.status;
+  if (opts?.search) where.email = { contains: opts.search, mode: "insensitive" };
+
+  var [recipients, total] = await Promise.all([
+    prisma.emailCampaignRecipient.findMany({
+      where: where,
+      orderBy: [{ sentAt: "desc" }, { id: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true, leadId: true, email: true, status: true,
+        sentAt: true, deliveredAt: true, openedAt: true, clickedAt: true, bouncedAt: true,
+        openCount: true, clickCount: true, errorMessage: true,
+      },
+    }),
+    prisma.emailCampaignRecipient.count({ where: where }),
+  ]);
+
+  return { recipients: recipients, total: total, page: page, pageSize: pageSize };
 }
 
 // ─── Preview segment (count matching leads) ───
