@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Send, CheckCircle, Eye, MousePointer, AlertTriangle,
   XCircle, Clock, Users, Mail, BarChart3, FileText, UserCheck,
-  Loader2, ChevronRight, ChevronLeft,
+  Loader2, ChevronRight,
 } from "lucide-react";
 import { getCampaignRecipients } from "../actions";
 
@@ -458,31 +458,27 @@ function RecipientsTab({ campaignId, initialRecipients, stats }: { campaignId: s
         )}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <p className="text-xs text-gray-500">
-          {loading ? "Chargement…" : total === 0 ? "Aucun destinataire" : from + "–" + to + " sur " + total}
-        </p>
-        <div className="flex items-center gap-1">
+      {/* Pagination — centrée, comme la vue Pipeline */}
+      {total > PAGE_SIZE && (
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-4 mb-2">
           <button
             onClick={function() { setPage(Math.max(1, page - 1)); }}
             disabled={page <= 1 || loading}
-            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Page précédente"
+            className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronLeft size={16} />
+            Précédent
           </button>
-          <span className="text-xs text-gray-600 px-2 whitespace-nowrap">Page {page} / {totalPages}</span>
+          <span className="text-xs text-gray-600">Page {page} / {totalPages}</span>
           <button
             onClick={function() { setPage(Math.min(totalPages, page + 1)); }}
             disabled={page >= totalPages || loading}
-            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="Page suivante"
+            className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronRight size={16} />
+            Suivant
           </button>
+          <span className="text-xs text-gray-400">{from} – {to} sur {total}</span>
         </div>
-      </div>
+      )}
     </div>
   );
 }
