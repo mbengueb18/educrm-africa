@@ -11,7 +11,7 @@ import {
   User as UserIcon, Edit3, Star, Tag, Clock, Briefcase, Globe,
   ExternalLink, ChevronRight, ChevronDown, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
-  TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight,
+  TrendingUp, TrendingDown, Target, Minus, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
@@ -1204,13 +1204,15 @@ function CreateAppointmentInline({ leadId, assignedToId, onClose }: {
 
 // ─── AI Assistant Tab ───
 function AIAssistantTab({ lead }: { lead: any }) {
-  const [activeMode, setActiveMode] = useState<"brief" | "actions" | "draft_email" | "draft_whatsapp">("brief");
+  const [activeMode, setActiveMode] = useState<"predict" | "brief" | "actions" | "draft_email" | "draft_whatsapp">("predict");
   const [briefData, setBriefData] = useState<any>(null);
   const [actionsData, setActionsData] = useState<any>(null);
+  const [predictData, setPredictData] = useState<any>(null);
   const [emailDraft, setEmailDraft] = useState<any>(null);
   const [whatsappDraft, setWhatsappDraft] = useState<any>(null);
   const [briefGeneratedAt, setBriefGeneratedAt] = useState<string | null>(null);
   const [actionsGeneratedAt, setActionsGeneratedAt] = useState<string | null>(null);
+  const [predictGeneratedAt, setPredictGeneratedAt] = useState<string | null>(null);
   const [hasMajorChange, setHasMajorChange] = useState(false);
   const [changeReasons, setChangeReasons] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1224,8 +1226,10 @@ function AIAssistantTab({ lead }: { lead: any }) {
         if (data.success) {
           setBriefData(data.briefData);
           setActionsData(data.actionsData);
+          setPredictData(data.predictData);
           setBriefGeneratedAt(data.briefGeneratedAt);
           setActionsGeneratedAt(data.actionsGeneratedAt);
+          setPredictGeneratedAt(data.predictGeneratedAt);
           setHasMajorChange(data.hasMajorChange);
           setChangeReasons(data.changeReasons || []);
         }
@@ -1245,7 +1249,12 @@ function AIAssistantTab({ lead }: { lead: any }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Erreur");
 
-      if (mode === "brief") {
+      if (mode === "predict") {
+        setPredictData(data.data);
+        setPredictGeneratedAt(new Date().toISOString());
+        setHasMajorChange(false);
+        setChangeReasons([]);
+      } else if (mode === "brief") {
         setBriefData(data.data);
         setBriefGeneratedAt(new Date().toISOString());
         setHasMajorChange(false);
@@ -1309,13 +1318,23 @@ function AIAssistantTab({ lead }: { lead: any }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <ModeButton active={activeMode === "predict"} icon={Target} label="Score prédictif" onClick={() => setActiveMode("predict")} />
         <ModeButton active={activeMode === "brief"} icon={UserIcon} label="Brief lead" onClick={() => setActiveMode("brief")} />
         <ModeButton active={activeMode === "actions"} icon={Zap} label="Actions suggérées" onClick={() => setActiveMode("actions")} />
         <ModeButton active={activeMode === "draft_email"} icon={Mail} label="Brouillon email" onClick={() => setActiveMode("draft_email")} />
         <ModeButton active={activeMode === "draft_whatsapp"} icon={MessageCircle} label="Brouillon WhatsApp" onClick={() => setActiveMode("draft_whatsapp")} />
       </div>
 
+      {activeMode === "predict" && (
+        <PredictContent
+          data={predictData}
+          generatedAt={predictGeneratedAt}
+          loading={loading}
+          hasMajorChange={hasMajorChange}
+          onGenerate={() => callAI("predict")}
+        />
+      )}
       {activeMode === "brief" && (
         <BriefContent
           data={briefData}
@@ -1399,6 +1418,132 @@ function EmptyAIState({ icon: Icon, title, description, buttonLabel, onAction, l
           <><Sparkles size={14} /> {buttonLabel}</>
         )}
       </button>
+    </div>
+  );
+}
+
+function PredictContent({ data, generatedAt, loading, hasMajorChange, onGenerate }: any) {
+  if (loading && !data) return <AILoadingState message="L'IA estime la probabilité de conversion..." />;
+  if (!data) {
+    return (
+      <EmptyAIState
+        icon={Target}
+        title="Probabilité de conversion non calculée"
+        description="Lancez l'IA pour estimer les chances que ce lead s'inscrive, avec le facteur décisif et l'action prioritaire pour maximiser la conversion."
+        buttonLabel="Calculer le score prédictif"
+        onAction={onGenerate}
+        loading={loading}
+      />
+    );
+  }
+
+  const prob = typeof data.probability === "number" ? Math.max(0, Math.min(100, Math.round(data.probability))) : 0;
+  // Bandes de couleur : chaud / tiède / froid
+  const band = prob >= 66
+    ? { bar: "bg-emerald-500", text: "text-emerald-600", ring: "text-emerald-500", label: "🔥 Forte", chip: "bg-emerald-100 text-emerald-700" }
+    : prob >= 40
+    ? { bar: "bg-amber-500", text: "text-amber-600", ring: "text-amber-500", label: "☀️ Modérée", chip: "bg-amber-100 text-amber-700" }
+    : { bar: "bg-blue-500", text: "text-blue-600", ring: "text-blue-500", label: "❄️ Faible", chip: "bg-blue-100 text-blue-700" };
+
+  const CONFIDENCE: Record<string, { label: string; cls: string }> = {
+    HIGH: { label: "Fiabilité élevée", cls: "bg-emerald-50 text-emerald-600" },
+    MEDIUM: { label: "Fiabilité moyenne", cls: "bg-amber-50 text-amber-600" },
+    LOW: { label: "Fiabilité faible", cls: "bg-gray-100 text-gray-500" },
+  };
+  const conf = CONFIDENCE[data.confidence] || CONFIDENCE.MEDIUM;
+
+  const TREND: Record<string, { icon: any; label: string; cls: string }> = {
+    UP: { icon: TrendingUp, label: "En hausse", cls: "text-emerald-600" },
+    DOWN: { icon: TrendingDown, label: "En baisse", cls: "text-red-500" },
+    STABLE: { icon: Minus, label: "Stable", cls: "text-gray-400" },
+  };
+  const trend = TREND[data.trend] || TREND.STABLE;
+  const TrendIcon = trend.icon;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+          Score prédictif IA {generatedAt && "• Généré " + formatRelativeDate(generatedAt)}
+        </p>
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          className={cn(
+            "text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors",
+            hasMajorChange
+              ? "bg-amber-100 text-amber-700 hover:bg-amber-200 font-medium"
+              : "text-violet-600 hover:bg-violet-50"
+          )}
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          {loading ? "Recalcul..." : (hasMajorChange ? "Recalculer (recommandé)" : "Recalculer")}
+        </button>
+      </div>
+
+      {/* Jauge principale */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
+        <div className="flex items-end justify-between gap-3 mb-3 flex-wrap">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Probabilité de conversion</p>
+            <div className="flex items-baseline gap-2">
+              <span className={cn("text-4xl font-bold tabular-nums", band.text)}>{prob}<span className="text-xl">%</span></span>
+              <span className={cn("text-xs px-2 py-0.5 rounded-full font-semibold", band.chip)}>{band.label}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", conf.cls)}>{conf.label}</span>
+            <span className={cn("flex items-center gap-1 text-[11px] font-medium", trend.cls)}>
+              <TrendIcon size={13} /> {trend.label}
+            </span>
+          </div>
+        </div>
+        <div className="h-2.5 w-full rounded-full bg-gray-100 overflow-hidden">
+          <div className={cn("h-full rounded-full transition-all", band.bar)} style={{ width: prob + "%" }} />
+        </div>
+      </div>
+
+      {data.topFactor && (
+        <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl border border-violet-200 p-3 sm:p-4">
+          <p className="text-[10px] text-violet-700 uppercase tracking-wider mb-1 font-semibold">🎯 Facteur décisif</p>
+          <p className="text-sm text-gray-800">{data.topFactor}</p>
+        </div>
+      )}
+
+      {data.positiveSignals && data.positiveSignals.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+          <p className="text-[10px] text-emerald-600 uppercase tracking-wider mb-2 font-semibold">Signaux favorables</p>
+          <ul className="space-y-1.5">
+            {data.positiveSignals.map((s: string, i: number) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <ThumbsUp size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.riskSignals && data.riskSignals.length > 0 && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-3 sm:p-4">
+          <p className="text-[10px] text-amber-700 uppercase tracking-wider mb-2 font-semibold">⚠️ Freins à la conversion</p>
+          <ul className="space-y-1.5">
+            {data.riskSignals.map((s: string, i: number) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.recommendation && (
+        <div className="bg-violet-600 rounded-xl p-3 sm:p-4">
+          <p className="text-[10px] text-violet-200 uppercase tracking-wider mb-1 font-semibold">💡 Action prioritaire</p>
+          <p className="text-sm text-white font-medium">{data.recommendation}</p>
+        </div>
+      )}
     </div>
   );
 }

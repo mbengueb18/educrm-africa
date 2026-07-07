@@ -1283,6 +1283,7 @@ model LeadAIAnalysis {
   // Cached AI analyses (JSON for flexibility)
   briefData   Json?
   actionsData Json?
+  predictData Json? // { probability, confidence, trend, topFactor, positiveSignals, riskSignals, recommendation }
 
   // Snapshot of lead state at analysis time (for change detection)
   snapshotMessageCount     Int     @default(0)
@@ -1295,6 +1296,7 @@ model LeadAIAnalysis {
 
   briefGeneratedAt   DateTime?
   actionsGeneratedAt DateTime?
+  predictGeneratedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

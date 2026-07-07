@@ -94,6 +94,7 @@ export async function getPipelineData(pipelineId?: string) {
         assignedTo: { select: { id: true, name: true, avatar: true } },
         program: { select: { id: true, name: true, code: true } },
         campaign: { select: { id: true, name: true } },
+        aiAnalysis: { select: { predictData: true } },
         _count: { select: { messages: true, activities: true } },
       },
       orderBy: { updatedAt: "desc" },

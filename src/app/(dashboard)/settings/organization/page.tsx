@@ -8,10 +8,10 @@ import {
   ArrowLeft, Building2, MapPin, GraduationCap, Calendar, Plus,
   Pencil, Trash2, Check, X, Loader2, Globe, Phone, Mail,
   Save, Star, ToggleLeft, ToggleRight, Hash, CreditCard,
-  Clock,
+  Clock, Sparkles,
 } from "lucide-react";
 import {
-  getOrganization, updateOrganization,
+  getOrganization, updateOrganization, getAIUsage,
   createCampus, updateCampus, deleteCampus,
   createProgram, updateProgram, deleteProgram,
   createAcademicYear, updateAcademicYear, setCurrentAcademicYear,
@@ -133,6 +133,8 @@ function GeneralSection({ org, onSaved }: { org: any; onSaved: () => void }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <AIUsageCard />
+
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} /> Informations générales</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -208,6 +210,92 @@ function GeneralSection({ org, onSaved }: { org: any; onSaved: () => void }) {
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Enregistrer
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Carte d'usage IA (jauge de consommation mensuelle) ───
+function AIUsageCard() {
+  var [usage, setUsage] = useState<any>(null);
+  var [loading, setLoading] = useState(true);
+
+  useEffect(function() {
+    getAIUsage()
+      .then(setUsage)
+      .catch(function() { /* silencieux : la carte disparaît en cas d'erreur */ })
+      .finally(function() { setLoading(false); });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 flex items-center justify-center">
+        <Loader2 size={18} className="animate-spin text-brand-400" />
+      </div>
+    );
+  }
+
+  if (!usage) return null;
+
+  // IA non incluse dans le plan → invitation à activer / upgrader
+  if (!usage.available) {
+    return (
+      <div className="bg-gradient-to-br from-brand-50 to-white rounded-xl border border-brand-100 p-4 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center shrink-0">
+            <Sparkles size={18} className="text-brand-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-bold text-gray-900">Assistant IA</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {usage.addonAvailable
+                ? "Non inclus dans votre plan " + usage.planName + ". Activez l'add-on IA" + (usage.addonPrice ? " (" + formatCFA(usage.addonPrice) + " FCFA/mois)" : "") + " pour débloquer briefs, actions suggérées et rédaction assistée."
+                : "Passez au plan Performance pour bénéficier de l'IA incluse (briefs, actions suggérées, rédaction assistée)."}
+            </p>
+            <Link href="/settings" className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-brand-600 hover:text-brand-700">
+              <Sparkles size={13} /> {usage.addonAvailable ? "Activer l'add-on IA" : "Voir les plans"}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  var pct = usage.limit > 0 ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
+  var nearLimit = pct >= 80;
+  var atLimit = usage.remaining <= 0;
+  var barColor = atLimit ? "bg-red-500" : nearLimit ? "bg-amber-500" : "bg-brand-500";
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+          <Sparkles size={16} className="text-brand-500" /> Actions IA ce mois
+        </h3>
+        <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
+          atLimit ? "bg-red-50 text-red-600" : nearLimit ? "bg-amber-50 text-amber-600" : "bg-brand-50 text-brand-600"
+        )}>
+          {usage.used.toLocaleString("fr-FR")} / {usage.limit.toLocaleString("fr-FR")}
+        </span>
+      </div>
+
+      <div className="h-2.5 w-full rounded-full bg-gray-100 overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: pct + "%" }} />
+      </div>
+
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-xs text-gray-500">
+          {atLimit
+            ? "Quota épuisé — l'assistant IA est en pause jusqu'au prochain mois."
+            : "Reste " + usage.remaining.toLocaleString("fr-FR") + " action" + (usage.remaining > 1 ? "s" : "") + " ce mois."}
+        </p>
+        <span className="text-[11px] text-gray-400">Plan {usage.planName}</span>
+      </div>
+
+      {nearLimit && (
+        <p className={cn("text-xs mt-2 flex items-center gap-1.5", atLimit ? "text-red-600" : "text-amber-600")}>
+          <Clock size={12} /> Le compteur se réinitialise au 1er du mois prochain.
+        </p>
+      )}
     </div>
   );
 }

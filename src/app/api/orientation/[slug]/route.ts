@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { callGemini } from "@/lib/gemini";
+import { callAIMetered } from "@/lib/ai/metered";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -93,7 +93,14 @@ Si action = "start", commence par te présenter brièvement et pose la première
       }));
     }
 
-    const responseText = await callGemini(geminiMessages, systemInstruction);
+    // Outil public face au prospect : on comptabilise l'usage IA mais on ne
+    // bloque JAMAIS un candidat en cours d'orientation (enforce: false).
+    const responseText = await callAIMetered({
+      orgId: org.id,
+      messages: geminiMessages,
+      systemInstruction,
+      enforce: false,
+    });
 
     // Try to parse JSON
     let parsed: any;

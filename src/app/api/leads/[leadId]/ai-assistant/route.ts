@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { callGemini } from "@/lib/gemini";
+import { callAIMetered } from "@/lib/ai/metered";
+import { PlanLimitError } from "@/lib/plans/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -62,8 +63,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       hasAnalysis: !!analysis,
       briefData: analysis?.briefData || null,
       actionsData: analysis?.actionsData || null,
+      predictData: analysis?.predictData || null,
       briefGeneratedAt: analysis?.briefGeneratedAt || null,
       actionsGeneratedAt: analysis?.actionsGeneratedAt || null,
+      predictGeneratedAt: analysis?.predictGeneratedAt || null,
       hasMajorChange,
       changeReasons,
     });
@@ -126,7 +129,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const leadContext = buildLeadContext(lead);
     const prompt = buildPrompt(mode, leadContext, extraContext);
 
-    const response = await callGemini([{ role: "user", parts: [{ text: prompt }] }]);
+    const response = await callAIMetered({
+      orgId: session.user.organizationId,
+      messages: [{ role: "user", parts: [{ text: prompt }] }],
+    });
     if (!response) {
       return NextResponse.json({ error: "Aucune réponse de l'IA" }, { status: 500 });
     }
@@ -139,8 +145,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       parsed = { text: response };
     }
 
-    // ─── Sauvegarder dans le cache si c'est brief ou actions (pas pour les drafts éphémères) ───
-    if (mode === "brief" || mode === "actions") {
+    // ─── Sauvegarder dans le cache si c'est brief, actions ou predict (pas pour les drafts éphémères) ───
+    if (mode === "brief" || mode === "actions" || mode === "predict") {
       const snapshot = {
         snapshotMessageCount: lead._count.messages,
         snapshotCallCount: lead._count.calls,
@@ -160,6 +166,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         updateData.actionsData = parsed;
         updateData.actionsGeneratedAt = new Date();
       }
+      if (mode === "predict") {
+        updateData.predictData = parsed;
+        updateData.predictGeneratedAt = new Date();
+      }
 
       await prisma.leadAIAnalysis.upsert({
         where: { leadId: lead.id },
@@ -170,6 +180,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({ success: true, data: parsed, mode });
   } catch (error: any) {
+    // Quota IA épuisé ou feature non incluse dans le plan → 402 avec message d'upgrade
+    if (error instanceof PlanLimitError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, upgradeTarget: error.upgradeTarget },
+        { status: 402 }
+      );
+    }
     console.error("[AI Assistant POST]", error);
     return NextResponse.json({ error: error.message || "Erreur serveur" }, { status: 500 });
   }
@@ -290,6 +307,23 @@ function buildPrompt(mode: string, leadContext: string, extraContext?: string): 
       "  ]\n" +
       "}\n\n" +
       "Maximum 3-5 actions. Trie par priorité décroissante. Pas de texte avant/après. Pas de markdown.";
+  }
+
+  if (mode === "predict") {
+    return baseContext +
+      "TÂCHE : Estime la PROBABILITÉ que ce lead se convertisse en inscription (étudiant payant), en te basant UNIQUEMENT sur les données ci-dessus.\n\n" +
+      "Méthode : croise le niveau d'engagement (messages, appels, RDV, réactivité), l'ancienneté et la fraîcheur des interactions, la progression dans le pipeline, le score, la source, et la présence/absence de signaux d'achat (demande de frais, de dossier, de dates). Sois lucide : peu d'interactions ou un silence prolongé = probabilité basse. Ne surestime pas.\n\n" +
+      "Réponds STRICTEMENT en JSON valide avec cette structure :\n" +
+      "{\n" +
+      '  "probability": 0-100 (entier, probabilité de conversion en inscription),\n' +
+      '  "confidence": "HIGH" | "MEDIUM" | "LOW" (fiabilité de ton estimation selon la quantité de données disponibles),\n' +
+      '  "trend": "UP" | "DOWN" | "STABLE" (dynamique récente de l\'engagement),\n' +
+      '  "topFactor": "Le facteur unique le plus déterminant dans cette estimation (1 phrase courte)",\n' +
+      '  "positiveSignals": ["1 à 3 signaux qui augmentent la probabilité"],\n' +
+      '  "riskSignals": ["0 à 3 signaux qui la diminuent"],\n' +
+      '  "recommendation": "L\'action prioritaire pour maximiser la conversion (1 phrase)"\n' +
+      "}\n\n" +
+      "Pas de texte avant ou après le JSON. Pas de markdown.";
   }
 
   if (mode === "draft_email") {

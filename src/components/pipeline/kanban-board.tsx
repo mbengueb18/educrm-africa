@@ -40,6 +40,7 @@ interface Lead {
   assignedTo: { id: string; name: string; avatar: string | null } | null;
   program: { id: string; name: string; code: string | null } | null;
   campusId?: string | null;
+  aiAnalysis?: { predictData?: any } | null;
   _count: { messages: number; activities: number };
 }
 
@@ -78,7 +79,7 @@ export function KanbanBoard({
   const [filterAssigned, setFilterAssigned] = useState("");
   const [filterProgram, setFilterProgram] = useState("");
   const [filterCampus, setFilterCampus] = useState("");
-  const [sortKey, setSortKey] = useState<"score" | "createdAt" | "updatedAt">("score");
+  const [sortKey, setSortKey] = useState<"predict" | "score" | "createdAt" | "updatedAt">("score");
   const COLUMN_PAGE_SIZE = 50;
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
 
@@ -125,6 +126,13 @@ export function KanbanBoard({
   const getLeadsForStage = (stageId: string) => {
     var stageLeads = filteredLeads.filter((l) => l.stageId === stageId);
     return [...stageLeads].sort((a, b) => {
+      if (sortKey === "predict") {
+        // Leads avec probabilité IA en tête (triés décroissant) ; non estimés en dernier.
+        var pa = typeof a.aiAnalysis?.predictData?.probability === "number" ? a.aiAnalysis.predictData.probability : -1;
+        var pb = typeof b.aiAnalysis?.predictData?.probability === "number" ? b.aiAnalysis.predictData.probability : -1;
+        if (pb !== pa) return pb - pa;
+        return b.score - a.score;
+      }
       if (sortKey === "score") return b.score - a.score;
       if (sortKey === "createdAt") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
@@ -196,6 +204,7 @@ export function KanbanBoard({
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
             <span className="text-[10px] text-gray-500 px-2 hidden sm:inline">Tri:</span>
             {[
+              { key: "predict" as const, label: "IA" },
               { key: "score" as const, label: "Score" },
               { key: "createdAt" as const, label: "Date" },
               { key: "updatedAt" as const, label: "MAJ" },

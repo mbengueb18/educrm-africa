@@ -11,6 +11,7 @@ import {
   Activity,
   AlertTriangle,
   Clock,
+  Target,
 } from "lucide-react";
 import type { LeadSource } from "@prisma/client";
 
@@ -30,6 +31,7 @@ interface LeadCardProps {
     customFields?: any;
     assignedTo: { id: string; name: string; avatar: string | null } | null;
     program: { id: string; name: string; code: string | null } | null;
+    aiAnalysis?: { predictData?: any } | null;
     _count: { messages: number; activities: number };
     daysSinceContact?: number;
     lastContactAt?: Date | null;
@@ -64,6 +66,16 @@ const sourceColors: Partial<Record<LeadSource, string>> = {
 };
 
 export function LeadCard({ lead, customFieldsConfig = [], onOpen }: LeadCardProps) {
+  const rawProb = lead.aiAnalysis?.predictData?.probability;
+  const prob = typeof rawProb === "number" ? Math.max(0, Math.min(100, Math.round(rawProb))) : null;
+  const probCls = prob === null
+    ? ""
+    : prob >= 66
+    ? "bg-emerald-100 text-emerald-700"
+    : prob >= 40
+    ? "bg-amber-100 text-amber-700"
+    : "bg-blue-100 text-blue-700";
+
   return (
     <div
       className="kanban-card group"
@@ -80,6 +92,15 @@ export function LeadCard({ lead, customFieldsConfig = [], onOpen }: LeadCardProp
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {prob !== null && (
+            <span
+              className={cn("inline-flex items-center gap-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full", probCls)}
+              title={"Probabilité de conversion estimée par l'IA : " + prob + "%"}
+            >
+              <Target size={10} />
+              {prob}%
+            </span>
+          )}
           <span
             className={cn(
               "text-xs font-bold px-2 py-0.5 rounded-full",

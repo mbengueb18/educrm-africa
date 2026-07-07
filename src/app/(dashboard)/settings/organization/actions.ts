@@ -3,6 +3,42 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getPlanLimits } from "@/lib/plans/config";
+import { getAIActionsUsedThisMonth } from "@/lib/plans/usage";
+
+// ─── Usage IA du mois en cours (pour la jauge de consommation) ───
+export async function getAIUsage() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var org = await prisma.organization.findUniqueOrThrow({
+    where: { id: session.user.organizationId },
+    select: { plan: true, aiAddonEnabled: true, planLockedUntil: true },
+  });
+
+  // Rétrogradation auto si le plan a expiré (cohérent avec checks.ts)
+  var effectivePlan = org.plan;
+  if (org.planLockedUntil && org.planLockedUntil.getTime() < Date.now()) {
+    effectivePlan = "ESSENTIEL";
+  }
+
+  var limits = getPlanLimits(effectivePlan);
+  var available = limits.aiAssistant || org.aiAddonEnabled;
+  var limit = available ? limits.aiActionsPerMonth : 0;
+  var used = await getAIActionsUsedThisMonth(session.user.organizationId);
+
+  return {
+    available,
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    plan: effectivePlan,
+    planName: limits.name,
+    addonEnabled: org.aiAddonEnabled,
+    addonAvailable: limits.aiAddonAvailable,
+    addonPrice: limits.aiAddonPrice,
+  };
+}
 
 // ─── Get organization ───
 export async function getOrganization() {
