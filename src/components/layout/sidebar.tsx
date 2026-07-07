@@ -110,12 +110,7 @@ const navItems: NavItem[] = [
     icon: FileText,
     permission: "leads:view" as Permission,
   },
-  {
-    label: "Formulaires",
-    href: "/forms",
-    icon: ClipboardList,
-    permission: "leads:view" as Permission,
-  },
+  /* Formulaires : déplacé dans Réglages → Formulaires (plus dans le menu latéral) */
   /* {
     label: "Paiements",
     href: "/payments",

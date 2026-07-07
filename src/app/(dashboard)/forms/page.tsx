@@ -1,10 +1,7 @@
-import { Metadata } from "next";
-import { getForms } from "./actions";
-import { FormsClient } from "./forms-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Formulaires" };
-
-export default async function FormsPage() {
-  const forms = await getForms();
-  return <FormsClient forms={forms as any} />;
+// La liste des formulaires a été déplacée dans Réglages → Formulaires.
+// (L'éditeur /forms/[id]/edit et les soumissions restent à leur emplacement.)
+export default function FormsPage() {
+  redirect("/settings/forms");
 }
