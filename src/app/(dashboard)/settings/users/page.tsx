@@ -172,8 +172,11 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
     if (mode === "create" && password.length < 6) { toast.error("Mot de passe min. 6 caractères"); return; }
     setSaving(true);
     try {
-      if (mode === "create") { await createUser({ name, email, password, phone: phone || undefined, role }); toast.success("Utilisateur créé"); }
-      else if (user) { await updateUser(user.id, { name, email, phone, role, isActive }); toast.success("Utilisateur mis à jour"); }
+      var res = mode === "create"
+        ? await createUser({ name, email, password, phone: phone || undefined, role })
+        : user ? await updateUser(user.id, { name, email, phone, role, isActive }) : null;
+      if (res && res.ok === false) { toast.error(res.error || "Erreur"); setSaving(false); return; }
+      toast.success(mode === "create" ? "Utilisateur créé" : "Utilisateur mis à jour");
       onClose(true);
     } catch (err: any) { toast.error(err.message || "Erreur"); }
     setSaving(false);
@@ -182,14 +185,22 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
   var handleResetPwd = async function() {
     if (!user || newPwd.length < 6) return;
     setResetting(true);
-    try { await resetUserPassword(user.id, newPwd); toast.success("Mot de passe réinitialisé"); setShowResetPwd(false); setNewPwd(""); }
+    try {
+      var res = await resetUserPassword(user.id, newPwd);
+      if (res.ok === false) { toast.error(res.error || "Erreur"); setResetting(false); return; }
+      toast.success("Mot de passe réinitialisé"); setShowResetPwd(false); setNewPwd("");
+    }
     catch (err: any) { toast.error(err.message || "Erreur"); }
     setResetting(false);
   };
 
   var handleDelete = async function() {
     if (!user || !confirm("Supprimer " + user.name + " ?")) return;
-    try { await deleteUser(user.id); toast.success("Supprimé"); onClose(true); }
+    try {
+      var res = await deleteUser(user.id);
+      if (res.ok === false) { toast.error(res.error || "Erreur"); return; }
+      toast.success("Supprimé"); onClose(true);
+    }
     catch (err: any) { toast.error(err.message || "Erreur"); }
   };
 

@@ -8,6 +8,12 @@ import bcrypt from "bcryptjs";
 import { assertCanAddUser } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
 
+// Résultat standard des actions d'écriture : on RENVOIE l'erreur métier au lieu
+// de la throw. En prod, Next.js masque le message des erreurs throw des Server
+// Actions ("An error occurred in the Server Components render...") ; un retour
+// permet d'afficher un message clair côté client.
+type ActionResult = { ok: true } | { ok: false; error: string };
+
 export async function getUsers() {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -36,27 +42,26 @@ export async function getUserStats() {
 
 export async function createUser(data: {
   name: string; email: string; password: string; phone?: string; role: string; campusId?: string;
-}) {
+}): Promise<ActionResult> {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") return { ok: false, error: "Réservé aux administrateurs" };
 
-  // ✅ NOUVEAU : vérifier la limite du plan AVANT toute autre opération
+  // Vérifier la limite du plan AVANT toute autre opération
   try {
     await assertCanAddUser(session.user.organizationId);
   } catch (error) {
     if (error instanceof PlanLimitError) {
-      // Renvoyer un message clair au client
       var msg = error.upgradeTarget
         ? error.message + " Passez au plan " + error.upgradeTarget + " pour augmenter la limite."
         : error.message;
-      throw new Error(msg);
+      return { ok: false, error: msg };
     }
     throw error;
   }
 
   var existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
-  if (existing) throw new Error("Cet email est déjà utilisé");
+  if (existing) return { ok: false, error: "Cet email est déjà utilisé" };
   var passwordHash = await bcrypt.hash(data.password, 12);
   await prisma.user.create({
     data: {
@@ -68,17 +73,17 @@ export async function createUser(data: {
     },
   });
   revalidatePath("/settings/users");
-  return { success: true };
+  return { ok: true };
 }
 
 export async function updateUser(userId: string, data: {
   name?: string; email?: string; phone?: string; role?: string; campusId?: string | null; isActive?: boolean;
-}) {
+}): Promise<ActionResult> {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") return { ok: false, error: "Réservé aux administrateurs" };
 
-  // ✅ NOUVEAU : si on réactive un utilisateur, vérifier la limite
+  // Si on réactive un utilisateur, vérifier la limite
   if (data.isActive === true) {
     var currentUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -93,7 +98,7 @@ export async function updateUser(userId: string, data: {
           var msg = error.upgradeTarget
             ? error.message + " Passez au plan " + error.upgradeTarget + " pour réactiver cet utilisateur."
             : error.message;
-          throw new Error(msg);
+          return { ok: false, error: msg };
         }
         throw error;
       }
@@ -105,7 +110,7 @@ export async function updateUser(userId: string, data: {
   if (data.email !== undefined) {
     var e = data.email.toLowerCase().trim();
     var dup = await prisma.user.findFirst({ where: { email: e, id: { not: userId } } });
-    if (dup) throw new Error("Cet email est déjà utilisé");
+    if (dup) return { ok: false, error: "Cet email est déjà utilisé" };
     updateData.email = e;
   }
   if (data.phone !== undefined) updateData.phone = data.phone.trim() || null;
@@ -114,28 +119,28 @@ export async function updateUser(userId: string, data: {
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   await prisma.user.update({ where: { id: userId }, data: updateData });
   revalidatePath("/settings/users");
-  return { success: true };
+  return { ok: true };
 }
 
-export async function resetUserPassword(userId: string, newPassword: string) {
+export async function resetUserPassword(userId: string, newPassword: string): Promise<ActionResult> {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
-  if (newPassword.length < 6) throw new Error("Min. 6 caractères");
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") return { ok: false, error: "Réservé aux administrateurs" };
+  if (newPassword.length < 6) return { ok: false, error: "Min. 6 caractères" };
   var hash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
   revalidatePath("/settings/users");
-  return { success: true };
+  return { ok: true };
 }
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(userId: string): Promise<ActionResult> {
   var session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") throw new Error("Réservé aux administrateurs");
-  if (session.user.id === userId) throw new Error("Impossible de supprimer votre propre compte");
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") return { ok: false, error: "Réservé aux administrateurs" };
+  if (session.user.id === userId) return { ok: false, error: "Impossible de supprimer votre propre compte" };
   await prisma.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } });
   await prisma.task.updateMany({ where: { assignedToId: userId }, data: { assignedToId: session.user.id } });
   await prisma.user.delete({ where: { id: userId } });
   revalidatePath("/settings/users");
-  return { success: true };
+  return { ok: true };
 }
