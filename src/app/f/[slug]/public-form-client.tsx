@@ -139,7 +139,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : (s.bgColor || "#EEF4FB"), display: "flex", alignItems: "center", justifyContent: "center", padding: embed ? "8px" : "28px 16px" }}>
       <style>{formBaseCss(s)}</style>
-      <div style={{ width: "100%", maxWidth: 500 }}>
+      <div style={{ width: "100%", maxWidth: 640 }}>
         <div style={{ background: "#fff", borderRadius: (s.radius ?? 12) + 4 + "px", boxShadow: embed ? "none" : "0 8px 30px rgba(20,40,70,.12)", overflow: "hidden" }}>
           <div style={{ height: 7, background: s.color || "#2471A3" }} />
           <div style={{ padding: "26px 28px" }}>
