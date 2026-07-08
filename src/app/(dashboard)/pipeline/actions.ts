@@ -818,16 +818,20 @@ export async function calculateLeadScores(orgId: string) {
     }
   }
 
-  // Batch update scores — par paquets pour ne pas saturer le pool de connexions
+  // Mise à jour groupée : 1 requête SQL par lot (bien plus rapide qu'un UPDATE par lead).
+  // UPDATE ... FROM (unnest(ids), unnest(scores)) — évite N allers-retours DB.
   if (updates.length > 0) {
-    var BATCH = 4; // <= connection limit (5)
-    for (var b = 0; b < updates.length; b += BATCH) {
-      var slice = updates.slice(b, b + BATCH);
-      await Promise.all(
-        slice.map(function(u) {
-          return prisma.lead.update({ where: { id: u.id }, data: { score: u.score } });
-        })
-      );
+    var CHUNK = 1000;
+    for (var b = 0; b < updates.length; b += CHUNK) {
+      var slice = updates.slice(b, b + CHUNK);
+      var ids = slice.map(function(u) { return u.id; });
+      var scores = slice.map(function(u) { return u.score; });
+      await prisma.$executeRaw`
+        UPDATE "leads" AS l
+        SET score = data.score
+        FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${scores}::int[]) AS score) AS data
+        WHERE l.id = data.id AND l."organizationId" = ${orgId}
+      `;
     }
   }
 
