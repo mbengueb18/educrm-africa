@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/api-keys";
 import { getLeadRouting } from "@/lib/pipeline-routing";
+import { computeLeadScore } from "@/lib/lead-score";
 import { z } from "zod";
 
 function corsResponse(data: any, status: number) {
@@ -626,6 +627,7 @@ export async function POST(request: NextRequest) {
         programId,
         campusId,
         organizationId,
+        score: computeLeadScore({ source: fields.source, email: fields.email, whatsapp: fields.whatsapp, programId, campusId }),
         customFields: Object.keys(allCustomFields).length > 0 ? allCustomFields : undefined,
       },
     });

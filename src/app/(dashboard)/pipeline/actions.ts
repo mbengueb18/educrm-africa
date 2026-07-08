@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLeadRouting } from "@/lib/pipeline-routing";
 import { getCustomFields } from "@/lib/custom-fields";
+import { computeLeadScore } from "@/lib/lead-score";
 
 // ─── Rôles autorisés à assigner/réassigner un lead ───
 function canAssignLeads(role: string): boolean {
@@ -277,6 +278,13 @@ const lead = await prisma.lead.create({
     stageId: routing.stageId,
     pipelineId: routing.pipelineId,
     organizationId,
+    score: computeLeadScore({
+      source: (data as any).source,
+      email: data.email || null,
+      whatsapp: data.whatsapp || data.phone,
+      programId: (data as any).programId,
+      campusId: (data as any).campusId,
+    }),
   },
 });
 
@@ -641,12 +649,14 @@ export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
     if (phoneTrim) seenPhones.add(phoneTrim);
     if (emailTrim) seenEmails.add(emailTrim);
 
+    var emailClean = row.email ? row.email.trim() : null;
+    var whatsappClean = row.whatsapp?.trim() || phoneTrim || null;
     toInsert.push({
       firstName: row.firstName.trim(),
       lastName: row.lastName.trim(),
       phone: phoneTrim || "N/A",
-      email: row.email ? row.email.trim() : null,
-      whatsapp: row.whatsapp?.trim() || phoneTrim || null,
+      email: emailClean,
+      whatsapp: whatsappClean,
       city: row.city?.trim() || null,
       source: source as any,
       sourceDetail: row.sourceDetail?.trim() || "Import CSV",
@@ -654,6 +664,8 @@ export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
       pipelineId: routing.pipelineId,
       programId,
       organizationId,
+      // Score de base immédiat (interactions = 0 à l'import) — le cron affinera ensuite.
+      score: computeLeadScore({ source, email: emailClean, whatsapp: whatsappClean, programId }),
       customFields: Object.keys(rowCustomFields).length > 0 ? rowCustomFields : undefined,
     });
   }
@@ -779,46 +791,27 @@ export async function calculateLeadScores(orgId: string) {
     }),
   ]);
 
-  var sourceScores: Record<string, number> = {
-    REFERRAL: 20, WALK_IN: 20, WEBSITE: 15, PHONE_CALL: 15,
-    FACEBOOK: 10, INSTAGRAM: 10, WHATSAPP: 10,
-    SALON: 10, PARTNER: 10, RADIO: 5, TV: 5, IMPORT: 5, OTHER: 5,
-  };
-
   var updates: { id: string; score: number }[] = [];
 
   for (var lead of leads) {
-    var score = 0;
-
-    // Source score (max 20)
-    score += sourceScores[lead.source] || 5;
-
-    // Profile completeness (max 25)
-    if (lead.email) score += 5;
-    if (lead.whatsapp) score += 5;
-    if (lead.programId) score += 10;
-    if (lead.campusId) score += 5;
-
-    // Interactions (max 55)
-    score += Math.min(lead._count.calls * 5, 20);
-    score += Math.min(lead._count.messages * 3, 15);
-    score += Math.min(lead._count.appointments * 10, 20);
-
-    // Recency bonus (max 15)
+    // Dernier contact (appel/message) pour le bonus de récence
     var callDate = lastCalls.find(function(c) { return c.leadId === lead.id; })?._max?.calledAt;
     var msgDate = lastMessages.find(function(m) { return m.leadId === lead.id; })?._max?.sentAt;
     var dates = [callDate, msgDate].filter(Boolean) as Date[];
     var lastContact = dates.length > 0 ? new Date(Math.max(...dates.map(function(d) { return d.getTime(); }))) : null;
 
-    if (lastContact) {
-      var daysSince = Math.floor((now.getTime() - lastContact.getTime()) / 86_400_000);
-      if (daysSince <= 3) score += 15;
-      else if (daysSince <= 7) score += 10;
-      else if (daysSince <= 14) score += 5;
-    }
-
-    // Cap at 100
-    score = Math.min(score, 100);
+    var score = computeLeadScore({
+      source: lead.source,
+      email: lead.email,
+      whatsapp: lead.whatsapp,
+      programId: lead.programId,
+      campusId: lead.campusId,
+      calls: lead._count.calls,
+      messages: lead._count.messages,
+      appointments: lead._count.appointments,
+      lastContact,
+      now,
+    });
 
     if (score !== lead.score) {
       updates.push({ id: lead.id, score });

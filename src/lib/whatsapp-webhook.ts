@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { computeLeadScore } from "@/lib/lead-score";
 
 // ═══════════════════════════════════════════════════════════════
 // 1) VÉRIFICATION SIGNATURE HMAC
@@ -132,7 +133,7 @@ export async function createOrphanLead(
       source: "WHATSAPP",
       stageId: routing.stageId,
       pipelineId: routing.pipelineId,    // NOUVEAU
-      score: 0,
+      score: computeLeadScore({ source: "WHATSAPP", whatsapp: formattedPhone }),
       customFields: {
         _orphan: true,
         _createdViaWebhook: true,

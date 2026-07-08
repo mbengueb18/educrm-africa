@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getLeadRouting } from "@/lib/pipeline-routing";
 import { sendEmail } from "@/lib/email";
 import { isInputField, type FormField, type FormRouting, type FormSettings } from "@/lib/forms";
+import { computeLeadScore } from "@/lib/lead-score";
 
 export const runtime = "nodejs";
 
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         pipelineId: pipelineId ?? undefined,
         assignedToId: routing.assignToId ?? undefined,
         organizationId: form.organizationId,
+        score: computeLeadScore({ source: "WEBSITE", email, whatsapp }),
         customFields: Object.keys(customFields).length ? customFields : undefined,
       },
       select: { id: true },
