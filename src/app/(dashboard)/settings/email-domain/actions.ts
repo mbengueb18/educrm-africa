@@ -7,6 +7,7 @@ import { canAccessFeature } from "@/lib/plans/checks";
 import {
   findOrCreateResendDomain,
   getResendDomain,
+  ensureSendingTracking,
   verifyResendDomain,
   removeResendDomain,
   findOrCreateInboundDomain,
@@ -100,6 +101,10 @@ export async function refreshEmailDomainStatus() {
     where: { organizationId: session.user.organizationId },
   });
   if (!config?.resendDomainId) throw new Error("Aucun domaine à vérifier.");
+
+  // Auto-réparation : garantit le suivi ouvertures/clics sur les domaines créés
+  // avant l'ajout de cette option (sinon les campagnes restent à 0 ouverture).
+  await ensureSendingTracking(config.resendDomainId);
 
   await verifyResendDomain(config.resendDomainId);
   const rd = await getResendDomain(config.resendDomainId);

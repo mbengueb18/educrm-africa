@@ -45,8 +45,24 @@ export function mapStatus(resendStatus: string): "PENDING" | "VERIFIED" | "FAILE
   return "PENDING";
 }
 
+// Active le suivi des OUVERTURES et des CLICS sur un domaine d'ENVOI Resend.
+// Sans ça, Resend n'insère ni le pixel de suivi ni la réécriture des liens →
+// les campagnes affichent 0 ouverture / 0 clic (les délivrés/rebonds, eux,
+// n'en dépendent pas). Le tracking est `false` par défaut à la création Resend,
+// il faut donc l'activer explicitement. Best-effort : ne doit jamais casser le
+// flux d'ajout/vérification de domaine.
+export async function ensureSendingTracking(id: string): Promise<void> {
+  try {
+    await client().domains.update({ id, openTracking: true, clickTracking: true });
+  } catch (e) {
+    console.error("[email-domain] Activation du tracking Resend échouée pour", id, e);
+  }
+}
+
 // Cherche un domaine déjà présent dans le compte Resend, sinon le crée.
-export async function findOrCreateResendDomain(domain: string): Promise<ResendDomainResult> {
+// `enableTracking` = active le suivi ouvertures/clics (domaines d'ENVOI uniquement ;
+// inutile pour le sous-domaine de réception "reply.<domaine>").
+export async function findOrCreateResendDomain(domain: string, enableTracking = true): Promise<ResendDomainResult> {
   const resend = client();
   const target = domain.toLowerCase();
 
@@ -56,6 +72,9 @@ export async function findOrCreateResendDomain(domain: string): Promise<ResendDo
     const items: any[] = list?.data?.data || list?.data || [];
     const existing = items.find((d: any) => (d.name || "").toLowerCase() === target);
     if (existing?.id) {
+      // Domaine déjà présent : on (ré)active le tracking au cas où il aurait été
+      // créé avant l'ajout de cette option (auto-réparation des anciens domaines).
+      if (enableTracking) await ensureSendingTracking(existing.id);
       return await getResendDomain(existing.id);
     }
   } catch {
@@ -63,7 +82,9 @@ export async function findOrCreateResendDomain(domain: string): Promise<ResendDo
   }
 
   // 2. Créer le domaine → Resend renvoie les enregistrements DNS à ajouter
-  const created: any = await resend.domains.create({ name: domain });
+  const created: any = await resend.domains.create(
+    enableTracking ? { name: domain, openTracking: true, clickTracking: true } : { name: domain }
+  );
   if (created?.error || !created?.data) {
     throw new Error(created?.error?.message || "Création du domaine côté Resend échouée.");
   }
@@ -158,7 +179,7 @@ async function setResendCapabilities(id: string, capabilities: { sending?: "enab
 // Crée (ou réutilise) le domaine "reply.<domaine>" côté Resend, avec réception activée.
 export async function findOrCreateInboundDomain(domain: string): Promise<ResendDomainResult> {
   const replyDomain = inboundDomainFor(domain);
-  const rd = await findOrCreateResendDomain(replyDomain);
+  const rd = await findOrCreateResendDomain(replyDomain, false); // réception : pas de tracking
   // On active À LA FOIS l'envoi et la réception : le sending doit rester activé pour que
   // Resend vérifie le DKIM (preuve de propriété), sans quoi le domaine n'est jamais vérifié
   // et le routage inbound est bloqué. On n'envoie pas réellement depuis ce sous-domaine.
