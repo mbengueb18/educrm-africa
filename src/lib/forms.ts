@@ -3,7 +3,15 @@
 export type FieldType =
   | "text" | "textarea" | "email" | "tel" | "whatsapp" | "number" | "url" | "date" | "time"
   | "select" | "radio" | "checkboxes" | "boolean" | "consent" | "file"
+  | "country" | "nationality"
   | "hidden" | "heading" | "paragraph" | "divider";
+
+// Condition d'affichage : le champ n'est visible que si un autre champ vérifie la règle.
+export type FieldCondition = {
+  field: string;           // clé technique (name) du champ contrôlant
+  op: "eq" | "neq";        // égal / différent
+  value: string;           // valeur attendue
+};
 
 export type FormField = {
   id: string;
@@ -17,6 +25,7 @@ export type FormField = {
   width?: "full" | "half";
   content?: string;          // heading / paragraph / consent (texte)
   defaultValue?: string;     // hidden
+  showIf?: FieldCondition;   // affichage conditionnel (optionnel)
 };
 
 export type FormSettings = {
@@ -67,6 +76,7 @@ export function slugify(input: string): string {
 const DEFAULT_NAMES: Partial<Record<FieldType, string>> = {
   email: "email", tel: "phone", whatsapp: "whatsapp", text: "firstName",
   textarea: "message", date: "date", number: "number", url: "url",
+  country: "country", nationality: "nationality",
 };
 
 let counter = 0;
@@ -91,7 +101,8 @@ export const DEFAULT_LABELS: Record<FieldType, string> = {
   text: "Texte", textarea: "Message", email: "Email", tel: "Téléphone",
   whatsapp: "WhatsApp", number: "Nombre", url: "Lien", date: "Date", time: "Heure",
   select: "Liste déroulante", radio: "Choix unique", checkboxes: "Cases à cocher",
-  boolean: "Oui / Non", consent: "Consentement", file: "Fichier joint", hidden: "Champ caché",
+  boolean: "Oui / Non", consent: "Consentement", file: "Fichier joint",
+  country: "Pays", nationality: "Nationalité", hidden: "Champ caché",
   heading: "Titre", paragraph: "Paragraphe", divider: "Séparateur",
 };
 
@@ -178,8 +189,28 @@ export function isStandardName(name: string): boolean {
 // Types que l'IA d'import PDF est autorisée à produire (on exclut hidden/divider).
 export const IMPORTABLE_TYPES: FieldType[] = [
   "text", "textarea", "email", "tel", "whatsapp", "number", "url", "date", "time",
-  "select", "radio", "checkboxes", "boolean", "consent", "file", "heading", "paragraph",
+  "select", "radio", "checkboxes", "boolean", "consent", "file",
+  "country", "nationality", "heading", "paragraph",
 ];
+
+// Évalue si un champ doit être affiché selon sa condition showIf et les valeurs saisies.
+export function isFieldVisible(field: FormField, values: Record<string, any>): boolean {
+  const c = field.showIf;
+  if (!c || !c.field) return true;
+  const actual = values[c.field];
+  const matches = Array.isArray(actual)
+    ? actual.map(String).includes(String(c.value))
+    : String(actual ?? "") === String(c.value ?? "");
+  return c.op === "neq" ? !matches : matches;
+}
+
+// Détecte un champ "pays" / "nationalité" à partir de son libellé/nom.
+function detectGeoType(label: string, name: string): "country" | "nationality" | null {
+  const s = (label + " " + name).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (/nationalit|nationality/.test(s)) return "nationality";
+  if (/\bpays\b|\bcountry\b/.test(s)) return "country";
+  return null;
+}
 
 // Dérive une clé technique camelCase à partir d'un libellé.
 function nameFromLabel(label: string): string {
@@ -203,6 +234,8 @@ export function normalizeImportedFields(raw: unknown): FormField[] {
   if (!Array.isArray(raw)) return [];
   const used = new Set<string>();
   const out: FormField[] = [];
+  const aiNameToFinal = new Map<string, string>();          // clé IA (assainie) → clé finale
+  const pending: { idx: number; field: string; op: "eq" | "neq"; value: string }[] = [];
 
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
@@ -218,16 +251,22 @@ export function normalizeImportedFields(raw: unknown): FormField[] {
     // Ignore les objets sans aucun signal exploitable (bruit de l'IA).
     if (!hasLabel && !hasContent && !hasValidType) continue;
 
-    const type: FieldType = hasValidType
+    const labelStr = hasLabel ? (r.label as string).trim() : "";
+    const aiNameRaw = typeof r.name === "string" ? r.name.replace(/[^a-zA-Z0-9_]/g, "") : "";
+
+    const baseType: FieldType = hasValidType
       ? (providedType as FieldType)
       : rawOptions.length > 0 ? "select" : "text";
+    // Détection pays/nationalité (prioritaire sur les champs de saisie).
+    const geo = detectGeoType(labelStr, aiNameRaw);
+    const type: FieldType = geo && baseType !== "heading" && baseType !== "paragraph" ? geo : baseType;
 
     const field: FormField = { ...newField(type) };
 
-    if (hasLabel) field.label = (r.label as string).trim().slice(0, 140);
+    if (labelStr) field.label = labelStr.slice(0, 140);
 
     // Clé technique : IA → clé standard du type → dérivée du libellé → défaut. Puis dédoublonnage.
-    let name = typeof r.name === "string" ? r.name.replace(/[^a-zA-Z0-9_]/g, "") : "";
+    let name = aiNameRaw;
     if (!name && (type === "email" || type === "tel" || type === "whatsapp")) name = field.name; // email/phone/whatsapp
     if (!name) name = nameFromLabel(field.label);
     if (!name) name = field.name;
@@ -236,6 +275,7 @@ export function normalizeImportedFields(raw: unknown): FormField[] {
     while (used.has(unique)) unique = name + "_" + n++;
     used.add(unique);
     field.name = unique;
+    if (aiNameRaw && !aiNameToFinal.has(aiNameRaw)) aiNameToFinal.set(aiNameRaw, unique);
 
     if (typeof r.required === "boolean") field.required = r.required;
 
@@ -245,7 +285,24 @@ export function normalizeImportedFields(raw: unknown): FormField[] {
       field.content = r.content.trim();
     }
 
+    // Condition d'affichage renvoyée par l'IA → résolue après (référence par clé IA).
+    const cond = r.showIf;
+    if (cond && typeof cond === "object") {
+      const c = cond as Record<string, unknown>;
+      const cf = typeof c.field === "string" ? c.field.replace(/[^a-zA-Z0-9_]/g, "") : "";
+      const op = c.op === "neq" ? "neq" : c.op === "eq" ? "eq" : null;
+      const val = typeof c.value === "string" ? c.value.trim() : c.value != null ? String(c.value) : "";
+      if (cf && op && val) pending.push({ idx: out.length, field: cf, op, value: val });
+    }
+
     out.push(field);
+  }
+
+  // Résolution des conditions : mappe la clé IA → clé finale ; ignore si non résoluble / auto-référence.
+  for (const p of pending) {
+    const target = aiNameToFinal.get(p.field);
+    if (!target || out[p.idx].name === target) continue;
+    out[p.idx].showIf = { field: target, op: p.op, value: p.value };
   }
 
   return out;

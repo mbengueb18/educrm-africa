@@ -1,0 +1,65 @@
+// Listes pays / nationalités (français) pour les champs déroulants "country" et "nationality".
+// Afrique en premier (contexte principal de TalibCRM), puis reste du monde, par ordre alphabétique.
+
+export const COUNTRIES: string[] = [
+  // — Afrique —
+  "Afrique du Sud", "Algérie", "Angola", "Bénin", "Botswana", "Burkina Faso", "Burundi",
+  "Cameroun", "Cap-Vert", "Comores", "Congo", "Congo (RDC)", "Côte d'Ivoire", "Djibouti",
+  "Égypte", "Érythrée", "Eswatini", "Éthiopie", "Gabon", "Gambie", "Ghana", "Guinée",
+  "Guinée-Bissau", "Guinée équatoriale", "Kenya", "Lesotho", "Libéria", "Libye", "Madagascar",
+  "Malawi", "Mali", "Maroc", "Maurice", "Mauritanie", "Mozambique", "Namibie", "Niger",
+  "Nigéria", "Ouganda", "Rwanda", "São Tomé-et-Príncipe", "Sénégal", "Seychelles",
+  "Sierra Leone", "Somalie", "Soudan", "Soudan du Sud", "Tanzanie", "Tchad", "Togo",
+  "Tunisie", "Zambie", "Zimbabwe",
+  // — Reste du monde —
+  "Afghanistan", "Albanie", "Allemagne", "Andorre", "Arabie saoudite", "Argentine", "Arménie",
+  "Australie", "Autriche", "Azerbaïdjan", "Bahamas", "Bahreïn", "Bangladesh", "Barbade",
+  "Belgique", "Belize", "Biélorussie", "Birmanie", "Bolivie", "Bosnie-Herzégovine", "Brésil",
+  "Brunei", "Bulgarie", "Cambodge", "Canada", "Chili", "Chine", "Chypre", "Colombie",
+  "Corée du Nord", "Corée du Sud", "Costa Rica", "Croatie", "Cuba", "Danemark", "Dominique",
+  "Émirats arabes unis", "Équateur", "Espagne", "Estonie", "États-Unis", "Finlande", "France",
+  "Géorgie", "Grèce", "Grenade", "Guatemala", "Guyana", "Haïti", "Honduras", "Hongrie", "Inde",
+  "Indonésie", "Irak", "Iran", "Irlande", "Islande", "Israël", "Italie", "Jamaïque", "Japon",
+  "Jordanie", "Kazakhstan", "Kirghizistan", "Kosovo", "Koweït", "Laos", "Lettonie", "Liban",
+  "Liechtenstein", "Lituanie", "Luxembourg", "Macédoine du Nord", "Malaisie", "Maldives",
+  "Malte", "Mexique", "Moldavie", "Monaco", "Mongolie", "Monténégro", "Népal", "Nicaragua",
+  "Norvège", "Nouvelle-Zélande", "Oman", "Ouzbékistan", "Pakistan", "Panama", "Paraguay",
+  "Pays-Bas", "Pérou", "Philippines", "Pologne", "Portugal", "Qatar", "République dominicaine",
+  "République tchèque", "Roumanie", "Royaume-Uni", "Russie", "Saint-Marin", "Salvador",
+  "Serbie", "Singapour", "Slovaquie", "Slovénie", "Sri Lanka", "Suède", "Suisse", "Syrie",
+  "Tadjikistan", "Taïwan", "Thaïlande", "Timor oriental", "Turkménistan", "Turquie", "Ukraine",
+  "Uruguay", "Vatican", "Venezuela", "Viêt Nam", "Yémen",
+];
+
+export const NATIONALITIES: string[] = [
+  // — Afrique —
+  "Sud-africaine", "Algérienne", "Angolaise", "Béninoise", "Botswanaise", "Burkinabè",
+  "Burundaise", "Camerounaise", "Cap-verdienne", "Comorienne", "Congolaise", "Congolaise (RDC)",
+  "Ivoirienne", "Djiboutienne", "Égyptienne", "Érythréenne", "Swazie", "Éthiopienne", "Gabonaise",
+  "Gambienne", "Ghanéenne", "Guinéenne", "Bissau-guinéenne", "Équato-guinéenne", "Kényane",
+  "Lesothane", "Libérienne", "Libyenne", "Malgache", "Malawite", "Malienne", "Marocaine",
+  "Mauricienne", "Mauritanienne", "Mozambicaine", "Namibienne", "Nigérienne", "Nigériane",
+  "Ougandaise", "Rwandaise", "Santoméenne", "Sénégalaise", "Seychelloise", "Sierra-léonaise",
+  "Somalienne", "Soudanaise", "Sud-soudanaise", "Tanzanienne", "Tchadienne", "Togolaise",
+  "Tunisienne", "Zambienne", "Zimbabwéenne",
+  // — Reste du monde —
+  "Afghane", "Albanaise", "Allemande", "Andorrane", "Saoudienne", "Argentine", "Arménienne",
+  "Australienne", "Autrichienne", "Azerbaïdjanaise", "Bahamienne", "Bahreïnienne", "Bangladaise",
+  "Barbadienne", "Belge", "Bélizienne", "Biélorusse", "Birmane", "Bolivienne", "Bosnienne",
+  "Brésilienne", "Brunéienne", "Bulgare", "Cambodgienne", "Canadienne", "Chilienne", "Chinoise",
+  "Chypriote", "Colombienne", "Nord-coréenne", "Sud-coréenne", "Costaricaine", "Croate",
+  "Cubaine", "Danoise", "Dominiquaise", "Émirienne", "Équatorienne", "Espagnole", "Estonienne",
+  "Américaine", "Finlandaise", "Française", "Géorgienne", "Grecque", "Grenadienne", "Guatémaltèque",
+  "Guyanienne", "Haïtienne", "Hondurienne", "Hongroise", "Indienne", "Indonésienne", "Irakienne",
+  "Iranienne", "Irlandaise", "Islandaise", "Israélienne", "Italienne", "Jamaïcaine", "Japonaise",
+  "Jordanienne", "Kazakhe", "Kirghize", "Kosovare", "Koweïtienne", "Laotienne", "Lettone",
+  "Libanaise", "Liechtensteinoise", "Lituanienne", "Luxembourgeoise", "Macédonienne", "Malaisienne",
+  "Maldivienne", "Maltaise", "Mexicaine", "Moldave", "Monégasque", "Mongole", "Monténégrine",
+  "Népalaise", "Nicaraguayenne", "Norvégienne", "Néo-zélandaise", "Omanaise", "Ouzbèke",
+  "Pakistanaise", "Panaméenne", "Paraguayenne", "Néerlandaise", "Péruvienne", "Philippine",
+  "Polonaise", "Portugaise", "Qatarienne", "Dominicaine", "Tchèque", "Roumaine", "Britannique",
+  "Russe", "Saint-Marinaise", "Salvadorienne", "Serbe", "Singapourienne", "Slovaque", "Slovène",
+  "Sri-lankaise", "Suédoise", "Suisse", "Syrienne", "Tadjike", "Taïwanaise", "Thaïlandaise",
+  "Est-timoraise", "Turkmène", "Turque", "Ukrainienne", "Uruguayenne", "Vaticane", "Vénézuélienne",
+  "Vietnamienne", "Yéménite",
+];

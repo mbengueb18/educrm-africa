@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Check, Clock, Share2, Eye, Trash2, ChevronUp, ChevronDown, Plus, X } from "lucide-react";
 import { newField, DEFAULT_SETTINGS, hasOptions, isInputField, type FormField, type FieldType, type FormSettings, type FormRouting } from "@/lib/forms";
+import { COUNTRIES, NATIONALITIES } from "@/lib/countries";
 import { formBaseCss } from "@/lib/form-styles";
 import { FormFieldView } from "@/components/forms/form-field";
 import { updateForm, setFormStatus } from "../../actions";
@@ -23,6 +24,7 @@ const PALETTE: { cat: string; items: { t: FieldType; k: string; lbl: string }[] 
   { cat: "Choix", items: [
     { t: "select", k: "🔽", lbl: "Liste déroulante" }, { t: "radio", k: "🔘", lbl: "Choix unique" },
     { t: "checkboxes", k: "☑️", lbl: "Cases à cocher" }, { t: "boolean", k: "🔀", lbl: "Oui / Non" },
+    { t: "country", k: "🌍", lbl: "Pays" }, { t: "nationality", k: "🏳️", lbl: "Nationalité" },
   ]},
   { cat: "Avancé", items: [
     { t: "file", k: "📎", lbl: "Fichier joint" }, { t: "consent", k: "✅", lbl: "Consentement" }, { t: "hidden", k: "🙈", lbl: "Champ caché" },
@@ -150,7 +152,7 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
             ))}
           </div>
           <div className="p-4">
-            {tab === "champ" && (sel ? <FieldSettings field={sel} onPatch={(p) => patchField(sel.id, p)} /> : <p className="text-xs text-gray-400 py-6 text-center">Sélectionnez un champ dans l'aperçu pour l'éditer.</p>)}
+            {tab === "champ" && (sel ? <FieldSettings field={sel} fields={fields} onPatch={(p) => patchField(sel.id, p)} /> : <p className="text-xs text-gray-400 py-6 text-center">Sélectionnez un champ dans l'aperçu pour l'éditer.</p>)}
             {tab === "reglages" && <GeneralSettings settings={settings} onPatch={(p) => setSettings((s) => ({ ...s, ...p }))} />}
             {tab === "design" && <DesignSettings settings={settings} onPatch={(p) => setSettings((s) => ({ ...s, ...p }))} />}
             {tab === "routage" && <RoutingSettings routing={routing} onPatch={(p) => setRouting((r) => ({ ...r, ...p }))} stages={routingData.stages} users={routingData.users} />}
@@ -166,8 +168,23 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
 function Lbl({ children }: { children: React.ReactNode }) { return <span className="text-[11px] font-semibold text-gray-500 mb-1 block">{children}</span>; }
 function Inp(props: any) { return <input {...props} className="input text-sm mb-3" />; }
 
-function FieldSettings({ field, onPatch }: { field: FormField; onPatch: (p: Partial<FormField>) => void }) {
+// Valeurs proposées pour la condition, selon le type du champ contrôlant.
+function condValueOptions(f: FormField): string[] | null {
+  if (f.type === "select" || f.type === "radio" || f.type === "checkboxes") return f.options || [];
+  if (f.type === "boolean") return ["Oui", "Non"];
+  if (f.type === "country") return COUNTRIES;
+  if (f.type === "nationality") return NATIONALITIES;
+  return null;
+}
+
+function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: FormField[]; onPatch: (p: Partial<FormField>) => void }) {
   const isLayout = !isInputField(field.type);
+  const selfIdx = fields.findIndex((f) => f.id === field.id);
+  // Champs pouvant contrôler l'affichage : champs de saisie situés AVANT celui-ci.
+  const candidates = fields.filter((f, i) => i < selfIdx && isInputField(f.type) && !!f.name);
+  const cond = field.showIf;
+  const ctrl = cond ? fields.find((f) => f.name === cond.field) : undefined;
+  const valueOpts = ctrl ? condValueOptions(ctrl) : null;
   return (
     <div>
       {(field.type === "heading" || field.type === "paragraph" || field.type === "consent") ? (
@@ -190,6 +207,30 @@ function FieldSettings({ field, onPatch }: { field: FormField; onPatch: (p: Part
           <label className="flex items-center justify-between text-sm py-1.5"><span>Demi‑largeur</span>
             <button onClick={() => onPatch({ width: field.width === "half" ? "full" : "half" })} className={"w-9 h-5 rounded-full relative " + (field.width === "half" ? "bg-brand-600" : "bg-gray-300")}><span className={"absolute top-0.5 w-4 h-4 rounded-full bg-white " + (field.width === "half" ? "left-4" : "left-0.5")} /></button>
           </label>
+
+          <div className="border-t border-gray-100 mt-2 pt-3">
+            <Lbl>Affichage conditionnel</Lbl>
+            {candidates.length === 0 ? (
+              <p className="text-[10px] text-gray-400">Placez ce champ après un autre champ de saisie pour pouvoir conditionner son affichage.</p>
+            ) : !cond ? (
+              <button onClick={() => onPatch({ showIf: { field: candidates[candidates.length - 1].name, op: "eq", value: "" } })} className="text-xs text-brand-600 font-semibold hover:underline">+ Afficher sous condition</button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] text-gray-500">N'afficher ce champ que si :</p>
+                <select className="input text-sm" value={cond.field} onChange={(e) => onPatch({ showIf: { ...cond, field: e.target.value, value: "" } })}>
+                  {candidates.map((c) => <option key={c.id} value={c.name}>{c.label || c.name}</option>)}
+                </select>
+                <select className="input text-sm" value={cond.op} onChange={(e) => onPatch({ showIf: { ...cond, op: e.target.value as "eq" | "neq" } })}>
+                  <option value="eq">est égal à</option>
+                  <option value="neq">n'est pas égal à</option>
+                </select>
+                {valueOpts
+                  ? <select className="input text-sm" value={cond.value} onChange={(e) => onPatch({ showIf: { ...cond, value: e.target.value } })}><option value="">Choisir une valeur…</option>{valueOpts.map((o, i) => <option key={i} value={o}>{o}</option>)}</select>
+                  : <Inp value={cond.value} onChange={(e: any) => onPatch({ showIf: { ...cond, value: e.target.value } })} placeholder="Valeur attendue" />}
+                <button onClick={() => onPatch({ showIf: undefined })} className="text-[11px] text-red-500 hover:underline">Retirer la condition</button>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

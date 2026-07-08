@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import type { FormField } from "@/lib/forms";
+import { COUNTRIES, NATIONALITIES } from "@/lib/countries";
 
 // Rendu d'un champ de formulaire (utilisé par le constructeur en aperçu ET par la page publique).
 // preview=true → champs non interactifs (constructeur). Sinon interactif (valeurs contrôlées).
@@ -47,6 +48,14 @@ export function FormFieldView({ field, value, onChange, preview, slug }: {
       <select value={value || ""} onChange={(e) => set(e.target.value)} {...common}>
         <option value="">{f.placeholder || "Sélectionner…"}</option>
         {(f.options || []).map((o, i) => <option key={i} value={o}>{o}</option>)}
+      </select>
+    );
+  } else if (f.type === "country" || f.type === "nationality") {
+    const geoOpts = f.type === "country" ? COUNTRIES : NATIONALITIES;
+    control = (
+      <select value={value || ""} onChange={(e) => set(e.target.value)} {...common}>
+        <option value="">{f.placeholder || "Sélectionner…"}</option>
+        {geoOpts.map((o, i) => <option key={i} value={o}>{o}</option>)}
       </select>
     );
   } else if (f.type === "radio") {

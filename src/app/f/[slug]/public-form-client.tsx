@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formBaseCss } from "@/lib/form-styles";
 import { FormFieldView } from "@/components/forms/form-field";
-import { groupIntoRows, isInputField, splitIntoSteps, type FormField, type FormSettings } from "@/lib/forms";
+import { groupIntoRows, isInputField, isFieldVisible, splitIntoSteps, type FormField, type FormSettings } from "@/lib/forms";
 
 export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
   form: { id: string; name: string; description: string | null; fields: FormField[]; settings: FormSettings; slug: string };
@@ -74,9 +74,10 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
     setError("");
   };
 
-  // Validation des champs requis d'un sous-ensemble.
+  // Validation des champs requis d'un sous-ensemble (champs masqués ignorés).
   const validate = (subset: FormField[]): boolean => {
     for (const f of subset) {
+      if (!isFieldVisible(f, values)) continue;
       if (f.required && isInputField(f.type)) {
         const v = values[f.name];
         if (v == null || v === "" || (Array.isArray(v) && v.length === 0) || (f.type === "consent" && !v)) {
@@ -111,10 +112,16 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
       const utm: Record<string, string> = {};
       ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].forEach((k) => { const v = params.get(k); if (v) utm[k] = v; });
 
+      // N'envoie que les valeurs des champs visibles (on exclut les champs conditionnels masqués).
+      const cleanValues: Record<string, any> = {};
+      for (const f of fields) {
+        if (isFieldVisible(f, values) && values[f.name] !== undefined) cleanValues[f.name] = values[f.name];
+      }
+
       const res = await fetch("/api/forms/" + form.slug + "/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs }),
+        body: JSON.stringify({ values: cleanValues, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur");
@@ -127,7 +134,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
     }
   };
 
-  const rows = groupIntoRows(current.fields);
+  const rows = groupIntoRows(current.fields.filter((f) => isFieldVisible(f, values)));
 
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : (s.bgColor || "#EEF4FB"), display: "flex", alignItems: "center", justifyContent: "center", padding: embed ? "8px" : "28px 16px" }}>

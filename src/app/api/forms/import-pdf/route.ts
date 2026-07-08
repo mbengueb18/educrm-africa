@@ -18,23 +18,25 @@ Analyse le document et extrais UNIQUEMENT les champs à remplir par la personne.
 {
   "name": "titre du formulaire déduit du document",
   "fields": [
-    { "type": "...", "label": "...", "name": "...", "required": true|false, "options": ["..."], "content": "..." }
+    { "type": "...", "label": "...", "name": "...", "required": true|false, "options": ["..."], "content": "...", "showIf": { "field": "<name>", "op": "eq|neq", "value": "..." } }
   ]
 }
 
 Types de champ autorisés :
 - Saisie : text, textarea, email, tel, whatsapp, number, url, date, time
 - Choix : select (liste déroulante), radio (choix unique), checkboxes (cases multiples), boolean (oui/non)
+- Géo : country (pays — liste déroulante intégrée), nationality (nationalité — liste déroulante intégrée)
 - Autres : consent (case d'acceptation RGPD), file (pièce jointe)
 - Mise en page : heading (titre de section), paragraph (texte d'information)
 
 Règles :
 - "label" = libellé visible en français, tel qu'écrit sur le document.
 - "name" = clé technique en camelCase ASCII (ex: "dateNaissance"). Utilise IMPÉRATIVEMENT ces clés standard quand le champ correspond : firstName (prénom), lastName (nom), email, phone (téléphone), whatsapp, city (ville), message (message/commentaire/motivation).
-- "options" UNIQUEMENT pour select/radio/checkboxes (reprends les choix listés sur le document).
+- "options" UNIQUEMENT pour select/radio/checkboxes (reprends les choix listés sur le document). NE mets PAS d'options pour country/nationality (listes intégrées).
 - "content" UNIQUEMENT pour heading/paragraph/consent (le texte).
-- Choisis le type le plus adapté : email→email, téléphone→tel, date de naissance→date, réponse longue→textarea, cases à cocher multiples→checkboxes, oui/non→boolean, acceptation de conditions→consent, document à joindre→file.
+- Choisis le type le plus adapté : email→email, téléphone→tel, date de naissance→date, réponse longue→textarea, cases à cocher multiples→checkboxes, oui/non→boolean, acceptation de conditions→consent, document à joindre→file, pays→country, nationalité→nationality.
 - "required": true seulement si le champ est clairement obligatoire (astérisque, mention "obligatoire").
+- "showIf" (OPTIONNEL) : ajoute-le uniquement si le document indique clairement qu'un champ dépend d'une réponse précédente (ex : "Si non, précisez qui prend en charge…"). "field" = le "name" du champ contrôlant (défini AVANT), "op" = "eq" (égal) ou "neq" (différent), "value" = la valeur déclencheuse (ex : "Non"). Dans le doute, n'ajoute PAS de showIf.
 - Reproduis les titres de sections du document avec des champs "heading".
 - N'invente AUCUN champ absent du document. N'ajoute PAS de bouton d'envoi (géré automatiquement).`;
 
