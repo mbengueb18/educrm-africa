@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,8 +22,15 @@ export async function OPTIONS() { return cors({}, 204); }
 export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const form = await prisma.form.findFirst({ where: { slug, status: "PUBLISHED" }, select: { id: true } });
-    if (!form) return cors({ error: "Formulaire introuvable ou non publié" }, 404);
+    const form = await prisma.form.findFirst({ where: { slug }, select: { id: true, status: true, organizationId: true } });
+    if (!form) return cors({ error: "Formulaire introuvable" }, 404);
+    // Formulaire publié → upload public. Brouillon → réservé au propriétaire (aperçu).
+    if (form.status !== "PUBLISHED") {
+      const session = await auth();
+      if (!session?.user || session.user.organizationId !== form.organizationId) {
+        return cors({ error: "Formulaire non publié" }, 403);
+      }
+    }
 
     const fd = await request.formData();
     const file = fd.get("file") as File | null;
