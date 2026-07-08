@@ -763,6 +763,18 @@ export async function exportLeadsCSV() {
   return csvContent;
 }
 
+// ─── Recalcul manuel des scores (bouton admin) ───
+export async function recalculateOrgLeadScores() {
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Réservé aux administrateurs");
+  }
+  var result = await calculateLeadScores(session.user.organizationId);
+  revalidatePath("/pipeline");
+  return result; // { updated }
+}
+
 // ─── Calculate lead score ───
 export async function calculateLeadScores(orgId: string) {
   var leads = await prisma.lead.findMany({

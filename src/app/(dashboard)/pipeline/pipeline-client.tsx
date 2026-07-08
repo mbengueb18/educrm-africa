@@ -12,11 +12,11 @@ import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, UserCheck, TrendingUp, Kanban, List,
   Upload, Download, Copy, Check, Loader2, X, AlertTriangle,
-  MoreHorizontal,  GitBranch, ChevronDown, SlidersHorizontal,
+  MoreHorizontal,  GitBranch, ChevronDown, SlidersHorizontal, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
-import { detectDuplicates, mergeDuplicateLeads } from "@/app/(dashboard)/pipeline/actions";
+import { detectDuplicates, mergeDuplicateLeads, recalculateOrgLeadScores } from "@/app/(dashboard)/pipeline/actions";
 import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
 import { evaluateLeadAgainstGroup } from "@/lib/lead-filters";
 
@@ -67,6 +67,7 @@ export function PipelineClient({
   var [loadingDuplicates, setLoadingDuplicates] = useState(false);
   var [merging, setMerging] = useState(false);
   var [showMoreMenu, setShowMoreMenu] = useState(false);
+  var [recalculating, setRecalculating] = useState(false);
   var [advancedFilter, setAdvancedFilter] = useState<FilterGroup>({ operator: "AND", rules: [] });
   var [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
 
@@ -90,6 +91,24 @@ export function PipelineClient({
   }
   setLoadingDuplicates(false);
 };
+
+  var isOrgAdmin = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
+
+  var handleRecalcScores = async function() {
+    setShowMoreMenu(false);
+    setRecalculating(true);
+    var toastId = toast.loading("Recalcul des scores en cours…");
+    try {
+      var r = await recalculateOrgLeadScores();
+      toast.dismiss(toastId);
+      toast.success((r.updated || 0) + " lead(s) recalculé(s)");
+      router.refresh();
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      toast.error(err.message || "Erreur");
+    }
+    setRecalculating(false);
+  };
 
   var handleMerge = async function(keepId: string, removeIds: string[]) {
     setMerging(true);
@@ -278,6 +297,16 @@ export function PipelineClient({
             Doublons
           </button>
 
+          {/* Recalcul des scores — admin, desktop only */}
+          {isOrgAdmin && (
+            <button onClick={handleRecalcScores} disabled={recalculating}
+              className="btn-secondary py-1.5 text-xs hidden sm:inline-flex"
+              title="Recalculer le score de tous les leads de l'organisation">
+              {recalculating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              Scores
+            </button>
+          )}
+
           {/* Import / Export — desktop only */}
           <button
             onClick={function() { setImportOpen(true); }}
@@ -310,6 +339,16 @@ export function PipelineClient({
                     {loadingDuplicates ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
                     Détecter les doublons
                   </button>
+                  {isOrgAdmin && (
+                    <button
+                      onClick={handleRecalcScores}
+                      disabled={recalculating}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {recalculating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      Recalculer les scores
+                    </button>
+                  )}
                   <div className="h-px bg-gray-100 my-1" />
                   <button
                     onClick={handleOpenImport}
