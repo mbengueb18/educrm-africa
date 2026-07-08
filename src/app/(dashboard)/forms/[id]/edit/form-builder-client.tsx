@@ -211,6 +211,14 @@ function GeneralSettings({ settings, onPatch }: { settings: FormSettings; onPatc
         : <><Lbl>Message</Lbl><textarea className="input text-sm mb-3" rows={3} value={settings.successMessage || ""} onChange={(e) => onPatch({ successMessage: e.target.value })} /></>}
 
       <div className="border-t border-gray-100 mt-2 pt-3">
+        <label className="flex items-center justify-between text-sm py-1.5 cursor-pointer">
+          <span>Formulaire multi‑étapes</span>
+          <input type="checkbox" checked={settings.multiStep === true} onChange={(e) => onPatch({ multiStep: e.target.checked })} />
+        </label>
+        <p className="text-[10px] text-gray-400 -mt-0.5">Affiche le formulaire par étapes avec une barre de progression. Les étapes suivent les champs « Titre » (sinon découpage automatique). La saisie est sauvegardée automatiquement dans le navigateur.</p>
+      </div>
+
+      <div className="border-t border-gray-100 mt-2 pt-3">
         <Lbl>Notification par email</Lbl>
         <Inp type="email" value={settings.notifyEmail || ""} onChange={(e: any) => onPatch({ notifyEmail: e.target.value })} placeholder="commercial@ecole.sn" />
         <p className="text-[10px] text-gray-400 -mt-1">Un email est envoyé à cette adresse à chaque soumission. Laissez vide pour désactiver.</p>

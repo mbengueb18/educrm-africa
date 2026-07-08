@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { newField, slugify, DEFAULT_SETTINGS, type FormField, type FormSettings, type FormRouting } from "@/lib/forms";
+import { newField, slugify, isLongForm, DEFAULT_SETTINGS, type FormField, type FormSettings, type FormRouting } from "@/lib/forms";
 
 async function requireOrg() {
   const session = await auth();
@@ -53,6 +53,34 @@ export async function createForm() {
       slug,
       fields: fields as any,
       settings: DEFAULT_SETTINGS as any,
+      routing: {} as any,
+      status: "DRAFT",
+      createdById: session.user.id,
+    },
+    select: { id: true },
+  });
+
+  revalidatePath("/forms");
+  return { id: form.id };
+}
+
+// Crée un formulaire brouillon à partir d'une liste de champs déjà normalisés
+// (utilisé par l'import PDF). Les champs doivent passer par normalizeImportedFields en amont.
+export async function createFormWithFields(name: string, fields: FormField[]) {
+  const session = await requireOrg();
+  const cleanName = (name || "").trim().slice(0, 120) || "Formulaire importé";
+  const slug = await uniqueSlug(cleanName + "-" + Date.now().toString(36).slice(-4));
+
+  // Multi-étapes pré-activé pour les formulaires longs (souvent le cas à l'import PDF).
+  const settings: FormSettings = { ...DEFAULT_SETTINGS, multiStep: isLongForm(fields) };
+
+  const form = await prisma.form.create({
+    data: {
+      organizationId: session.user.organizationId,
+      name: cleanName,
+      slug,
+      fields: fields as any,
+      settings: settings as any,
       routing: {} as any,
       status: "DRAFT",
       createdById: session.user.id,

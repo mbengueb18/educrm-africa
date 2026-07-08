@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, FileText, Loader2, Share2, Pencil, Trash2, BarChart3, FolderOpen } from "lucide-react";
+import { Plus, FileText, Loader2, Share2, Pencil, Trash2, BarChart3, FolderOpen, FileUp } from "lucide-react";
 import { createForm, deleteForm } from "./actions";
 import { ShareModal } from "./share-modal";
 
@@ -14,11 +14,41 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [share, setShare] = useState<FormRow | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const create = () => startTransition(async () => {
     try { const r = await createForm(); router.push("/forms/" + r.id + "/edit"); }
     catch (e: any) { toast.error(e.message || "Erreur"); }
   });
+
+  const onPickPdf = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permet de re-sélectionner le même fichier
+    if (!file) return;
+    if (!(file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
+      toast.error("Veuillez choisir un fichier PDF"); return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error("PDF trop volumineux (max 4 Mo). Compressez-le ou réduisez le nombre de pages."); return;
+    }
+    setImporting(true);
+    const t = toast.loading("Analyse du PDF en cours…");
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/forms/import-pdf", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Import impossible");
+        toast.success((data.fieldCount || 0) + " champ(s) détecté(s) — vérifiez et ajustez.", { id: t });
+        router.push("/forms/" + data.id + "/edit");
+      } catch (err: any) {
+        toast.error(err.message || "Erreur lors de l'import", { id: t });
+        setImporting(false);
+      }
+    })();
+  };
   const del = (f: FormRow) => {
     if (!confirm("Supprimer « " + f.name + " » ? Les soumissions liées seront perdues.")) return;
     startTransition(async () => {
@@ -31,11 +61,17 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
     <div>
       <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Formulaires</h1>
-        <button onClick={create} disabled={pending} className="btn-primary py-2 px-4 text-sm">
-          {pending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Nouveau formulaire
-        </button>
+        <div className="flex items-center gap-2">
+          <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickPdf} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={importing || pending} className="btn-secondary py-2 px-4 text-sm" title="Générer un formulaire à partir d'un PDF">
+            {importing ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />} Importer un PDF
+          </button>
+          <button onClick={create} disabled={pending || importing} className="btn-primary py-2 px-4 text-sm">
+            {pending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Nouveau formulaire
+          </button>
+        </div>
       </div>
-      <p className="text-sm text-gray-500 mt-1 mb-5">Créez des formulaires pour collecter des leads (site web, webinaire, événement…).</p>
+      <p className="text-sm text-gray-500 mt-1 mb-5">Créez des formulaires pour collecter des leads (site web, webinaire, événement…), ou <button onClick={() => fileInputRef.current?.click()} disabled={importing} className="text-brand-600 font-semibold hover:underline disabled:opacity-50">importez un PDF existant</button> pour le convertir automatiquement.</p>
 
       {forms.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">

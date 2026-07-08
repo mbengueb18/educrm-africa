@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import { ShareModal } from "@/app/(dashboard)/forms/share-modal";
 import {
   ArrowLeft, ChevronDown, ChevronRight, FileText, CheckCircle2, AlertCircle,
   Calendar, Layers, Settings2, Trash2, Search, Loader2, Pencil, Check, X,
-  Globe, Tag, Plus, Link2, Share2, BarChart3, FolderOpen, Sparkles, MonitorSmartphone,
+  Globe, Tag, Plus, Link2, Share2, BarChart3, FolderOpen, Sparkles, MonitorSmartphone, FileUp,
 } from "lucide-react";
 
 type FormRow = {
@@ -96,11 +96,41 @@ function BuilderFormsTab({ forms }: { forms: FormRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [share, setShare] = useState<FormRow | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const create = () => startTransition(async () => {
     try { const r = await createForm(); router.push("/forms/" + r.id + "/edit"); }
     catch (e: any) { toast.error(e.message || "Erreur"); }
   });
+
+  const onPickPdf = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permet de re-sélectionner le même fichier
+    if (!file) return;
+    if (!(file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
+      toast.error("Veuillez choisir un fichier PDF"); return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error("PDF trop volumineux (max 4 Mo). Compressez-le ou réduisez le nombre de pages."); return;
+    }
+    setImporting(true);
+    const t = toast.loading("Analyse du PDF en cours…");
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/forms/import-pdf", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Import impossible");
+        toast.success((data.fieldCount || 0) + " champ(s) détecté(s) — vérifiez et ajustez.", { id: t });
+        router.push("/forms/" + data.id + "/edit");
+      } catch (err: any) {
+        toast.error(err.message || "Erreur lors de l'import", { id: t });
+        setImporting(false);
+      }
+    })();
+  };
 
   const del = (f: FormRow) => {
     if (!confirm("Supprimer « " + f.name + " » ? Les soumissions liées seront perdues.")) return;
@@ -114,18 +144,29 @@ function BuilderFormsTab({ forms }: { forms: FormRow[] }) {
     <div>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <p className="text-sm text-gray-500">
-          Créez des formulaires hébergés par TalibCRM (site web, webinaire, événement…) pour collecter des leads.
+          Créez des formulaires hébergés par TalibCRM (site web, webinaire, événement…) pour collecter des leads, ou <button onClick={() => fileInputRef.current?.click()} disabled={importing} className="text-brand-600 font-semibold hover:underline disabled:opacity-50">importez un PDF existant</button> pour le convertir automatiquement.
         </p>
-        <button onClick={create} disabled={pending} className="btn-primary py-2 px-4 text-sm shrink-0">
-          {pending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Nouveau formulaire
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickPdf} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={importing || pending} className="btn-secondary py-2 px-4 text-sm" title="Générer un formulaire à partir d'un PDF">
+            {importing ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />} Importer un PDF
+          </button>
+          <button onClick={create} disabled={pending || importing} className="btn-primary py-2 px-4 text-sm">
+            {pending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Nouveau formulaire
+          </button>
+        </div>
       </div>
 
       {forms.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
           <FolderOpen size={40} className="text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-400">Aucun formulaire pour l'instant</p>
-          <button onClick={create} disabled={pending} className="btn-primary py-2 text-xs mt-4"><Plus size={14} /> Créer un formulaire</button>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button onClick={() => fileInputRef.current?.click()} disabled={importing} className="btn-secondary py-2 text-xs">
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <FileUp size={14} />} Importer un PDF
+            </button>
+            <button onClick={create} disabled={pending} className="btn-primary py-2 text-xs"><Plus size={14} /> Créer un formulaire</button>
+          </div>
         </div>
       ) : (
         <div className="space-y-2.5">
