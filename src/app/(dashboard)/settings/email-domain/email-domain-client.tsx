@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft, Globe, ShieldCheck, Loader2, Copy, Check, RefreshCw,
-  Trash2, AlertTriangle, Lock, CheckCircle2, Mail, Inbox,
+  Trash2, AlertTriangle, Lock, CheckCircle2, Mail, Inbox, Eye,
 } from "lucide-react";
 import {
   addEmailDomain, refreshEmailDomainStatus, updateEmailSender, removeEmailDomain,
@@ -253,6 +253,12 @@ function VerifiedCard({ config, pending, startTransition, onDone }: any) {
 
   const verifiedDate = config.verifiedAt ? new Date(config.verifiedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
+  // Suivi ouvertures/clics : actif dès que le CNAME de tracking est vérifié côté Resend.
+  const trackingRecords: DnsRecord[] = config.dnsRecords || [];
+  const trackingActive = trackingRecords.some(
+    (r) => (r.purpose || "").toLowerCase() === "tracking" && (r.status || "").toLowerCase() === "verified"
+  );
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
@@ -268,6 +274,22 @@ function VerifiedCard({ config, pending, startTransition, onDone }: any) {
             <p className="text-sm font-semibold text-gray-900">Vos emails partent depuis {config.fromLocalPart}@{config.domain}</p>
             <p className="text-xs text-gray-500 mt-0.5">Inbox, fiche prospect, campagnes et séquences utilisent désormais votre domaine.</p>
           </div>
+        </div>
+
+        {/* Suivi ouvertures / clics des campagnes */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {trackingActive ? (
+            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 inline-flex items-center gap-1.5">
+              <Eye size={13} /> Suivi ouvertures &amp; clics : actif
+            </span>
+          ) : (
+            <span
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 inline-flex items-center gap-1.5"
+              title="Cliquez sur « Re-vérifier » pour générer l'enregistrement DNS de suivi (CNAME), à ajouter chez votre hébergeur."
+            >
+              <Eye size={13} /> Suivi ouvertures &amp; clics : non activé
+            </span>
+          )}
         </div>
 
         {editing ? (
