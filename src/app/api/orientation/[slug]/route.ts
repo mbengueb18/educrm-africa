@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { callGemini } from "@/lib/gemini";
+import { canAccessFeature } from "@/lib/plans/checks";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -33,6 +34,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!org) {
       return NextResponse.json({ error: "Organisation introuvable" }, { status: 404 });
+    }
+
+    // Orientation IA → réservée aux plans payants de l'établissement.
+    const aiCheck = await canAccessFeature(org.id, "AI_ASSISTANT");
+    if (!aiCheck.allowed) {
+      return NextResponse.json(
+        { error: "L'orientation par IA n'est pas activée pour cet établissement." },
+        { status: 403 },
+      );
     }
 
     // Build system prompt

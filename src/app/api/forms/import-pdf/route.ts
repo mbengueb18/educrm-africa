@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { callGeminiWithPdf } from "@/lib/gemini";
 import { normalizeImportedFields } from "@/lib/forms";
 import { createFormWithFields } from "@/app/(dashboard)/forms/actions";
+import { canAccessFeature } from "@/lib/plans/checks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,15 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  // Fonctionnalité IA → réservée aux plans payants.
+  const aiCheck = await canAccessFeature(session.user.organizationId, "AI_ASSISTANT");
+  if (!aiCheck.allowed) {
+    return NextResponse.json(
+      { error: "L'import de formulaire depuis un PDF (IA) est réservé aux plans payants.", upgrade: true },
+      { status: 403 },
+    );
   }
 
   let file: File | null = null;

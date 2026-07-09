@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { callGemini } from "@/lib/gemini";
+import { canAccessFeature } from "@/lib/plans/checks";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -78,6 +79,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+    // Génération IA → réservée aux plans payants.
+    const aiCheck = await canAccessFeature(session.user.organizationId, "AI_ASSISTANT");
+    if (!aiCheck.allowed) {
+      return NextResponse.json(
+        { error: "L'assistant IA est réservé aux plans payants.", upgrade: true },
+        { status: 403 },
+      );
+    }
 
     const { leadId } = await params;
     const body = await request.json();
