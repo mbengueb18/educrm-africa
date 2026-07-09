@@ -240,9 +240,15 @@ export async function getWebhookUrl() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  // Détecter l'URL de base
+  // Détecter l'URL de base — priorité à une URL STABLE (le webhook doit rester
+  // constant dans Meta). VERCEL_URL est l'URL par déploiement (hash instable),
+  // donc on ne l'utilise qu'en dernier recours.
   const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-  const host = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_APP_URL || "app.talibcrm.com";
+  const host =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL ||
+    "app.talibcrm.com";
   const baseUrl = host.startsWith("http") ? host : `${protocol}://${host}`;
 
   return `${baseUrl}/api/webhooks/whatsapp/${session.user.organizationId}`;
