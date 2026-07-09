@@ -13,7 +13,7 @@ import {
   findOrCreateInboundDomain,
   inboundRecords,
   inboundReady,
-  mapStatus,
+  resolveSendingStatus,
 } from "@/lib/email-domain";
 
 const RESERVED_DOMAINS = ["talibcrm.com"];
@@ -72,7 +72,7 @@ export async function addEmailDomain(data: { domain: string; fromLocalPart?: str
 
   // Resend : réutilise si déjà présent (cas "déjà vérifié"), sinon crée
   const rd = await findOrCreateResendDomain(domain);
-  const status = mapStatus(rd.status);
+  const status = resolveSendingStatus(rd);
 
   const base = {
     domain,
@@ -108,7 +108,7 @@ export async function refreshEmailDomainStatus() {
 
   await verifyResendDomain(config.resendDomainId);
   const rd = await getResendDomain(config.resendDomainId);
-  const status = mapStatus(rd.status);
+  const status = resolveSendingStatus(rd);
 
   await prisma.orgEmailDomain.update({
     where: { organizationId: session.user.organizationId },

@@ -37,11 +37,33 @@ function normalizeRecords(records: any[]): DnsRecord[] {
   }));
 }
 
+// Sous-domaine dédié au suivi ouvertures/clics (CNAME → links1.resend-dns.com).
+// Requis par Resend : les booléens open/click_tracking ne s'activent QUE si un
+// sous-domaine de tracking est configuré (et vérifié pour que le suivi soit actif).
+export const TRACKING_SUBDOMAIN = "track";
+
 // Statut Resend → statut interne (PENDING | VERIFIED | FAILED)
 export function mapStatus(resendStatus: string): "PENDING" | "VERIFIED" | "FAILED" {
   var s = (resendStatus || "").toLowerCase();
   if (s === "verified") return "VERIFIED";
   if (s === "failed" || s === "temporary_failure") return "FAILED";
+  return "PENDING";
+}
+
+// Statut d'ENVOI d'un domaine. Nuance vs mapStatus : quand on active le suivi
+// ouvertures/clics, Resend ajoute un CNAME de tracking et repasse le domaine en
+// "partially_verified" tant que ce CNAME n'est pas ajouté au DNS. L'ENVOI reste
+// pourtant pleinement fonctionnel (DKIM/SPF vérifiés) → on considère le domaine
+// VERIFIED dès que le DKIM est vérifié, le CNAME de tracking pouvant rester en attente.
+export function resolveSendingStatus(rd: ResendDomainResult): "PENDING" | "VERIFIED" | "FAILED" {
+  const s = (rd.status || "").toLowerCase();
+  if (s === "verified") return "VERIFIED";
+  if (s === "failed" || s === "temporary_failure") return "FAILED";
+  if (s === "partially_verified") {
+    const isVer = (st?: string) => (st || "").toLowerCase() === "verified";
+    const dkimOk = (rd.records || []).some((r) => r.purpose === "DKIM" && isVer(r.status));
+    return dkimOk ? "VERIFIED" : "PENDING";
+  }
   return "PENDING";
 }
 
@@ -53,7 +75,14 @@ export function mapStatus(resendStatus: string): "PENDING" | "VERIFIED" | "FAILE
 // flux d'ajout/vérification de domaine.
 export async function ensureSendingTracking(id: string): Promise<void> {
   try {
-    await client().domains.update({ id, openTracking: true, clickTracking: true });
+    // Le sous-domaine de tracking est obligatoire : sans lui, Resend ignore
+    // silencieusement open/click_tracking (les booléens restent false).
+    await client().domains.update({
+      id,
+      openTracking: true,
+      clickTracking: true,
+      trackingSubdomain: TRACKING_SUBDOMAIN,
+    });
   } catch (e) {
     console.error("[email-domain] Activation du tracking Resend échouée pour", id, e);
   }
@@ -83,7 +112,9 @@ export async function findOrCreateResendDomain(domain: string, enableTracking = 
 
   // 2. Créer le domaine → Resend renvoie les enregistrements DNS à ajouter
   const created: any = await resend.domains.create(
-    enableTracking ? { name: domain, openTracking: true, clickTracking: true } : { name: domain }
+    enableTracking
+      ? { name: domain, openTracking: true, clickTracking: true, trackingSubdomain: TRACKING_SUBDOMAIN }
+      : { name: domain }
   );
   if (created?.error || !created?.data) {
     throw new Error(created?.error?.message || "Création du domaine côté Resend échouée.");
