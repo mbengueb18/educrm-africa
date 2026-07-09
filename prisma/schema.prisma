@@ -203,6 +203,7 @@ model User {
   role           UserRole
   avatar         String?
   isActive       Boolean   @default(true)
+  emailVerified  DateTime? // null = email non vérifié (blocage souple à l'inscription)
   lastLoginAt    DateTime?
   emailSignature        String?  @db.Text // signature HTML ajoutée automatiquement aux emails
   emailSignatureEnabled Boolean  @default(true)
@@ -230,10 +231,54 @@ model User {
   whatsappCampaignsCreated WhatsAppCampaign[] @relation("WhatsAppCampaignsCreated")
   supportTickets SupportTicket[]
   notifications  Notification[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
 
   @@index([organizationId])
   @@index([email])
   @@map("users")
+}
+
+// ─── VÉRIFICATION D'EMAIL & ANTI-ABUS ───
+
+// Token à usage unique envoyé par email à l'inscription (blocage souple).
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  email     String // email visé (permet de détecter un changement d'email)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// Réinitialisation de mot de passe. On ne stocke QUE le hash SHA-256 du token
+// (le token brut ne vit que dans le lien email) → une fuite de base est inexploitable.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Limiteur d'inscriptions par IP (anti-abus du signup public).
+model SignupThrottle {
+  ip          String   @id
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("signup_throttles")
 }
 
 // ─── NOTIFICATIONS ───

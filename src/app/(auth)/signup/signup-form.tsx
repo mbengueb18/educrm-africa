@@ -60,9 +60,10 @@ export function SignupForm() {
   var [adminEmail, setAdminEmail] = useState("");
   var [adminPassword, setAdminPassword] = useState("");
   var [confirmPassword, setConfirmPassword] = useState("");
+  var [acceptedTerms, setAcceptedTerms] = useState(false);
 
   var canStep1 = schoolName.trim() && schoolType && city.trim() && country;
-  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 6 && adminPassword === confirmPassword;
+  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 6 && adminPassword === confirmPassword && acceptedTerms;
 
   var handleSubmit = async function() {
     setError("");
@@ -77,6 +78,7 @@ export function SignupForm() {
         adminName: adminName.trim(),
         adminEmail: adminEmail.trim(),
         adminPassword,
+        acceptedTerms,
       });
       setResult(res);
       setStep(3);
@@ -300,7 +302,7 @@ export function SignupForm() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 32 }}>
+              <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Confirmer le mot de passe *</label>
                 <div style={{ position: "relative" }}>
                   <Lock size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
@@ -319,6 +321,17 @@ export function SignupForm() {
                   <p style={{ fontSize: 12, color: "#EF4444", marginTop: 4 }}>Les mots de passe ne correspondent pas</p>
                 )}
               </div>
+
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 24, cursor: "pointer" }}>
+                <input type="checkbox" checked={acceptedTerms} onChange={function(e) { setAcceptedTerms(e.target.checked); }}
+                  style={{ marginTop: 2, width: 16, height: 16, accentColor: "#0E7C6B", cursor: "pointer", flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, color: "#64748B", lineHeight: 1.6 }}>
+                  J'accepte les{" "}
+                  <a href="/legal/cgu" target="_blank" rel="noopener" style={{ color: "#0E7C6B", textDecoration: "none", fontWeight: 600 }}>Conditions d'utilisation</a>{" "}
+                  et la{" "}
+                  <a href="/legal/confidentialite" target="_blank" rel="noopener" style={{ color: "#0E7C6B", textDecoration: "none", fontWeight: 600 }}>Politique de confidentialité</a>.
+                </span>
+              </label>
 
               <div style={{ display: "flex", gap: 12 }}>
                 <button onClick={function() { setStep(1); setError(""); }}
@@ -343,13 +356,6 @@ export function SignupForm() {
                   {saving ? "Création en cours..." : "Créer mon compte"}
                 </button>
               </div>
-
-              <p style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", marginTop: 20, lineHeight: 1.6 }}>
-                En créant un compte, vous acceptez nos{" "}
-                <a href="#" style={{ color: "#0E7C6B", textDecoration: "none" }}>Conditions d'utilisation</a>{" "}
-                et notre{" "}
-                <a href="#" style={{ color: "#0E7C6B", textDecoration: "none" }}>Politique de confidentialité</a>
-              </p>
             </div>
           )}
 
@@ -366,10 +372,21 @@ export function SignupForm() {
               <h2 style={{ fontSize: 28, fontWeight: 700, color: "#0F1923", marginBottom: 12 }}>
                 Bienvenue sur TalibCRM ! 🎉
               </h2>
-              <p style={{ fontSize: 15, color: "#64748B", lineHeight: 1.7, marginBottom: 32 }}>
+              <p style={{ fontSize: 15, color: "#64748B", lineHeight: 1.7, marginBottom: 20 }}>
                 Votre espace <strong>{schoolName}</strong> est prêt.<br />
-                Nous configurons votre pipeline et vous redirigeons...
+                Nous vous redirigeons vers votre tableau de bord...
               </p>
+
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: 10, textAlign: "left",
+                background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "12px 14px", marginBottom: 24,
+              }}>
+                <Mail size={16} color="#B45309" style={{ marginTop: 2, flexShrink: 0 }} />
+                <p style={{ fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
+                  Un email de confirmation a été envoyé à <strong>{result.email}</strong>.
+                  Cliquez sur le lien pour activer l'envoi d'emails et de campagnes.
+                </p>
+              </div>
 
               <div style={{
                 background: "#F0FAF7", borderRadius: 16, padding: 24, marginBottom: 32,
@@ -389,8 +406,8 @@ export function SignupForm() {
                     <p style={{ fontSize: 14, color: "#0F1923" }}>{result.email}</p>
                   </div>
                   <div>
-                    <p style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>URL</p>
-                    <p style={{ fontSize: 14, color: "#0E7C6B", fontWeight: 600 }}>app.talibcrm.com/{result.slug}</p>
+                    <p style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Formule</p>
+                    <p style={{ fontSize: 14, color: "#0F1923", fontWeight: 600 }}>Essentiel · gratuit</p>
                   </div>
                 </div>
               </div>

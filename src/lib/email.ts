@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
 import { getAttachmentBuffer } from "@/lib/supabase-storage";
 import { sendViaGmail, getGmailIntegration } from "@/lib/gmail-send";
+import { isOrgEmailVerified, EMAIL_VERIFICATION_REQUIRED_MESSAGE } from "@/lib/plans/checks";
 
 interface AttachmentInput {
   path: string;          // Supabase Storage path
@@ -38,6 +39,14 @@ interface EmailResult {
 
 export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   const { to, toName, subject: rawSubject, body: rawBody, leadId, organizationId, sentById, replyTo } = params;
+
+  // Blocage souple : tant que l'org n'a aucun email vérifié, on n'envoie rien.
+  // Choke point unique : tous les envois (1-to-1, bulk, campagnes, séquences,
+  // workflows) transitent par cette fonction. Les emails système (vérification)
+  // passent par sendTransactionalEmail et ne sont donc pas concernés.
+  if (!(await isOrgEmailVerified(organizationId))) {
+    return { success: false, error: EMAIL_VERIFICATION_REQUIRED_MESSAGE };
+  }
 
   // Replace variables ({{prenom}}, {{nom}}, {{email}}) using the lead's data
   let subject = rawSubject;

@@ -114,10 +114,7 @@ function LoginForm() {
               <School size={22} />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">EduCRM</h1>
-              <p className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">
-                Africa
-              </p>
+              <h1 className="text-lg font-bold text-gray-900">TalibCRM</h1>
             </div>
           </div>
 
@@ -157,12 +154,12 @@ function LoginForm() {
                 >
                   Mot de passe
                 </label>
-                {/*<a
+                <a
                   href="/forgot-password"
                   className="text-sm text-brand-600 hover:text-brand-700 font-medium"
                 >
                   Oublié ?
-                </a>*/}
+                </a>
               </div>
               <div className="relative">
                 <input
@@ -211,7 +208,7 @@ function LoginForm() {
             </button>
           </form>
 
-          {/*<p className="mt-8 text-center text-sm text-gray-500">
+          <p className="mt-8 text-center text-sm text-gray-500">
             Pas encore de compte ?{" "}
             <a
               href="/signup"
@@ -219,7 +216,7 @@ function LoginForm() {
             >
               Créer un compte gratuit
             </a>
-          </p>*/}
+          </p>
         </div>
       </div>
     </div>

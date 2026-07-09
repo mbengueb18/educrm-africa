@@ -45,6 +45,10 @@ export function middleware(request: NextRequest) {
       pathname === "/" ||
       pathname.startsWith("/signup") ||
       pathname.startsWith("/login") ||
+      pathname.startsWith("/forgot-password") ||
+      pathname.startsWith("/reset-password") ||
+      pathname.startsWith("/legal") ||
+      pathname.startsWith("/verify") ||
       pathname.startsWith("/api/") ||
       pathname.startsWith("/public") ||
       pathname.startsWith("/f/") ||
@@ -78,6 +82,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/legal") ||
+    pathname.startsWith("/verify") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/public") ||
     pathname.startsWith("/f/");

@@ -7,6 +7,7 @@ import { SupportBubble } from "@/components/support/support-bubble";
 import { AnalyticsPageView } from "@/components/analytics/analytics-page-view";
 import { CallReturnPrompt } from "@/components/calls/call-return-prompt";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { VerifyEmailBanner } from "@/components/onboarding/verify-email-banner";
 
 export default async function DashboardLayout({
   children,
@@ -63,6 +64,13 @@ export default async function DashboardLayout({
     select: { plan: true },
   });
 
+  // Blocage souple : bannière tant que l'email de l'utilisateur n'est pas vérifié.
+  var currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { emailVerified: true, email: true },
+  });
+  var needsEmailVerification = currentUser != null && currentUser.emailVerified == null;
+
   return (
     <PermissionProvider role={session.user.role} userId={session.user.id}>
       <AnalyticsPageView
@@ -81,6 +89,9 @@ export default async function DashboardLayout({
         overdueTasks={overdueTasks}
         dueTodayTasks={dueTodayTasks}
       >
+        {needsEmailVerification && currentUser?.email && (
+          <VerifyEmailBanner email={currentUser.email} />
+        )}
         {children}
       </DashboardShell>
       <SupportBubble />

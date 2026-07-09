@@ -404,10 +404,35 @@ export async function assertCanAccessFeature(
   }
 }
 
+/**
+ * Blocage souple à l'inscription : tant qu'aucun utilisateur de l'org n'a
+ * vérifié son email, l'envoi d'emails/campagnes est bloqué. Se lève dès que
+ * l'admin confirme son adresse. Les orgs existantes sont « grandfathered »
+ * par le backfill de emailVerified au déploiement.
+ */
+export const EMAIL_VERIFICATION_REQUIRED_MESSAGE =
+  "Confirmez votre adresse email pour activer l'envoi d'emails et de campagnes. Consultez votre boîte de réception ou renvoyez le lien depuis la bannière en haut de votre tableau de bord.";
+
+/** Vrai si au moins un utilisateur de l'org a vérifié son email. */
+export async function isOrgEmailVerified(orgId: string): Promise<boolean> {
+  const verifiedUser = await prisma.user.findFirst({
+    where: { organizationId: orgId, emailVerified: { not: null } },
+    select: { id: true },
+  });
+  return verifiedUser != null;
+}
+
+export async function assertOrgEmailVerified(orgId: string): Promise<void> {
+  if (!(await isOrgEmailVerified(orgId))) {
+    throw new Error(EMAIL_VERIFICATION_REQUIRED_MESSAGE);
+  }
+}
+
 export async function assertCanSendEmail(
   orgId: string,
   count: number = 1
 ): Promise<void> {
+  await assertOrgEmailVerified(orgId);
   const check = await canSendEmail(orgId, count);
   if (!check.allowed) {
     const org = await prisma.organization.findUniqueOrThrow({
