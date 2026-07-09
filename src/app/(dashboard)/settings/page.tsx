@@ -17,6 +17,7 @@ import {
   FileText,
   ClipboardList,
   AtSign,
+  Sparkles,
 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Paramètres" };
@@ -27,6 +28,7 @@ const settingsMenu = [
   { label: "Pipeline", description: "Étapes du pipeline de recrutement", icon: Settings, href: "/settings/pipelines" },
   { label: "Champs personnalisés", description: "Champs customs captés depuis les formulaires", icon: SlidersHorizontal, href: "/settings/custom-fields" },
   { label: "Formulaires", description: "Formulaires détectés sur votre site et mapping des champs", icon: ClipboardList, href: "/settings/forms" },
+  { label: "Test d'orientation IA", description: "Lien public du conseiller d'orientation à partager", icon: Sparkles, href: "/settings/orientation" },
   { label: "Propriétés", description: "Vue d'ensemble de tous les champs collectés", icon: Database, href: "/settings/properties" },
   { label: "Intégrations", description: "API, formulaire embarquable", icon: Plug, href: "/settings/integrations" },
   { label: "Tracking Web", description: "Suivi des visiteurs, sources, parcours web", icon: Globe2, href: "/settings/web-tracking" },
