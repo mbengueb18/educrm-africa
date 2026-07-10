@@ -190,6 +190,10 @@ function resolveLeadPath(path: string, lead: any): string {
 
   if (parts[0] === "lead" && parts.length === 2) {
     const field = parts[1];
+    // Champs virtuels basés sur une relation (pas des colonnes directes du lead).
+    if (field === "programName") {
+      return lead.program?.name || "";
+    }
     const value = lead[field];
     return value !== null && value !== undefined ? String(value) : "";
   }

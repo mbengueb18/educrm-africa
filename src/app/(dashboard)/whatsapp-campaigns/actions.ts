@@ -316,6 +316,7 @@ export async function sendWhatsAppCampaign(campaignId: string) {
       whatsapp: { not: null },
       isConverted: false,
     },
+    include: { program: { select: { name: true } } }, // pour résoudre {{lead.programName}}
   });
 
   if (leads.length === 0) throw new Error("Aucun lead avec WhatsApp dans cette audience");

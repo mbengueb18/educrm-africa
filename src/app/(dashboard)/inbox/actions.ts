@@ -455,6 +455,7 @@ export async function sendWhatsAppTemplateFromInbox(
   // Récupérer le lead
   const lead = await prisma.lead.findFirst({
     where: { id: leadId, organizationId: orgId },
+    include: { program: { select: { name: true } } }, // pour résoudre {{lead.programName}}
   });
   if (!lead) throw new Error("Lead introuvable");
   if (!lead.whatsapp) throw new Error("Ce lead n'a pas de numéro WhatsApp");
