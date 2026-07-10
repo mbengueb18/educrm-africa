@@ -23,6 +23,7 @@ import {
   MessageCircle,
   FileText,
   ClipboardList,
+  FileSignature,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
@@ -132,6 +133,12 @@ const navItems: NavItem[] = [
 ];
 
 const bottomItems = [
+  {
+    label: "Contrat",
+    href: "/contrats",
+    icon: FileSignature,
+    permission: "settings:view" as Permission,
+  },
   {
     label: "Paramètres",
     href: "/settings",

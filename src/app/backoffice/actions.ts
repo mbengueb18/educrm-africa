@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getPlanLimits } from "@/lib/plans/config";
 import { getBoSession, setBoCookie, clearBoCookie, createToken, type BoSession } from "@/lib/bo-auth";
+import { supabaseAdmin } from "@/lib/supabase-storage";
+import { CONTRACTS_BUCKET } from "@/lib/contracts/template";
 
 const VALID_PLANS = ["ESSENTIEL", "CROISSANCE", "PERFORMANCE"] as const;
 type PlanKey = (typeof VALID_PLANS)[number];
@@ -155,5 +157,55 @@ export async function deletePlatformAdmin(id: string) {
   if (id === s.id) throw new Error("Vous ne pouvez pas vous supprimer vous-même");
   await prisma.platformAdmin.delete({ where: { id } });
   revalidatePath("/backoffice/admins");
+  return { success: true };
+}
+
+// ─── Contrats ───
+export async function getContracts() {
+  await requireBo();
+  const contracts = await prisma.contract.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { organization: { select: { name: true, slug: true } } },
+  });
+  return contracts.map((c) => ({
+    id: c.id,
+    reference: c.reference,
+    plan: c.plan,
+    status: c.status,
+    orgName: c.organization.name,
+    orgSlug: c.organization.slug,
+    signedFileName: c.signedFileName,
+    signedSize: c.signedSize,
+    signedAt: c.signedAt ? c.signedAt.toISOString() : null,
+    uploadedByName: c.uploadedByName,
+    validatedAt: c.validatedAt ? c.validatedAt.toISOString() : null,
+    validatedBy: c.validatedBy,
+    hasFile: !!c.signedPath,
+    createdAt: c.createdAt.toISOString(),
+  }));
+}
+
+export async function getBoContractSignedUrl(id: string) {
+  await requireBo();
+  const contract = await prisma.contract.findUnique({ where: { id } });
+  if (!contract) throw new Error("Contrat introuvable");
+  if (!contract.signedPath) throw new Error("Aucun contrat signé n'a encore été déposé");
+  const { data, error } = await supabaseAdmin.storage
+    .from(CONTRACTS_BUCKET)
+    .createSignedUrl(contract.signedPath, 60 * 60, { download: contract.signedFileName || `${contract.reference}.pdf` });
+  if (error || !data?.signedUrl) throw new Error("Impossible de générer le lien");
+  return { url: data.signedUrl };
+}
+
+export async function validateContract(id: string) {
+  const s = await requireBo();
+  const contract = await prisma.contract.findUnique({ where: { id } });
+  if (!contract) throw new Error("Contrat introuvable");
+  if (contract.status !== "SIGNE_RECU") throw new Error("Seul un contrat signé et reçu peut être validé");
+  await prisma.contract.update({
+    where: { id },
+    data: { status: "VALIDE", validatedAt: new Date(), validatedBy: s.name || s.email },
+  });
+  revalidatePath("/contrats");
   return { success: true };
 }

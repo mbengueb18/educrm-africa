@@ -67,6 +67,7 @@ model Organization {
   supportTickets SupportTicket[]
   emailDomain         OrgEmailDomain?
   planChangeLogs      PlanChangeLog[]
+  contracts           Contract[]
 
   @@map("organizations")
 }
@@ -80,6 +81,47 @@ enum Plan {
 enum BillingCycle {
   MONTHLY
   YEARLY
+}
+
+// ─── CONTRATS D'ABONNEMENT ───
+// Contrat papier : généré/pré-rempli côté CRM, imprimé, signé à la main par le
+// client, puis re-uploadé (scan/photo) depuis le CRM. Le PDF signé est archivé
+// dans Supabase (bucket privé « contracts ») et envoyé à contact@talibcrm.com.
+model Contract {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           Plan
+  billingCycle   BillingCycle?
+  reference      String         @unique // ex. TC-CRO-0001
+  status         ContractStatus @default(A_SIGNER)
+
+  // Fichier signé (renseigné à l'upload)
+  signedPath     String? // chemin dans le bucket Supabase
+  signedFileName String?
+  signedSize     Int?
+  signedMime     String?
+  signedAt       DateTime? // date de réception du contrat signé
+  uploadedById   String? // User (org) ayant fait l'upload
+  uploadedByName String?
+
+  // Validation côté back-office
+  validatedAt DateTime?
+  validatedBy String? // PlatformAdmin ayant validé
+  note        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("contracts")
+}
+
+enum ContractStatus {
+  BROUILLON // généré, pas encore présenté
+  A_SIGNER // disponible pour le client, en attente de signature
+  SIGNE_RECU // le client a re-uploadé le contrat signé
+  VALIDE // validé par le back-office
 }
 
 enum SupportTicketType {

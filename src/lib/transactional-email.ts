@@ -1,11 +1,19 @@
 import { Resend } from "resend";
 
+interface TransactionalEmailAttachment {
+  filename: string;
+  /** Contenu binaire du fichier (Resend accepte un Buffer ou une chaîne base64). */
+  content: Buffer | string;
+  contentType?: string;
+}
+
 interface TransactionalEmailParams {
   to: string;
   subject: string;
   html: string;
   text: string;
   replyTo?: string;
+  attachments?: TransactionalEmailAttachment[];
 }
 
 interface TransactionalEmailResult {
@@ -48,6 +56,11 @@ export async function sendTransactionalEmail(
       html: params.html,
       text: params.text,
       replyTo: params.replyTo,
+      attachments: params.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
       tags: [{ name: "category", value: "transactional" }],
     });
 
