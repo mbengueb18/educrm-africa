@@ -92,6 +92,31 @@ export function OnboardingWizard({ webhookUrl, onDone }: Props) {
     });
   };
 
+  // ─── Étape 1 → 2 : enregistrer AVANT le webhook ───
+  // Le handshake Meta appelle notre route qui compare le Verify Token stocké en base.
+  // Il faut donc que l'intégration (et le token) soit persistée AVANT que l'utilisateur
+  // clique « Vérifier et enregistrer » côté Meta, sinon la route renvoie 404.
+  const handleSaveThenWebhook = () => {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        await saveIntegration({
+          phoneNumberId: selected.id,
+          whatsappBusinessAccountId: wabaId,
+          accessToken,
+          verifyToken,
+          appSecret,
+          displayPhoneNumber: selected.displayPhoneNumber || undefined,
+          verifiedName: selected.verifiedName || undefined,
+        });
+        toast.success("Identifiants enregistrés — vous pouvez valider le webhook dans Meta.");
+        setStep(2);
+      } catch (e: any) {
+        toast.error(e.message, { duration: 6000 });
+      }
+    });
+  };
+
   // ─── Étape finale : enregistrer + tester ───
   const handleFinish = () => {
     if (!selected) return;
@@ -351,7 +376,7 @@ export function OnboardingWizard({ webhookUrl, onDone }: Props) {
                 <li><strong>Verify and Save</strong>.</li>
                 <li>Dans <strong>Webhook fields</strong>, abonnez-vous à l'événement <code className="bg-gray-100 px-1 rounded">messages</code> (« Subscribe »).</li>
               </ol>
-              <p className="text-[11px] text-amber-700">⚠️ Si « The URL couldn't be validated » : ce n'est pas bloquant, réessayez plus tard. L'envoi de messages fonctionnera dès l'activation.</p>
+              <p className="text-[11px] text-amber-700">⚠️ Si « The URL couldn't be validated » : vérifiez que le <strong>Verify Token collé dans Meta est identique</strong> à celui ci-dessus (sans espace avant/après). Vos identifiants ont déjà été enregistrés à l'étape précédente, la validation doit donc passer immédiatement.</p>
             </HelpBox>
 
             <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-gray-200 p-3 hover:border-emerald-300">
@@ -414,12 +439,13 @@ export function OnboardingWizard({ webhookUrl, onDone }: Props) {
             <ChevronLeft size={13} /> Retour
           </button>
           <button
-            onClick={next}
-            disabled={!canNext}
+            onClick={step === 1 ? handleSaveThenWebhook : next}
+            disabled={!canNext || isPending}
             className="btn-primary py-1.5 px-4 text-xs disabled:opacity-40"
             title={!canNext ? "Complétez cette étape pour continuer" : ""}
           >
-            Continuer <ChevronRight size={13} />
+            {isPending && step === 1 ? <Loader2 size={13} className="animate-spin" /> : null}
+            {step === 1 ? "Enregistrer et continuer" : "Continuer"} <ChevronRight size={13} />
           </button>
         </div>
       )}
