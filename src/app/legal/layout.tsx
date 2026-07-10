@@ -10,7 +10,8 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             <div style={{ width: 32, height: 32, borderRadius: 9, background: "#0E7C6B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><School size={18} /></div>
             <span style={{ fontWeight: 700, fontSize: 18, color: "#0F1923" }}>TalibCRM</span>
           </Link>
-          <nav style={{ display: "flex", gap: 20, fontSize: 13.5 }}>
+          <nav style={{ display: "flex", gap: 20, fontSize: 13.5, flexWrap: "wrap" }}>
+            <Link href="/legal/mentions-legales" style={{ color: "#475569", textDecoration: "none" }}>Mentions légales</Link>
             <Link href="/legal/cgu" style={{ color: "#475569", textDecoration: "none" }}>CGU</Link>
             <Link href="/legal/confidentialite" style={{ color: "#475569", textDecoration: "none" }}>Confidentialité</Link>
             <Link href="/login" style={{ color: "#0E7C6B", textDecoration: "none", fontWeight: 600 }}>Se connecter</Link>

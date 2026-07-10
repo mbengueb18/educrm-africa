@@ -18,7 +18,7 @@ export default function ConfidentialitePage() {
   return (
     <>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0F1923", marginBottom: 6 }}>Politique de confidentialité</h1>
-      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>Dernière mise à jour : 9 juillet 2026</p>
+      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>Dernière mise à jour : 10 juillet 2026</p>
 
       <P>
         Cette politique décrit comment TalibCRM collecte, utilise et protège les données personnelles dans le
@@ -29,10 +29,16 @@ export default function ConfidentialitePage() {
 
       <H2>1. Responsable de traitement</H2>
       <P>
-        Pour les données de compte des utilisateurs, TalibCRM agit en tant que responsable de traitement. Pour
-        les données que vous importez et gérez dans le Service (vos prospects et étudiants), vous êtes
-        responsable de traitement et TalibCRM agit comme sous-traitant, pour votre compte et selon vos
-        instructions.
+        Le Service TalibCRM est édité par <strong>Performance Digital</strong>, entreprise individuelle
+        (NINEA 008923220, RCCM SN DKR 2024 A 32598), sise à Hann Maristes 1/C, Îlot H, Villa N°75, Dakar
+        (Sénégal) — contact@talibcrm.com.
+      </P>
+      <P>
+        Pour les données de compte des utilisateurs, Performance Digital agit en tant que responsable de
+        traitement. Pour les données que vous importez et gérez dans le Service (vos prospects et étudiants),
+        vous êtes responsable de traitement et Performance Digital agit comme sous-traitant, pour votre compte
+        et selon vos instructions. Le traitement est réalisé conformément à la loi n° 2008-12 du 25 janvier
+        2008 sur la protection des données à caractère personnel au Sénégal.
       </P>
 
       <H2>2. Données collectées</H2>
@@ -74,10 +80,11 @@ export default function ConfidentialitePage() {
 
       <H2>7. Vos droits</H2>
       <P>
-        Conformément à la réglementation applicable en matière de protection des données, vous disposez de
-        droits d'accès, de rectification, d'effacement, de limitation et d'opposition. Pour les exercer,
-        écrivez à contact@talibcrm.com. Si vous êtes un contact (prospect/étudiant) d'un établissement,
-        adressez votre demande à cet établissement, responsable de vos données.
+        Conformément à la loi n° 2008-12 du 25 janvier 2008, vous disposez de droits d'accès, de
+        rectification, d'effacement, de limitation et d'opposition sur vos données. Pour les exercer, écrivez
+        à contact@talibcrm.com. Si vous êtes un contact (prospect/étudiant) d'un établissement, adressez votre
+        demande à cet établissement, responsable de vos données. Vous pouvez également saisir la Commission de
+        protection des Données personnelles (CDP) du Sénégal en cas de difficulté.
       </P>
 
       <H2>8. Cookies</H2>

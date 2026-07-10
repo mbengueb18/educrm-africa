@@ -18,7 +18,7 @@ export default function CGUPage() {
   return (
     <>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0F1923", marginBottom: 6 }}>Conditions Générales d'Utilisation</h1>
-      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>Dernière mise à jour : 9 juillet 2026</p>
+      <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>Dernière mise à jour : 10 juillet 2026</p>
 
       <H2>1. Objet</H2>
       <P>
@@ -30,8 +30,11 @@ export default function CGUPage() {
 
       <H2>2. Éditeur du Service</H2>
       <P>
-        Le Service est édité par TalibCRM, [raison sociale et forme juridique], immatriculée sous le
-        [numéro RCCM / registre], dont le siège est situé à [adresse]. Contact : contact@talibcrm.com.
+        Le Service TalibCRM est édité par <strong>Performance Digital</strong>, entreprise individuelle
+        exploitée par M. Abdoul Aziz Mbengue, immatriculée au Registre du Commerce et du Crédit Mobilier
+        (RCCM) sous le numéro <strong>SN DKR 2024 A 32598</strong>, identifiant NINEA
+        <strong> 008923220</strong>, dont le siège est situé à Hann Maristes 1/C, Îlot H, Villa N°75, Dakar
+        (Sénégal). Téléphone : +221 77 532 03 55 — Email : contact@talibcrm.com.
       </P>
 
       <H2>3. Création de compte</H2>
@@ -93,8 +96,9 @@ export default function CGUPage() {
 
       <H2>10. Droit applicable</H2>
       <P>
-        Les présentes CGU sont régies par le droit applicable au siège de l'éditeur. Tout litige relève des
-        juridictions compétentes de ce ressort, sous réserve des dispositions légales impératives.
+        Les présentes CGU sont régies par le droit sénégalais. À défaut de résolution amiable, tout litige
+        relatif à leur validité, leur interprétation ou leur exécution relève de la compétence des tribunaux
+        de Dakar, sous réserve des dispositions légales impératives.
       </P>
     </>
   );
