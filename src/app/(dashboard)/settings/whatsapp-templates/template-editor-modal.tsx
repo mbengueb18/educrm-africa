@@ -159,10 +159,12 @@ export function TemplateEditorModal({ mode, template, onClose, onSaved }: Props)
                 onChange={(e) => setMetaName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}
                 className="input text-sm font-mono"
                 placeholder="rentree_2026_fr"
-                disabled={mode === "edit"}
+                disabled={mode === "edit" && template?.status !== "DRAFT"}
               />
               <p className="text-[10px] text-gray-400 mt-1">
-                lowercase, chiffres, underscores
+                {mode === "edit" && template?.status !== "DRAFT"
+                  ? "Nom verrouillé (template déjà soumis à Meta)"
+                  : "lowercase, chiffres, underscores"}
               </p>
             </div>
 
