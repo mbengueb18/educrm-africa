@@ -89,32 +89,34 @@ export function TemplateEditorModal({ mode, template, onClose, onSaved }: Props)
 
     startTransition(async () => {
       try {
-        if (mode === "create") {
-          await createTemplate({
-            metaName: metaName.trim(),
-            language,
-            category: category as any,
-            bodyText: bodyText.trim(),
-            headerText: headerText.trim() || undefined,
-            footerText: footerText.trim() || undefined,
-            buttons: buttons.length > 0 ? buttons : undefined,
-          });
-          toast.success("Template créé");
-        } else {
-          await updateTemplate(template.id, {
-            metaName: metaName.trim(),
-            language,
-            category: category as any,
-            bodyText: bodyText.trim(),
-            headerText: headerText.trim() || null,
-            footerText: footerText.trim() || null,
-            buttons: buttons.length > 0 ? buttons : null,
-          });
-          toast.success("Template modifié");
+        const result = mode === "create"
+          ? await createTemplate({
+              metaName: metaName.trim(),
+              language,
+              category: category as any,
+              bodyText: bodyText.trim(),
+              headerText: headerText.trim() || undefined,
+              footerText: footerText.trim() || undefined,
+              buttons: buttons.length > 0 ? buttons : undefined,
+            })
+          : await updateTemplate(template.id, {
+              metaName: metaName.trim(),
+              language,
+              category: category as any,
+              bodyText: bodyText.trim(),
+              headerText: headerText.trim() || null,
+              footerText: footerText.trim() || null,
+              buttons: buttons.length > 0 ? buttons : null,
+            });
+
+        if (!result.ok) {
+          toast.error(result.error || "Échec de l'enregistrement", { duration: 7000 });
+          return;
         }
+        toast.success(mode === "create" ? "Template créé" : "Template modifié");
         onSaved();
-      } catch (e: any) {
-        toast.error(e.message);
+      } catch {
+        toast.error("Une erreur inattendue est survenue.");
       }
     });
   };

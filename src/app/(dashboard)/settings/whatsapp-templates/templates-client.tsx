@@ -81,10 +81,10 @@ export function TemplatesClient({ templates }: Props) {
     setSyncing(true);
     try {
       const result = await syncTemplatesFromMeta();
-      toast.success(`${result.created} créé(s), ${result.updated} mis à jour`);
-      router.refresh();
-    } catch (e: any) {
-      toast.error(e.message);
+      if (!result.ok) { toast.error(result.error || "Sync échoué"); }
+      else { toast.success(`${result.created} créé(s), ${result.updated} mis à jour`); router.refresh(); }
+    } catch {
+      toast.error("Une erreur inattendue est survenue.");
     }
     setSyncing(false);
   };
@@ -93,11 +93,12 @@ export function TemplatesClient({ templates }: Props) {
     if (!confirm(`Supprimer le template "${template.metaName}" ?`)) return;
     startTransition(async () => {
       try {
-        await deleteTemplate(template.id);
+        const result = await deleteTemplate(template.id);
+        if (!result.ok) { toast.error(result.error || "Suppression impossible"); return; }
         toast.success("Template supprimé");
         router.refresh();
-      } catch (e: any) {
-        toast.error(e.message);
+      } catch {
+        toast.error("Une erreur inattendue est survenue.");
       }
     });
   };
@@ -107,10 +108,11 @@ export function TemplatesClient({ templates }: Props) {
     startTransition(async () => {
       try {
         const result = await submitTemplate(template.id);
+        if (!result.ok) { toast.error(result.error || "Soumission échouée", { duration: 8000 }); return; }
         toast.success(`Soumis à Meta (statut : ${result.status})`);
         router.refresh();
-      } catch (e: any) {
-        toast.error(e.message);
+      } catch {
+        toast.error("Une erreur inattendue est survenue.");
       }
     });
   };

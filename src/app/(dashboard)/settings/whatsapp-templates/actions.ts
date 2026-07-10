@@ -103,44 +103,57 @@ export async function createTemplate(data: {
   headerText?: string;
   footerText?: string;
   buttons?: any[];
-}) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { ok: false, error: "Non authentifié" };
 
-  // check feature gate + quota
-  await assertCanCreateWhatsAppTemplate(session.user.organizationId);
+    // check feature gate + quota
+    await assertCanCreateWhatsAppTemplate(session.user.organizationId);
 
-  // Valider le nom : seulement lowercase, chiffres et underscores
-  if (!/^[a-z0-9_]+$/.test(data.metaName)) {
-    throw new Error("Le nom du template doit contenir uniquement des lettres minuscules, chiffres et underscores (ex: rentree_2026_fr)");
+    // Valider le nom : seulement lowercase, chiffres et underscores
+    if (!/^[a-z0-9_]+$/.test(data.metaName)) {
+      return { ok: false, error: "Le nom du template doit contenir uniquement des lettres minuscules, chiffres et underscores (ex: rentree_2026_fr)" };
+    }
+
+    if (!data.bodyText.trim()) {
+      return { ok: false, error: "Le corps du message est obligatoire" };
+    }
+
+    // Anti-doublon : un nom+langue est unique par organisation.
+    const dup = await prisma.whatsAppTemplate.findUnique({
+      where: { organizationId_metaName_language: { organizationId: session.user.organizationId, metaName: data.metaName, language: data.language } },
+      select: { id: true },
+    });
+    if (dup) {
+      return { ok: false, error: `Un template nommé « ${data.metaName} » existe déjà pour cette langue. Choisissez un autre nom (ex: ${data.metaName}_2).` };
+    }
+
+    // Calculer le mapping {{1}}, {{2}}... pour Meta
+    const { variableMapping } = convertTemplateForMeta(data.bodyText);
+
+    const template = await prisma.whatsAppTemplate.create({
+      data: {
+        organizationId: session.user.organizationId,
+        metaName: data.metaName,
+        language: data.language,
+        category: data.category,
+        bodyText: data.bodyText,
+        headerText: data.headerText || null,
+        footerText: data.footerText || null,
+        buttons: data.buttons as any || null,
+        variableMapping: variableMapping as any,
+        status: "DRAFT",
+        source: "local",
+        createdById: session.user.id,
+      },
+    });
+
+    revalidatePath("/settings/whatsapp-templates");
+    return { ok: true, id: template.id };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Erreur lors de la création du template" };
   }
-
-  if (!data.bodyText.trim()) {
-    throw new Error("Le corps du message est obligatoire");
-  }
-
-  // Calculer le mapping {{1}}, {{2}}... pour Meta
-  const { variableMapping } = convertTemplateForMeta(data.bodyText);
-
-  const template = await prisma.whatsAppTemplate.create({
-    data: {
-      organizationId: session.user.organizationId,
-      metaName: data.metaName,
-      language: data.language,
-      category: data.category,
-      bodyText: data.bodyText,
-      headerText: data.headerText || null,
-      footerText: data.footerText || null,
-      buttons: data.buttons as any || null,
-      variableMapping: variableMapping as any,
-      status: "DRAFT",
-      source: "local",
-      createdById: session.user.id,
-    },
-  });
-
-  revalidatePath("/settings/whatsapp-templates");
-  return template;
 }
 
 // ─── Update template (only if DRAFT) ───
@@ -152,82 +165,94 @@ export async function updateTemplate(templateId: string, data: {
   headerText?: string | null;
   footerText?: string | null;
   buttons?: any[] | null;
-}) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { ok: false, error: "Non authentifié" };
 
-  // check feature gate (pas de quota check pour update)
-  await assertCanManageWhatsAppTemplates(session.user.organizationId);
+    // check feature gate (pas de quota check pour update)
+    await assertCanManageWhatsAppTemplates(session.user.organizationId);
 
-  const template = await prisma.whatsAppTemplate.findFirst({
-    where: { id: templateId, organizationId: session.user.organizationId },
-  });
+    const template = await prisma.whatsAppTemplate.findFirst({
+      where: { id: templateId, organizationId: session.user.organizationId },
+    });
 
-  if (!template) throw new Error("Template introuvable");
-  if (template.status !== "DRAFT") {
-    throw new Error("Seuls les brouillons peuvent être modifiés. Les templates soumis à Meta sont verrouillés.");
+    if (!template) return { ok: false, error: "Template introuvable" };
+    if (template.status !== "DRAFT") {
+      return { ok: false, error: "Seuls les brouillons peuvent être modifiés. Les templates soumis à Meta sont verrouillés." };
+    }
+
+    if (data.metaName && !/^[a-z0-9_]+$/.test(data.metaName)) {
+      return { ok: false, error: "Le nom du template doit contenir uniquement des lettres minuscules, chiffres et underscores" };
+    }
+
+    // Recalculer le mapping si le bodyText change
+    let variableMapping = template.variableMapping;
+    if (data.bodyText !== undefined) {
+      const result = convertTemplateForMeta(data.bodyText);
+      variableMapping = result.variableMapping as any;
+    }
+
+    await prisma.whatsAppTemplate.update({
+      where: { id: templateId },
+      data: {
+        metaName: data.metaName ?? template.metaName,
+        language: data.language ?? template.language,
+        category: data.category ?? template.category,
+        bodyText: data.bodyText ?? template.bodyText,
+        headerText: data.headerText !== undefined ? data.headerText : template.headerText,
+        footerText: data.footerText !== undefined ? data.footerText : template.footerText,
+        buttons: (data.buttons !== undefined ? data.buttons : template.buttons) as any,
+        variableMapping: variableMapping as any,
+      },
+    });
+
+    revalidatePath("/settings/whatsapp-templates");
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Erreur lors de la modification du template" };
   }
-
-  if (data.metaName && !/^[a-z0-9_]+$/.test(data.metaName)) {
-    throw new Error("Le nom du template doit contenir uniquement des lettres minuscules, chiffres et underscores");
-  }
-
-  // Recalculer le mapping si le bodyText change
-  let variableMapping = template.variableMapping;
-  if (data.bodyText !== undefined) {
-    const result = convertTemplateForMeta(data.bodyText);
-    variableMapping = result.variableMapping as any;
-  }
-
-  await prisma.whatsAppTemplate.update({
-    where: { id: templateId },
-    data: {
-      metaName: data.metaName ?? template.metaName,
-      language: data.language ?? template.language,
-      category: data.category ?? template.category,
-      bodyText: data.bodyText ?? template.bodyText,
-      headerText: data.headerText !== undefined ? data.headerText : template.headerText,
-      footerText: data.footerText !== undefined ? data.footerText : template.footerText,
-      buttons: (data.buttons !== undefined ? data.buttons : template.buttons) as any,
-      variableMapping: variableMapping as any,
-    },
-  });
-
-  revalidatePath("/settings/whatsapp-templates");
-  return { success: true };
 }
 
 // ─── Submit template to Meta for approval ───
-export async function submitTemplate(templateId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
-
-  // check feature gate
-  await assertCanManageWhatsAppTemplates(session.user.organizationId);
-
-  const template = await prisma.whatsAppTemplate.findFirst({
-    where: { id: templateId, organizationId: session.user.organizationId },
-  });
-
-  if (!template) throw new Error("Template introuvable");
-  if (template.status !== "DRAFT") throw new Error("Ce template a déjà été soumis");
-
-  // Convertir la syntaxe TalibCRM vers Meta ({{lead.X}} -> {{1}})
-  const { metaBody, variableMapping } = convertTemplateForMeta(template.bodyText);
-
-  // Soumettre à Meta
+export async function submitTemplate(templateId: string): Promise<{ ok: boolean; status?: string; error?: string }> {
   try {
-    const result = await submitMetaTemplate(session.user.organizationId, {
-      name: template.metaName,
-      language: template.language,
-      category: template.category,
-      bodyText: metaBody,
-      headerText: template.headerText,
-      footerText: template.footerText,
-      buttons: template.buttons as any,
+    const session = await auth();
+    if (!session?.user) return { ok: false, error: "Non authentifié" };
+
+    // check feature gate
+    await assertCanManageWhatsAppTemplates(session.user.organizationId);
+
+    const template = await prisma.whatsAppTemplate.findFirst({
+      where: { id: templateId, organizationId: session.user.organizationId },
     });
 
-    // Mettre à jour en local
+    if (!template) return { ok: false, error: "Template introuvable" };
+    if (template.status !== "DRAFT") return { ok: false, error: "Ce template a déjà été soumis" };
+
+    // Convertir la syntaxe TalibCRM vers Meta ({{lead.X}} -> {{1}})
+    const { metaBody, variableMapping } = convertTemplateForMeta(template.bodyText);
+
+    let result;
+    try {
+      result = await submitMetaTemplate(session.user.organizationId, {
+        name: template.metaName,
+        language: template.language,
+        category: template.category,
+        bodyText: metaBody,
+        headerText: template.headerText,
+        footerText: template.footerText,
+        buttons: template.buttons as any,
+      });
+    } catch (err: any) {
+      const raw = err?.message || "";
+      // Meta réserve le nom d'un template supprimé pendant ~4 semaines.
+      if (/already exists|existe déjà|been deleted|deleted/i.test(raw)) {
+        return { ok: false, error: `Meta refuse ce nom : « ${template.metaName} » a déjà été utilisé (un template supprimé garde son nom réservé pendant ~4 semaines). Renommez le template (ex: ${template.metaName}_2) puis re-soumettez.` };
+      }
+      return { ok: false, error: `Soumission refusée par Meta : ${raw}` };
+    }
+
     await prisma.whatsAppTemplate.update({
       where: { id: templateId },
       data: {
@@ -239,19 +264,23 @@ export async function submitTemplate(templateId: string) {
     });
 
     revalidatePath("/settings/whatsapp-templates");
-    return { success: true, status: result.status };
-  } catch (err: any) {
-    throw new Error(`Soumission échouée : ${err.message}`);
+    return { ok: true, status: result.status };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Soumission échouée" };
   }
 }
 
 // ─── Sync templates from Meta ───
-export async function syncTemplatesFromMeta() {
+export async function syncTemplatesFromMeta(): Promise<{ ok: boolean; created?: number; updated?: number; total?: number; error?: string }> {
   const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
 
     // check feature gate
-  await assertCanManageWhatsAppTemplates(session.user.organizationId);
+  try {
+    await assertCanManageWhatsAppTemplates(session.user.organizationId);
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Accès refusé" };
+  }
 
   const orgId = session.user.organizationId;
 
@@ -324,42 +353,46 @@ export async function syncTemplatesFromMeta() {
     }
 
     revalidatePath("/settings/whatsapp-templates");
-    return { success: true, created, updated, total: metaTemplates.length };
+    return { ok: true, created, updated, total: metaTemplates.length };
   } catch (err: any) {
-    throw new Error(`Sync échoué : ${err.message}`);
+    return { ok: false, error: `Sync échoué : ${err?.message || "erreur inconnue"}` };
   }
 }
 
 // ─── Delete template ───
-export async function deleteTemplate(templateId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+export async function deleteTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { ok: false, error: "Non authentifié" };
 
-  const template = await prisma.whatsAppTemplate.findFirst({
-    where: { id: templateId, organizationId: session.user.organizationId },
-    include: { _count: { select: { campaigns: true } } },
-  });
+    const template = await prisma.whatsAppTemplate.findFirst({
+      where: { id: templateId, organizationId: session.user.organizationId },
+      include: { _count: { select: { campaigns: true } } },
+    });
 
-  if (!template) throw new Error("Template introuvable");
+    if (!template) return { ok: false, error: "Template introuvable" };
 
-  // Vérifier qu'aucune campagne n'utilise ce template
-  if (template._count.campaigns > 0) {
-    throw new Error(`Impossible de supprimer : ${template._count.campaigns} campagne(s) utilisent ce template`);
-  }
-
-  // Si soumis à Meta, supprimer côté Meta aussi
-  if (template.metaTemplateId && template.status !== "DRAFT") {
-    try {
-      await deleteMetaTemplate(session.user.organizationId, template.metaName);
-    } catch (err: any) {
-      // Si Meta refuse (template déjà supprimé, etc), on continue quand même
-      console.warn(`Suppression Meta échouée : ${err.message}`);
+    // Vérifier qu'aucune campagne n'utilise ce template
+    if (template._count.campaigns > 0) {
+      return { ok: false, error: `Impossible de supprimer : ${template._count.campaigns} campagne(s) utilisent ce template` };
     }
-  }
 
-  await prisma.whatsAppTemplate.delete({ where: { id: templateId } });
-  revalidatePath("/settings/whatsapp-templates");
-  return { success: true };
+    // Si soumis à Meta, supprimer côté Meta aussi
+    if (template.metaTemplateId && template.status !== "DRAFT") {
+      try {
+        await deleteMetaTemplate(session.user.organizationId, template.metaName);
+      } catch (err: any) {
+        // Si Meta refuse (template déjà supprimé, etc), on continue quand même
+        console.warn(`Suppression Meta échouée : ${err.message}`);
+      }
+    }
+
+    await prisma.whatsAppTemplate.delete({ where: { id: templateId } });
+    revalidatePath("/settings/whatsapp-templates");
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Erreur lors de la suppression" };
+  }
 }
 
 // ─── Get approved templates (for campaign editor) ───
