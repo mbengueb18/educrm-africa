@@ -147,6 +147,24 @@ export async function saveIntegration(data: {
     throw new Error(`Validation Meta échouée : ${e.message}. Vérifiez votre Access Token et Phone Number ID.`);
   }
 
+  // Abonne l'app à la WABA (webhook au niveau du compte WhatsApp Business).
+  // Étape DISTINCTE de l'abonnement au champ `messages` côté app : sans elle,
+  // Meta ne route AUCUN message entrant vers notre webhook. Non-bloquant.
+  try {
+    const subRes = await fetch(
+      `https://graph.facebook.com/v22.0/${data.whatsappBusinessAccountId.trim()}/subscribed_apps`,
+      { method: "POST", headers: { Authorization: `Bearer ${data.accessToken.trim()}` } }
+    );
+    if (!subRes.ok) {
+      const err = await subRes.json().catch(() => ({}));
+      console.warn(`[WA saveIntegration] subscribed_apps échoué:`, err?.error?.message || subRes.status);
+    } else {
+      console.log(`[WA saveIntegration] App abonnée à la WABA ${data.whatsappBusinessAccountId.trim()}`);
+    }
+  } catch (e: any) {
+    console.warn(`[WA saveIntegration] subscribed_apps error:`, e.message);
+  }
+
   if (existing) {
     // Update
     await prisma.whatsAppIntegration.update({
