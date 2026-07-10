@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone } from "lucide-react";
+import { Sparkles, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone, MessageCircle } from "lucide-react";
 
 // Bump la version pour re-déclencher l'accueil après de futures nouveautés.
-const SEEN_KEY = "talibcrm_onboarding_v2";
+const SEEN_KEY = "talibcrm_onboarding_v3";
 
 type Step = {
   selector?: string; // élément à surligner (facultatif → bulle centrée)
@@ -16,6 +16,11 @@ type Step = {
 };
 
 const STEPS: Step[] = [
+  {
+    selector: 'a[href="/inbox"]', route: "/inbox", icon: MessageCircle,
+    title: "WhatsApp intégré nativement",
+    body: "Connectez votre numéro dans Réglages → WhatsApp : les messages de vos prospects arrivent ici, dans la Boîte de réception. Vous répondez sans quitter le CRM, et chaque conversation crée ou rattache un lead automatiquement.",
+  },
   {
     selector: 'a[href="/documents"]', route: "/documents", icon: FileText,
     title: "Bibliothèque de documents",
@@ -34,6 +39,7 @@ const STEPS: Step[] = [
 ];
 
 const FEATURES = [
+  { icon: MessageCircle, title: "WhatsApp intégré", desc: "Recevez & répondez aux messages dans la Boîte de réception." },
   { icon: FileText, title: "Bibliothèque de documents", desc: "Partagez brochures & formulaires en 1 clic." },
   { icon: PenLine, title: "Signature email", desc: "Ajoutée automatiquement à vos envois." },
   { icon: Megaphone, title: "Campagnes programmables", desc: "Envoi direct ou planifié à la date voulue." },
@@ -121,7 +127,7 @@ export function OnboardingTour({ userId }: { userId: string }) {
           <div className="px-6 pt-7 pb-5 bg-gradient-to-br from-brand-600 to-brand-700 text-white text-center">
             <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-3"><Sparkles size={24} /></div>
             <h2 className="text-xl font-extrabold tracking-tight">Du nouveau sur TalibCRM 👋</h2>
-            <p className="text-sm text-white/85 mt-1">Documents partagés, signature email, campagnes programmables… découvrez les nouveautés.</p>
+            <p className="text-sm text-white/85 mt-1">WhatsApp intégré, documents partagés, campagnes programmables… découvrez les nouveautés.</p>
           </div>
           <div className="p-5 space-y-2.5">
             {FEATURES.map(function (f, i) {
