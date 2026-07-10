@@ -62,6 +62,7 @@ export async function submitMetaTemplate(
     headerText?: string | null;
     footerText?: string | null;
     buttons?: any[] | null;
+    bodyExamples?: string[]; // valeurs d'exemple pour {{1}}, {{2}}… (exigées par Meta)
   }
 ): Promise<{ id: string; status: string }> {
   const integration = await getWhatsAppIntegration(orgId);
@@ -83,10 +84,12 @@ export async function submitMetaTemplate(
     });
   }
 
-  components.push({
-    type: "BODY",
-    text: template.bodyText,
-  });
+  const bodyComponent: any = { type: "BODY", text: template.bodyText };
+  // Meta EXIGE des exemples pour chaque variable {{1}}, {{2}}… sinon rejet.
+  if (template.bodyExamples && template.bodyExamples.length > 0) {
+    bodyComponent.example = { body_text: [template.bodyExamples] };
+  }
+  components.push(bodyComponent);
 
   if (template.footerText) {
     components.push({

@@ -109,7 +109,16 @@ export function TemplatesClient({ templates }: Props) {
       try {
         const result = await submitTemplate(template.id);
         if (!result.ok) { toast.error(result.error || "Soumission échouée", { duration: 8000 }); return; }
-        toast.success(`Soumis à Meta (statut : ${result.status})`);
+        if (result.status === "REJECTED") {
+          toast.error(
+            result.rejectionReason
+              ? `Refusé par Meta : ${result.rejectionReason}`
+              : "Refusé par Meta. Ouvrez WhatsApp Manager → le template pour voir le motif exact.",
+            { duration: 12000 }
+          );
+        } else {
+          toast.success(`Soumis à Meta (statut : ${result.status})`);
+        }
         router.refresh();
       } catch {
         toast.error("Une erreur inattendue est survenue.");

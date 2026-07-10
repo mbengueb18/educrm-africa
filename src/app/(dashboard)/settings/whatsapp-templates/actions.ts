@@ -233,6 +233,13 @@ export async function submitTemplate(templateId: string): Promise<{ ok: boolean;
     // Convertir la syntaxe TalibCRM vers Meta ({{lead.X}} -> {{1}})
     const { metaBody, variableMapping } = convertTemplateForMeta(template.bodyText);
 
+    // Meta exige un exemple par variable → on en génère un plausible par champ.
+    const varCount = Object.keys(variableMapping).length;
+    const bodyExamples: string[] = [];
+    for (let i = 1; i <= varCount; i++) {
+      bodyExamples.push(exampleForVariable(variableMapping[String(i)] || ""));
+    }
+
     let result;
     try {
       result = await submitMetaTemplate(session.user.organizationId, {
@@ -243,6 +250,7 @@ export async function submitTemplate(templateId: string): Promise<{ ok: boolean;
         headerText: template.headerText,
         footerText: template.footerText,
         buttons: template.buttons as any,
+        bodyExamples,
       });
     } catch (err: any) {
       const raw = err?.message || "";
@@ -253,21 +261,50 @@ export async function submitTemplate(templateId: string): Promise<{ ok: boolean;
       return { ok: false, error: `Soumission refusée par Meta : ${raw}` };
     }
 
+    const localStatus = mapMetaStatusToLocal(result.status);
+
+    // Si rejeté, on va chercher le motif exact chez Meta pour l'afficher.
+    let rejectionReason: string | null = null;
+    if (localStatus === "REJECTED") {
+      try {
+        const metaList = await listMetaTemplates(session.user.organizationId);
+        const found = metaList.find(
+          (t) => t.name === template.metaName && t.language === template.language
+        );
+        rejectionReason = found?.rejected_reason || null;
+      } catch {
+        /* motif indisponible, on continue */
+      }
+    }
+
     await prisma.whatsAppTemplate.update({
       where: { id: templateId },
       data: {
-        status: mapMetaStatusToLocal(result.status),
+        status: localStatus,
         metaTemplateId: result.id,
         variableMapping: variableMapping as any,
         submittedAt: new Date(),
+        rejectionReason,
       },
     });
 
     revalidatePath("/settings/whatsapp-templates");
-    return { ok: true, status: result.status };
+    return { ok: true, status: result.status, rejectionReason: rejectionReason || undefined };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Soumission échouée" };
   }
+}
+
+// Génère une valeur d'exemple plausible selon le champ de la variable.
+function exampleForVariable(path: string): string {
+  const field = (path.split(".").pop() || "").toLowerCase();
+  if (field.includes("firstname") || field.includes("prenom")) return "Awa";
+  if (field.includes("lastname") || field.includes("nom")) return "Diop";
+  if (field.includes("email") || field.includes("mail")) return "awa.diop@exemple.com";
+  if (field.includes("phone") || field.includes("tel") || field.includes("whatsapp")) return "+221771234567";
+  if (field.includes("city") || field.includes("ville")) return "Dakar";
+  if (field.includes("program") || field.includes("filiere") || field.includes("formation")) return "Licence Informatique";
+  return "exemple";
 }
 
 // ─── Sync templates from Meta ───
