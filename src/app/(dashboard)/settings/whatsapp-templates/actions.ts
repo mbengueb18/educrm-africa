@@ -215,7 +215,7 @@ export async function updateTemplate(templateId: string, data: {
 }
 
 // ─── Submit template to Meta for approval ───
-export async function submitTemplate(templateId: string): Promise<{ ok: boolean; status?: string; error?: string }> {
+export async function submitTemplate(templateId: string): Promise<{ ok: boolean; status?: string; rejectionReason?: string; error?: string }> {
   try {
     const session = await auth();
     if (!session?.user) return { ok: false, error: "Non authentifié" };
