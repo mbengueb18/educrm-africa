@@ -207,6 +207,7 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
           ].map((tab) => (
             <button
               key={tab.key || "all"}
+              data-tour={tab.key === "WHATSAPP" ? "inbox-whatsapp-tab" : undefined}
               onClick={() => setChannelFilter(tab.key)}
               className={cn(
                 "px-4 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0",

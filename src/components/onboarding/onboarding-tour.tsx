@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone, MessageCircle } from "lucide-react";
+import { Sparkles, X, ArrowRight, ArrowLeft, Check, PlayCircle, FileText, PenLine, Megaphone, MessageCircle, Send, UserPlus } from "lucide-react";
 
 // Bump la version pour re-déclencher l'accueil après de futures nouveautés.
-const SEEN_KEY = "talibcrm_onboarding_v3";
+const SEEN_KEY = "talibcrm_onboarding_v4";
 
 type Step = {
   selector?: string; // élément à surligner (facultatif → bulle centrée)
@@ -18,8 +18,18 @@ type Step = {
 const STEPS: Step[] = [
   {
     selector: 'a[href="/inbox"]', route: "/inbox", icon: MessageCircle,
-    title: "WhatsApp intégré nativement",
-    body: "Connectez votre numéro dans Réglages → WhatsApp : les messages de vos prospects arrivent ici, dans la Boîte de réception. Vous répondez sans quitter le CRM, et chaque conversation crée ou rattache un lead automatiquement.",
+    title: "WhatsApp arrive dans la Boîte de réception",
+    body: "Les messages WhatsApp de vos prospects atterrissent ici, aux côtés des emails. Un seul endroit pour tout suivre — pas besoin d'ouvrir WhatsApp à part.",
+  },
+  {
+    selector: '[data-tour="inbox-whatsapp-tab"]', route: "/inbox", icon: Send,
+    title: "Filtrer et répondre en 1 clic",
+    body: "Cliquez sur l'onglet « WhatsApp » pour n'afficher que ces conversations. Ouvrez-en une, puis répondez directement depuis la zone de saisie en bas : l'échange se poursuit sans jamais quitter le CRM.",
+  },
+  {
+    selector: 'a[href="/pipeline"]', route: "/pipeline", icon: UserPlus,
+    title: "Un lead créé automatiquement",
+    body: "Dès qu'un prospect vous écrit sur WhatsApp, TalibCRM crée un lead (ou le rattache s'il existe déjà) et l'ajoute ici, dans Prospects — avec tout l'historique de la conversation. Aucune saisie manuelle.",
   },
   {
     selector: 'a[href="/documents"]', route: "/documents", icon: FileText,
