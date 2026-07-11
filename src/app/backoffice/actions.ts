@@ -325,6 +325,6 @@ export async function validateContract(id: string) {
     where: { id },
     data: { status: "VALIDE", validatedAt: new Date(), validatedBy: s.name || s.email },
   });
-  revalidatePath("/contrats");
+  revalidatePath("/backoffice/contrats");
   return { success: true };
 }
