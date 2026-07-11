@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { SupportForm } from "@/components/support/support-form";
-import { LifeBuoy, X, PlayCircle } from "lucide-react";
+import { LifeBuoy, X } from "lucide-react";
 
 export function SupportBubble() {
   var [open, setOpen] = useState(false);
@@ -34,16 +34,6 @@ export function SupportBubble() {
               </button>
             </div>
             <div className="p-5 overflow-y-auto">
-              <button
-                onClick={function() { setOpen(false); window.dispatchEvent(new CustomEvent("talibcrm:start-tour")); }}
-                className="w-full flex items-center gap-3 mb-4 px-3 py-2.5 rounded-xl border border-brand-100 bg-brand-50/60 hover:bg-brand-50 text-left transition-colors"
-              >
-                <span className="w-9 h-9 rounded-lg bg-brand-600 text-white flex items-center justify-center shrink-0"><PlayCircle size={18} /></span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-gray-900">Revoir la visite guidée</span>
-                  <span className="block text-xs text-gray-500">Un rappel des nouveautés en quelques clics.</span>
-                </span>
-              </button>
               <SupportForm compact onSuccess={function() { setOpen(false); }} />
             </div>
           </div>

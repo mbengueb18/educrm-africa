@@ -6,7 +6,6 @@ import { PermissionProvider } from "@/components/permission-provider";
 import { SupportBubble } from "@/components/support/support-bubble";
 import { AnalyticsPageView } from "@/components/analytics/analytics-page-view";
 import { CallReturnPrompt } from "@/components/calls/call-return-prompt";
-import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { VerifyEmailBanner } from "@/components/onboarding/verify-email-banner";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { getOnboardingProgress } from "@/lib/onboarding-progress";
@@ -101,7 +100,6 @@ export default async function DashboardLayout({
       </DashboardShell>
       <SupportBubble />
       <CallReturnPrompt />
-      <OnboardingTour userId={session.user.id} />
       <OnboardingChecklist progress={onboardingProgress} />
     </PermissionProvider>
   );
