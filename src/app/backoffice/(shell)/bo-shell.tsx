@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
-import { Building2, Users, LogOut, ShieldCheck } from "lucide-react";
+import { Building2, Users, LogOut, ShieldCheck, FileSignature } from "lucide-react";
 import { boLogout } from "../actions";
 
 const NAV = [
   { label: "Organisations", href: "/", icon: Building2 },
+  { label: "Contrats", href: "/contrats", icon: FileSignature },
   { label: "Admins plateforme", href: "/admins", icon: Users },
 ];
 
