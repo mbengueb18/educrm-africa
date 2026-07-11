@@ -1074,12 +1074,85 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ─── WhatsApp Widget Module ───
+  // Bouton flottant qui ouvre wa.me vers le numéro Cloud API de l'org.
+  // Activable/désactivable depuis Paramètres → Widget WhatsApp (comme le chatbot).
+  function initWhatsAppWidget() {
+    fetch('${baseUrl}/api/widget/whatsapp-config?org=' + ECRM.orgSlug)
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { enabled: false }; })
+      .then(function(config) {
+        if (!config || !config.enabled) return;
+        renderWhatsAppWidget(config);
+      });
+  }
+
+  function renderWhatsAppWidget(config) {
+    // Anti-doublon : si le script autonome /api/widget/whatsapp.js est aussi présent,
+    // le premier qui rend gagne (même flag partagé).
+    if (window.__tcrmWaWidget) return;
+    window.__tcrmWaWidget = true;
+
+    var color = config.color || '#25D366';
+    var isLeft = config.position === 'bottom-left';
+    var side = isLeft ? 'left:24px;' : 'right:24px;';
+    var closeSide = isLeft ? 'right:10px;' : 'left:10px;';
+    var waHref = 'https://wa.me/' + config.number + '?text=' + encodeURIComponent(config.prefill || '');
+    var open = false;
+
+    function esc(text) {
+      var d = document.createElement('div');
+      d.textContent = (text == null ? '' : text);
+      return d.innerHTML;
+    }
+
+    var waIcon = '<svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.2-.6.2-.2.3-.7.9-.8 1-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.2-.6-1.5-.9-2-.2-.5-.4-.4-.6-.5h-.5c-.2 0-.5.1-.7.3-.3.3-1 .9-1 2.3s1 2.7 1.2 2.9c.1.2 2 3.1 5 4.3.7.3 1.2.5 1.7.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3z"/><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2zm0 18.3c-1.5 0-3-.4-4.3-1.2l-.3-.2-2.9.9.9-2.8-.2-.3A8.3 8.3 0 1 1 12 20.3z"/></svg>';
+
+    // Si un chatbot occupe déjà le même coin, on remonte le bouton WhatsApp pour éviter le chevauchement.
+    var chatbotSameSide = !!document.getElementById('_ecrm_chat_bubble');
+    var bubbleBottom = chatbotSameSide ? '96px' : '24px';
+    var cardBottom = chatbotSameSide ? '168px' : '96px';
+
+    var bubble = document.createElement('div');
+    bubble.id = '_tcrm_wa_bubble';
+    bubble.style.cssText = 'position:fixed;bottom:' + bubbleBottom + ';' + side + 'z-index:999996;width:60px;height:60px;border-radius:50%;background:' + color + ';box-shadow:0 6px 20px rgba(0,0,0,0.25);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s;';
+    bubble.innerHTML = waIcon;
+    bubble.onmouseover = function() { bubble.style.transform = 'scale(1.08)'; };
+    bubble.onmouseout = function() { bubble.style.transform = 'scale(1)'; };
+    document.body.appendChild(bubble);
+
+    var card = document.createElement('div');
+    card.id = '_tcrm_wa_card';
+    card.style.cssText = 'position:fixed;bottom:' + cardBottom + ';' + side + 'z-index:999997;width:320px;max-width:calc(100vw - 48px);background:white;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,0.18);display:none;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
+    card.innerHTML =
+      '<div style="position:relative;background:' + color + ';padding:16px 18px;display:flex;gap:12px;align-items:flex-start;">' +
+        '<button id="_tcrm_wa_close" style="position:absolute;top:10px;' + closeSide + 'width:22px;height:22px;border:none;background:rgba(255,255,255,0.25);color:#fff;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;">&times;</button>' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + waIcon + '</div>' +
+        '<div><div style="color:#fff;font-size:15px;font-weight:700;line-height:1.2;">' + esc(config.title) + '</div>' +
+        '<div style="color:rgba(255,255,255,0.92);font-size:12px;margin-top:4px;line-height:1.35;">' + esc(config.welcome) + '</div></div>' +
+      '</div>' +
+      '<div style="padding:10px 14px 14px;">' +
+        (config.replyTime ? '<div style="font-size:11px;color:#9ca3af;padding:6px 2px 10px;">' + esc(config.replyTime) + '</div>' : '') +
+        '<a href="' + waHref + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;border:1px solid #e5e7eb;border-radius:12px;padding:12px;text-decoration:none;">' +
+          '<span style="width:36px;height:36px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + waIcon + '</span>' +
+          '<span style="flex:1;font-size:14px;font-weight:600;color:#1f2937;">WhatsApp</span>' +
+          '<span style="color:#25D366;font-size:20px;line-height:1;">&rsaquo;</span>' +
+        '</a>' +
+      '</div>';
+    document.body.appendChild(card);
+
+    function toggle() { open = !open; card.style.display = open ? 'block' : 'none'; }
+    bubble.onclick = toggle;
+    document.getElementById('_tcrm_wa_close').onclick = function(e) { e.stopPropagation(); toggle(); };
+  }
+
   // ─── Init ───
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { init(); initChatbot(); });
+    document.addEventListener('DOMContentLoaded', function() { init(); initChatbot(); initWhatsAppWidget(); });
   } else {
     init();
     initChatbot();
+    initWhatsAppWidget();
   }
 })();
 `;

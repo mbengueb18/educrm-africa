@@ -220,18 +220,33 @@ export function WhatsAppWidgetClient({
           </button>
         </div>
 
-        {/* Snippet */}
+        {/* Installation */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Installation sur votre site</h3>
+
+          {/* Cas 1 : tracker déjà posé */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
+            <p className="text-xs text-emerald-800">
+              <strong>✅ Vous avez déjà le tracker TalibCRM ?</strong> Rien à installer.
+              Le bouton apparaît (ou disparaît) automatiquement selon le réglage « Activer le widget » ci-dessus —
+              exactement comme le chatbot. Le changement se propage en ~1 minute.
+            </p>
+          </div>
+
+          {/* Cas 2 : pas de tracker */}
+          <p className="text-xs text-gray-600 mb-2">
+            <strong>Site sans le tracker TalibCRM ?</strong> Collez ce script juste avant la balise{" "}
+            <code className="text-gray-700">&lt;/body&gt;</code> :
+          </p>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-900">Code à installer sur votre site</h3>
+            <span className="text-[11px] text-gray-400">Script autonome (optionnel)</span>
             <button onClick={copySnippet} className="text-xs text-brand-600 hover:text-brand-700 flex items-center gap-1">
               <Copy size={13} /> Copier
             </button>
           </div>
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
           <p className="text-[11px] text-gray-500 mt-2">
-            Collez ce script juste avant la balise <code className="text-gray-700">&lt;/body&gt;</code> de votre site.
-            Le bouton n'apparaît que si le widget est activé ci-dessus.
+            Le bouton n'apparaît que si le widget est activé ci-dessus. Inutile de poser ce script si le tracker est déjà présent.
           </p>
         </div>
       </div>
