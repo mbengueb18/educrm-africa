@@ -57,6 +57,7 @@ model Organization {
   workflowExecutions  WorkflowExecution[]
   sequenceConfig      OrganizationSequenceConfig?
   chatbotConfig       ChatbotConfig?
+  whatsappWidgetConfig WhatsAppWidgetConfig?
   visitors            Visitor[]
   sessions            Session[]
   pageViews           PageView[]
@@ -1248,6 +1249,27 @@ model ChatbotConfig {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("chatbot_configs")
+}
+
+// Bouton flottant « Cliquez pour discuter sur WhatsApp » embarqué sur le site
+// de l'école. Réutilise le numéro Cloud API déjà configuré (WhatsAppIntegration).
+// Les réponses des visiteurs remontent automatiquement dans l'inbox via le webhook.
+model WhatsAppWidgetConfig {
+  id               String   @id @default(cuid())
+  organizationId   String   @unique
+  enabled          Boolean  @default(false)
+  title            String   @default("Entamer une conversation")
+  welcomeMessage   String   @default("👋 Bonjour ! Cliquez ici pour échanger avec nous sur WhatsApp.")
+  replyTimeText    String   @default("L'équipe répond généralement en quelques minutes.")
+  prefilledMessage String   @default("Bonjour, je viens de votre site web et j'ai une question.")
+  primaryColor     String   @default("#25D366")
+  position         String   @default("bottom-right") // bottom-right, bottom-left
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_widget_configs")
 }
 
 model LeadPortalToken {

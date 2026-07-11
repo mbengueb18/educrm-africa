@@ -35,6 +35,7 @@ const settingsMenu = [
   { label: "Templates email", description: "Créez vos modèles d'emails réutilisables", icon: Mail, href: "/settings/email-templates" },
   { label: "Domaine email", description: "Envoyez vos emails depuis votre propre domaine", icon: AtSign, href: "/settings/email-domain" },
   { label: "WhatsApp", description: "Connexion à WhatsApp Cloud API", icon: MessageCircle, href: "/settings/whatsapp-integration" },
+  { label: "Widget WhatsApp", description: "Bouton flottant « Discuter sur WhatsApp » sur votre site", icon: MessageCircle, href: "/settings/whatsapp-widget" },
   { label: "Templates WhatsApp", description: "Modèles de messages approuvés par Meta", icon: FileText, href: "/settings/whatsapp-templates" },
   { label: "Workflows", description: "Automatisez vos actions commerciales", icon: Zap, href: "/workflows" },
   { label: "Relances automatiques", description: "Séquences J1/J3/J7 multi-canal pour les leads silencieux", icon: Repeat, href: "/settings/sequences" },
