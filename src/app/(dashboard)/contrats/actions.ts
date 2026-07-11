@@ -3,17 +3,11 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-storage";
-import { buildContractView, buildReference, isContractablePlan, CONTRACTS_BUCKET } from "@/lib/contracts/template";
+import { buildContractView, normalizeContent, CONTRACTS_BUCKET } from "@/lib/contracts/template";
 import type { Plan } from "@/lib/plans/types";
 
-// ── Accès à l'espace Contrats ────────────────────────────────────────────────
-// Point unique de contrôle : seuls ces rôles peuvent consulter / générer /
-// uploader un contrat. (Choix à figer plus tard côté back-office.)
-const CONTRACT_ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN"] as const;
-
-function canManageContracts(role: string): boolean {
-  return (CONTRACT_ADMIN_ROLES as readonly string[]).includes(role);
-}
+// Statuts visibles côté CRM (le BROUILLON reste au back-office).
+const CRM_VISIBLE_STATUSES = ["A_SIGNER", "SIGNE_RECU", "VALIDE"];
 
 function serialize(c: {
   id: string; reference: string; plan: Plan; status: string;
@@ -35,70 +29,59 @@ function serialize(c: {
 }
 
 /**
- * Récupère (ou crée) le contrat de l'organisation courante pour son plan actif.
- * Retourne aussi la vue d'affichage (tarifs / limites) issue de config.ts.
+ * Contrat accessible à l'utilisateur courant : publié (statut visible) par le
+ * back-office ET l'utilisateur figure parmi les personnes désignées. Sinon null.
  */
-export async function getOrCreateContract() {
+export async function getMyContract() {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (!canManageContracts(session.user.role)) {
-    return { allowed: false as const };
-  }
 
-  const org = await prisma.organization.findUnique({
-    where: { id: session.user.organizationId },
-    select: { id: true, name: true, plan: true, billingCycle: true },
-  });
-  if (!org) throw new Error("Organisation introuvable");
-
-  if (!isContractablePlan(org.plan)) {
-    return { allowed: true as const, contractable: false as const, orgName: org.name, plan: org.plan };
-  }
-
-  let contract = await prisma.contract.findFirst({
-    where: { organizationId: org.id, plan: org.plan },
+  const contract = await prisma.contract.findFirst({
+    where: {
+      organizationId: session.user.organizationId,
+      status: { in: CRM_VISIBLE_STATUSES as any },
+      allowedUserIds: { has: session.user.id },
+    },
     orderBy: { createdAt: "desc" },
+    include: { organization: { select: { name: true } } },
   });
 
-  if (!contract) {
-    const seq = (await prisma.contract.count({ where: { plan: org.plan } })) + 1;
-    try {
-      contract = await prisma.contract.create({
-        data: {
-          organizationId: org.id,
-          plan: org.plan,
-          billingCycle: org.billingCycle,
-          reference: buildReference(org.plan, seq),
-          status: "A_SIGNER",
-        },
-      });
-    } catch {
-      // Collision de référence (rare, création concurrente) → on relit.
-      contract = await prisma.contract.findFirst({
-        where: { organizationId: org.id, plan: org.plan },
-        orderBy: { createdAt: "desc" },
-      });
-      if (!contract) throw new Error("Impossible de générer le contrat");
-    }
-  }
+  if (!contract) return { hasAccess: false as const };
 
   return {
-    allowed: true as const,
-    contractable: true as const,
-    orgName: org.name,
+    hasAccess: true as const,
+    orgName: contract.organization.name,
     contract: serialize(contract),
-    view: buildContractView(org.plan),
+    view: buildContractView(contract.plan),
+    content: normalizeContent(contract.content, contract.plan, contract.organization.name),
   };
 }
 
-/** URL signée (1h) pour télécharger le PDF signé de l'org courante. */
+/** Pour la sidebar : l'utilisateur a-t-il un contrat accessible ? */
+export async function hasAccessibleContract(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  const n = await prisma.contract.count({
+    where: {
+      organizationId: session.user.organizationId,
+      status: { in: CRM_VISIBLE_STATUSES as any },
+      allowedUserIds: { has: session.user.id },
+    },
+  });
+  return n > 0;
+}
+
+/** URL signée (1h) pour télécharger le PDF signé — réservé aux utilisateurs désignés. */
 export async function getSignedContractUrl(contractId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
-  if (!canManageContracts(session.user.role)) throw new Error("Accès refusé");
 
   const contract = await prisma.contract.findUnique({ where: { id: contractId } });
-  if (!contract || contract.organizationId !== session.user.organizationId) {
+  if (
+    !contract ||
+    contract.organizationId !== session.user.organizationId ||
+    !contract.allowedUserIds.includes(session.user.id)
+  ) {
     throw new Error("Contrat introuvable");
   }
   if (!contract.signedPath) throw new Error("Aucun contrat signé n'a encore été déposé");

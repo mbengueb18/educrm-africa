@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getTotalUnreadCount } from "@/app/(dashboard)/inbox/actions";
+import { hasAccessibleContract } from "@/app/(dashboard)/contrats/actions";
 import type { Permission } from "@/lib/permissions";
 
 interface NavItem {
@@ -134,12 +135,6 @@ const navItems: NavItem[] = [
 
 const bottomItems = [
   {
-    label: "Contrat",
-    href: "/contrats",
-    icon: FileSignature,
-    permission: "settings:view" as Permission,
-  },
-  {
     label: "Paramètres",
     href: "/settings",
     icon: Settings,
@@ -157,6 +152,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { can } = usePermissions();
   const [inboxUnread, setInboxUnread] = useState(0);
+  const [hasContract, setHasContract] = useState(false);
+
+  // ─── Le lien « Contrat » n'apparaît que si un contrat publié est destiné à l'utilisateur ───
+  useEffect(() => {
+    hasAccessibleContract().then(setHasContract).catch(() => setHasContract(false));
+  }, [pathname]);
 
   // ─── Fetch nombre de messages non lus pour le badge Inbox ───
   const refreshInboxBadge = useCallback(() => {
@@ -302,6 +303,21 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="px-3 py-3 border-t border-white/10 space-y-1">
+        {hasContract && (
+          <Link
+            href="/contrats"
+            onClick={onMobileClose}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+              pathname.startsWith("/contrats")
+                ? "bg-sidebar-active text-sidebar-text-active"
+                : "text-sidebar-text hover:bg-sidebar-hover hover:text-white"
+            )}
+          >
+            <FileSignature size={20} className="shrink-0" />
+            {!collapsed && <span>Contrat</span>}
+          </Link>
+        )}
         {visibleBottomItems.map((item) => (
           <Link
             key={item.href}

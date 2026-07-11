@@ -6,7 +6,15 @@ import { revalidatePath } from "next/cache";
 import { getPlanLimits } from "@/lib/plans/config";
 import { getBoSession, setBoCookie, clearBoCookie, createToken, type BoSession } from "@/lib/bo-auth";
 import { supabaseAdmin } from "@/lib/supabase-storage";
-import { CONTRACTS_BUCKET } from "@/lib/contracts/template";
+import {
+  CONTRACTS_BUCKET,
+  buildDefaultContent,
+  buildReference,
+  isContractablePlan,
+  normalizeContent,
+  buildContractView,
+  type ContractContent,
+} from "@/lib/contracts/template";
 
 const VALID_PLANS = ["ESSENTIEL", "CROISSANCE", "PERFORMANCE"] as const;
 type PlanKey = (typeof VALID_PLANS)[number];
@@ -174,6 +182,7 @@ export async function getContracts() {
     status: c.status,
     orgName: c.organization.name,
     orgSlug: c.organization.slug,
+    allowedCount: c.allowedUserIds.length,
     signedFileName: c.signedFileName,
     signedSize: c.signedSize,
     signedAt: c.signedAt ? c.signedAt.toISOString() : null,
@@ -183,6 +192,116 @@ export async function getContracts() {
     hasFile: !!c.signedPath,
     createdAt: c.createdAt.toISOString(),
   }));
+}
+
+/** Organisations éligibles à un contrat (offres payantes), avec indicateur d'existant. */
+export async function getContractableOrgs() {
+  await requireBo();
+  const orgs = await prisma.organization.findMany({
+    where: { plan: { in: ["CROISSANCE", "PERFORMANCE"] } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, plan: true, _count: { select: { contracts: true } } },
+  });
+  return orgs.map((o) => ({ id: o.id, name: o.name, plan: o.plan, contractCount: o._count.contracts }));
+}
+
+/** Crée un contrat BROUILLON pour une org, pré-rempli depuis le template. */
+export async function createContractForOrg(orgId: string) {
+  await requireBo();
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { id: true, name: true, plan: true, billingCycle: true },
+  });
+  if (!org) throw new Error("Organisation introuvable");
+  if (!isContractablePlan(org.plan)) throw new Error("Cette organisation n'est pas sur une offre payante");
+
+  const seq = (await prisma.contract.count({ where: { plan: org.plan } })) + 1;
+  const content = buildDefaultContent(org.plan, org.name);
+  const created = await prisma.contract.create({
+    data: {
+      organizationId: org.id,
+      plan: org.plan,
+      billingCycle: org.billingCycle,
+      reference: buildReference(org.plan, seq),
+      status: "BROUILLON",
+      content: content as any,
+    },
+  });
+  revalidatePath("/backoffice/contrats");
+  return { id: created.id };
+}
+
+/** Détail d'un contrat pour l'éditeur BO : contenu + utilisateurs de l'org. */
+export async function getContractDetail(id: string) {
+  await requireBo();
+  const c = await prisma.contract.findUnique({
+    where: { id },
+    include: { organization: { select: { name: true } } },
+  });
+  if (!c) throw new Error("Contrat introuvable");
+
+  const users = await prisma.user.findMany({
+    where: { organizationId: c.organizationId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true, role: true, isActive: true },
+  });
+
+  return {
+    id: c.id,
+    reference: c.reference,
+    plan: c.plan,
+    status: c.status,
+    orgName: c.organization.name,
+    content: normalizeContent(c.content, c.plan, c.organization.name),
+    view: buildContractView(c.plan),
+    allowedUserIds: c.allowedUserIds,
+    signedAt: c.signedAt ? c.signedAt.toISOString() : null,
+    validatedAt: c.validatedAt ? c.validatedAt.toISOString() : null,
+    users,
+    locked: c.status === "SIGNE_RECU" || c.status === "VALIDE",
+  };
+}
+
+/** Enregistre le contenu et/ou les utilisateurs désignés (tant que non signé). */
+export async function updateContract(id: string, data: { content?: ContractContent; allowedUserIds?: string[] }) {
+  await requireBo();
+  const c = await prisma.contract.findUnique({ where: { id }, select: { status: true } });
+  if (!c) throw new Error("Contrat introuvable");
+  if (c.status === "SIGNE_RECU" || c.status === "VALIDE") {
+    throw new Error("Contrat signé : contenu et accès ne sont plus modifiables");
+  }
+  await prisma.contract.update({
+    where: { id },
+    data: {
+      ...(data.content !== undefined ? { content: data.content as any } : {}),
+      ...(data.allowedUserIds !== undefined ? { allowedUserIds: data.allowedUserIds } : {}),
+    },
+  });
+  revalidatePath("/backoffice/contrats");
+  return { success: true };
+}
+
+/** Publie le contrat : BROUILLON → A_SIGNER (visible dans le CRM des désignés). */
+export async function publishContract(id: string) {
+  await requireBo();
+  const c = await prisma.contract.findUnique({ where: { id }, select: { status: true, allowedUserIds: true } });
+  if (!c) throw new Error("Contrat introuvable");
+  if (c.status !== "BROUILLON") throw new Error("Seul un brouillon peut être publié");
+  if (c.allowedUserIds.length === 0) throw new Error("Désignez au moins un utilisateur avant de publier");
+  await prisma.contract.update({ where: { id }, data: { status: "A_SIGNER" } });
+  revalidatePath("/backoffice/contrats");
+  return { success: true };
+}
+
+/** Repasse en brouillon (retire du CRM), tant que le contrat n'est pas signé. */
+export async function unpublishContract(id: string) {
+  await requireBo();
+  const c = await prisma.contract.findUnique({ where: { id }, select: { status: true } });
+  if (!c) throw new Error("Contrat introuvable");
+  if (c.status !== "A_SIGNER") throw new Error("Ce contrat ne peut plus repasser en brouillon");
+  await prisma.contract.update({ where: { id }, data: { status: "BROUILLON" } });
+  revalidatePath("/backoffice/contrats");
+  return { success: true };
 }
 
 export async function getBoContractSignedUrl(id: string) {

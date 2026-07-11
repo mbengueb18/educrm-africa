@@ -10,16 +10,12 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_SIZE = 15 * 1024 * 1024; // 15 Mo
-const CONTRACT_ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN"];
 const CONTRACTS_INBOX = "contact@talibcrm.com";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-    if (!CONTRACT_ADMIN_ROLES.includes(session.user.role)) {
-      return NextResponse.json({ error: "Accès réservé aux administrateurs" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -27,8 +23,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       where: { id },
       include: { organization: { select: { name: true } } },
     });
-    if (!contract || contract.organizationId !== session.user.organizationId) {
+    // Réservé aux utilisateurs désignés du contrat (défini au back-office).
+    if (
+      !contract ||
+      contract.organizationId !== session.user.organizationId ||
+      !contract.allowedUserIds.includes(session.user.id)
+    ) {
       return NextResponse.json({ error: "Contrat introuvable" }, { status: 404 });
+    }
+    if (contract.status === "BROUILLON") {
+      return NextResponse.json({ error: "Ce contrat n'est pas encore disponible" }, { status: 409 });
     }
     if (contract.status === "VALIDE") {
       return NextResponse.json({ error: "Ce contrat est déjà validé et ne peut plus être modifié" }, { status: 409 });

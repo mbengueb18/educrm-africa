@@ -94,7 +94,13 @@ model Contract {
   plan           Plan
   billingCycle   BillingCycle?
   reference      String         @unique // ex. TC-CRO-0001
-  status         ContractStatus @default(A_SIGNER)
+  status         ContractStatus @default(BROUILLON)
+
+  // Contenu éditable côté back-office (parties + clauses). Voir lib/contracts/template.ts
+  content Json?
+
+  // Utilisateurs de l'org autorisés à voir le contrat dans le CRM (désignés au back-office)
+  allowedUserIds String[] @default([])
 
   // Fichier signé (renseigné à l'upload)
   signedPath     String? // chemin dans le bucket Supabase
