@@ -521,7 +521,10 @@ export async function deleteLeads(leadIds: string[]) {
 }
 
 // ─── Import leads from CSV data (optimisé) ───
-export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
+export async function importLeadsFromCSV(
+  rows: Array<Record<string, string>>,
+  opts?: { defaultSource?: string; defaultSourceDetail?: string }
+) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
@@ -571,8 +574,22 @@ export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
     "whatsapp": "WHATSAPP", "wa": "WHATSAPP",
     "salon": "SALON", "forum": "SALON",
     "parrainage": "REFERRAL", "referral": "REFERRAL",
+    "appel": "PHONE_CALL", "telephone": "PHONE_CALL", "téléphone": "PHONE_CALL", "phone": "PHONE_CALL", "phone_call": "PHONE_CALL",
+    "visite": "WALK_IN", "walk-in": "WALK_IN", "walk in": "WALK_IN", "porte a porte": "WALK_IN",
+    "radio": "RADIO", "tv": "TV", "television": "TV", "télévision": "TV",
+    "partenaire": "PARTNER", "partner": "PARTNER",
+    "autre": "OTHER", "other": "OTHER",
     "import": "IMPORT",
   };
+
+  // Provenance déclarée pour tout le lot (source du fichier). La colonne « source »
+  // par ligne, si présente, reste prioritaire ; sinon on retombe sur cette provenance.
+  var VALID_SOURCES = new Set([
+    "WEBSITE", "FACEBOOK", "INSTAGRAM", "WHATSAPP", "PHONE_CALL", "WALK_IN",
+    "REFERRAL", "SALON", "RADIO", "TV", "PARTNER", "IMPORT", "OTHER",
+  ]);
+  var batchSource = opts?.defaultSource && VALID_SOURCES.has(opts.defaultSource) ? opts.defaultSource : "IMPORT";
+  var batchDetail = opts?.defaultSourceDetail?.trim() || "";
 
   var created = 0;
   var skipped = 0;
@@ -620,10 +637,10 @@ export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
       if (match) programId = match.id;
     }
 
-    // Source
-    var source = "IMPORT";
+    // Source : colonne par ligne prioritaire, sinon provenance déclarée du lot, sinon Import
+    var source = batchSource;
     if (row.source) {
-      source = sourceMap[row.source.toLowerCase()] || "IMPORT";
+      source = sourceMap[row.source.toLowerCase()] || batchSource;
     }
 
     // Custom fields
@@ -659,7 +676,7 @@ export async function importLeadsFromCSV(rows: Array<Record<string, string>>) {
       whatsapp: whatsappClean,
       city: row.city?.trim() || null,
       source: source as any,
-      sourceDetail: row.sourceDetail?.trim() || "Import CSV",
+      sourceDetail: row.sourceDetail?.trim() || batchDetail || "Import CSV",
       stageId: routing.stageId,
       pipelineId: routing.pipelineId,
       programId,
