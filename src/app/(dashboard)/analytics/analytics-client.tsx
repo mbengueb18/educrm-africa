@@ -8,7 +8,7 @@ import {
   GraduationCap, Phone, ListTodo, AlertTriangle,
   Activity, Target, Filter, Lock,
   CheckCircle2, XCircle, Timer, CalendarDays, Globe2, Repeat,
-  Sparkles, LayoutGrid, ArrowRight, Download,
+  Sparkles, LayoutGrid, ArrowRight, Download, Mail, MessageCircle, Gauge,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -307,6 +307,7 @@ function OverviewTab({ data, kpis, access }: { data: any; kpis: any; access: Rep
 // ═══════════════════════ ONGLET : ACQUISITION ═══════════════════════
 function AcquisitionTab({ data }: { data: any }) {
   return (
+    <div className="flex flex-col gap-4">
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Sources */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -352,12 +353,70 @@ function AcquisitionTab({ data }: { data: any }) {
         <p className="text-xs text-gray-500">Trafic du site, canaux (style GA4), parcours visiteurs et funnel de conversion visiteur → lead → étudiant.</p>
       </Link>
     </div>
+
+    {/* Hub campagnes email + WhatsApp unifié */}
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-700">Performance des campagnes</h3>
+        <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Email + WhatsApp</span>
+      </div>
+      {data.campaignPerf && data.campaignPerf.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-500">
+                <th className="text-left py-2 font-medium">Campagne</th>
+                <th className="text-right py-2 font-medium">Envoyés</th>
+                <th className="text-right py-2 font-medium">Délivrés</th>
+                <th className="text-right py-2 font-medium">Ouverts</th>
+                <th className="text-right py-2 font-medium">Cliqués</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {data.campaignPerf.map(function(c: any) {
+                var isEmail = c.channel === "EMAIL";
+                var openPct = c.delivered > 0 ? Math.round((c.opened / c.delivered) * 100) : 0;
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50/50">
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("w-6 h-6 rounded-md flex items-center justify-center shrink-0", isEmail ? "bg-blue-50" : "bg-emerald-50")}>
+                          {isEmail ? <Mail size={12} className="text-blue-600" /> : <MessageCircle size={12} className="text-emerald-600" />}
+                        </div>
+                        <span className="font-medium text-gray-900 truncate max-w-[220px]">{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.sent.toLocaleString("fr-FR")}</td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.delivered.toLocaleString("fr-FR")}</td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.opened.toLocaleString("fr-FR")} <span className="text-gray-400">({openPct}%)</span></td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.clicked === null ? "—" : c.clicked.toLocaleString("fr-FR")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400 text-center py-8">Aucune campagne envoyée sur la période</p>
+      )}
+    </div>
+    </div>
   );
 }
 
 // ═══════════════════════ ONGLET : PIPELINE ═══════════════════════
 function PipelineTab({ data }: { data: any }) {
+  var kpis = data.kpis;
   return (
+    <div className="flex flex-col gap-4">
+    {/* Vélocité */}
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <KpiCard label="Leads dans le pipeline" value={kpis.pipelineTotal ?? 0} icon={Target} iconColor="text-brand-600" iconBg="bg-brand-50" subLabel="hors perdus / inscrits" />
+      <KpiCard label="Cycle moyen" value={(kpis.avgCycleDays ?? 0) + " j"} icon={Gauge} iconColor="text-purple-600" iconBg="bg-purple-50" subLabel="capture → conversion" />
+      <KpiCard label="RDV planifiés" value={kpis.apptsTotal} icon={CalendarDays} iconColor="text-teal-600" iconBg="bg-teal-50" />
+      <KpiCard label="Taux de présence" value={kpis.apptPresenceRate + "%"} icon={CheckCircle2} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+    </div>
+
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Funnel */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -431,6 +490,7 @@ function PipelineTab({ data }: { data: any }) {
           <p className="text-xs text-gray-400 text-center py-12">Pas de données</p>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -208,6 +208,43 @@ export async function getDashboardData(filters?: {
     });
   }
 
+  // ─── CYCLE MOYEN (capture → conversion) ───
+  var convertedForCycle = await prisma.lead.findMany({
+    where: { ...baseWhere, isConverted: true, convertedAt: { gte: currentStart } },
+    select: { createdAt: true, convertedAt: true },
+  });
+  var cycleTotal = 0, cycleCount = 0;
+  convertedForCycle.forEach(function(l) {
+    if (l.convertedAt) {
+      var days = (new Date(l.convertedAt).getTime() - new Date(l.createdAt).getTime()) / 86_400_000;
+      if (days >= 0) { cycleTotal += days; cycleCount++; }
+    }
+  });
+  var avgCycleDays = cycleCount > 0 ? Math.round((cycleTotal / cycleCount) * 10) / 10 : 0;
+
+  // ─── PERFORMANCE DES CAMPAGNES (email + WhatsApp unifiés) ───
+  var [emailCampaigns, waCampaigns] = await Promise.all([
+    prisma.emailCampaign.findMany({
+      where: { organizationId: orgId, status: "SENT", sentAt: { gte: currentStart } },
+      select: { id: true, name: true, sentCount: true, deliveredCount: true, openedCount: true, clickedCount: true, sentAt: true },
+      orderBy: { sentAt: "desc" }, take: 20,
+    }),
+    prisma.whatsAppCampaign.findMany({
+      where: { organizationId: orgId, sentAt: { gte: currentStart } },
+      select: { id: true, name: true, sentCount: true, deliveredCount: true, readCount: true, sentAt: true },
+      orderBy: { sentAt: "desc" }, take: 20,
+    }),
+  ]);
+
+  var campaignPerf = [
+    ...emailCampaigns.map(function(c) {
+      return { id: c.id, channel: "EMAIL" as const, name: c.name, sent: c.sentCount, delivered: c.deliveredCount, opened: c.openedCount, clicked: c.clickedCount as number | null, sentAt: c.sentAt };
+    }),
+    ...waCampaigns.map(function(c) {
+      return { id: c.id, channel: "WHATSAPP" as const, name: c.name, sent: c.sentCount, delivered: c.deliveredCount, opened: c.readCount, clicked: null as number | null, sentAt: c.sentAt };
+    }),
+  ].sort(function(a, b) { return (b.sentAt?.getTime() || 0) - (a.sentAt?.getTime() || 0); }).slice(0, 12);
+
   // ─── RECENT ACTIVITY ───
   var recentActivities = await prisma.activity.findMany({
     where: { organizationId: orgId },
@@ -242,6 +279,7 @@ export async function getDashboardData(filters?: {
       callsTotal, callsToday, callsThisWeek, callReachRate, avgDuration,
       apptsTotal, apptsToday, apptsThisWeek, apptsCompleted, apptsNoShow, apptPresenceRate,
       tasksOpen, tasksOverdue,
+      avgCycleDays, pipelineTotal: totalInPipeline,
     },
     leadsTimeline,
     callsByDay,
@@ -249,6 +287,7 @@ export async function getDashboardData(filters?: {
     leadsBySource,
     leadsByProgram,
     commercialPerf,
+    campaignPerf,
     recentActivities,
     filterOptions: { users, campuses },
   };
