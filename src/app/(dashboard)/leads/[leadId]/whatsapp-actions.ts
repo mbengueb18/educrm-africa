@@ -4,13 +4,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendWhatsAppTemplate, sendWhatsAppText } from "@/lib/whatsapp";
+import { resolveVariablesFromLead } from "@/lib/whatsapp/send";
 import { assertCanAccessFeature } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
 
 interface SendTemplateInput {
   leadId: string;
-  templateName: string;
-  languageCode: string;
+  templateId?: string;      // Template approuvé sélectionné (résolu serveur-side)
+  templateName?: string;    // Fallback direct (ex. hello_world de test)
+  languageCode?: string;
   parameters?: string[];
 }
 
@@ -25,14 +27,7 @@ export async function sendWhatsAppToLead(input: SendTemplateInput | SendTextInpu
 
   const lead = await prisma.lead.findUnique({
     where: { id: input.leadId },
-    select: {
-      id: true,
-      organizationId: true,
-      firstName: true,
-      lastName: true,
-      whatsapp: true,
-      phone: true,
-    },
+    include: { program: { select: { name: true } } },
   });
 
   if (!lead) throw new Error("Lead introuvable");
@@ -59,22 +54,40 @@ export async function sendWhatsAppToLead(input: SendTemplateInput | SendTextInpu
   let result;
   let content: string;
 
-  if ("templateName" in input) {
-    result = await sendWhatsAppTemplate({
-      organizationId: lead.organizationId,
-      toPhoneNumber: targetNumber,
-      templateName: input.templateName,
-      languageCode: input.languageCode,
-      parameters: input.parameters,
-    });
-    content = `[Template: ${input.templateName}${input.parameters?.length ? " · " + input.parameters.join(", ") : ""}]`;
-  } else {
+  if ("text" in input) {
     result = await sendWhatsAppText({
       organizationId: lead.organizationId,
       toPhoneNumber: targetNumber,
       text: input.text,
     });
     content = input.text;
+  } else {
+    let templateName = input.templateName || "";
+    let languageCode = input.languageCode || "en_US";
+    let parameters = input.parameters || [];
+
+    // Template choisi dans la liste : on résout nom/langue + variables depuis la DB et le lead.
+    if (input.templateId) {
+      const tpl = await prisma.whatsAppTemplate.findFirst({
+        where: { id: input.templateId, organizationId: lead.organizationId },
+        select: { metaName: true, language: true, bodyText: true, variableMapping: true },
+      });
+      if (!tpl) throw new Error("Template introuvable");
+      templateName = tpl.metaName;
+      languageCode = tpl.language;
+      parameters = resolveVariablesFromLead(tpl.bodyText, tpl.variableMapping as any, lead);
+    }
+
+    if (!templateName) throw new Error("Aucun template sélectionné");
+
+    result = await sendWhatsAppTemplate({
+      organizationId: lead.organizationId,
+      toPhoneNumber: targetNumber,
+      templateName,
+      languageCode,
+      parameters,
+    });
+    content = `[Template: ${templateName}${parameters.length ? " · " + parameters.join(", ") : ""}]`;
   }
 
   if (!result.success) {
