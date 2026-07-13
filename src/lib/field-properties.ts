@@ -37,7 +37,7 @@ const SYSTEM_FIELDS: Omit<FieldProperty, "fillCount" | "totalLeads" | "fillRate"
   { key: "campusId", label: "Campus", group: "formation", type: "select", source: "system", isEditable: false, showInCard: false, showInList: true, mappedFormFields: ["campus", "campusCity", "campus_choix"] },
   { key: "stageId", label: "Étape pipeline", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: [] },
   { key: "score", label: "Score", group: "pipeline", type: "number", source: "system", isEditable: false, showInCard: true, showInList: true, mappedFormFields: [] },
-  { key: "assignedToId", label: "Commercial assigne", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: false, mappedFormFields: [] },
+  { key: "assignedToId", label: "Conseiller assigne", group: "pipeline", type: "select", source: "system", isEditable: false, showInCard: true, showInList: false, mappedFormFields: [] },
 ];
 
 export async function getAllFieldProperties(): Promise<{

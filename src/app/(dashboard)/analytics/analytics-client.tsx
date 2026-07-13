@@ -169,7 +169,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
+              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
               <select value={filterUser} onChange={function(e) { handleFilterChange(undefined, e.target.value); }} className="input text-sm py-1.5">
                 <option value="">Tous</option>
                 <option value={currentUserId}>Mes données</option>
@@ -512,13 +512,13 @@ function PipelineTab({ data }: { data: any }) {
 function TeamTab({ data }: { data: any }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Performance commerciale</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Performance des conseillers</h3>
       {data.commercialPerf.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-2 text-gray-500 font-medium">Commercial</th>
+                <th className="text-left py-2 text-gray-500 font-medium">Conseiller</th>
                 <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Portefeuille</th>
                 <th className="text-center py-2 text-gray-500 font-medium">Convertis</th>
                 <th className="text-center py-2 text-gray-500 font-medium">Taux</th>
@@ -556,11 +556,11 @@ function TeamTab({ data }: { data: any }) {
           </table>
         </div>
       ) : (
-        <p className="text-xs text-gray-400 text-center py-8">Aucun commercial</p>
+        <p className="text-xs text-gray-400 text-center py-8">Aucun conseiller</p>
       )}
       {data.unattributedConverted > 0 && (
         <p className="text-[11px] text-gray-400 mt-3 pt-3 border-t border-gray-100">
-          {data.unattributedConverted} conversion{data.unattributedConverted > 1 ? "s" : ""} de la période non attribuée{data.unattributedConverted > 1 ? "s" : ""} à un commercial (leads importés ou non assignés) — d'où l'écart avec le KPI « Convertis ».
+          {data.unattributedConverted} conversion{data.unattributedConverted > 1 ? "s" : ""} de la période non attribuée{data.unattributedConverted > 1 ? "s" : ""} à un conseiller (leads importés ou non assignés) — d'où l'écart avec le KPI « Convertis ».
         </p>
       )}
     </div>

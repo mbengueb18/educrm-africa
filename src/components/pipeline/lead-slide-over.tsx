@@ -704,7 +704,7 @@ function InfoTab({ lead, customFieldsConfig, stages, users, programs, campuses, 
       </Section>
 
       {!editMode && lead.assignedTo && (
-        <Section title="Commercial assigné">
+        <Section title="Conseiller assigné">
           <div className="flex items-center gap-3 py-1">
             <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center shrink-0">
               {getInitials(lead.assignedTo.name)}

@@ -245,7 +245,7 @@ export function KanbanBoard({
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
+              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
               <select value={filterAssigned} onChange={(e) => setFilterAssigned(e.target.value)} className="input text-sm py-1.5">
                 <option value="">Tous</option>
                 <option value="unassigned">Non assigné</option>

@@ -421,7 +421,7 @@ export async function exportLeadsInSequenceCSV() {
   // CSV header
   const headers = [
     "Prénom", "Nom", "Email", "Téléphone", "Date création", "Étape",
-    "Commercial", "Étapes exécutées", "Dernière étape", "Date dernière étape",
+    "Conseiller", "Étapes exécutées", "Dernière étape", "Date dernière étape",
     "A répondu", "Date 1ère réponse",
   ];
 

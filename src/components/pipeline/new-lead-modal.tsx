@@ -167,7 +167,7 @@ export function NewLeadModal({ open, onClose, programs = [], users = [], canAssi
                 )}
                 {canAssign && users.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Commercial assigné</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Conseiller assigné</label>
                     <select name="assignedToId" className="input">
                       <option value="">Moi-même (par défaut)</option>
                       {users.map((u) => (

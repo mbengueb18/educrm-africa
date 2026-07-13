@@ -79,7 +79,7 @@ const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "whatsapp", label: "WhatsApp", group: "Contact" },
   { key: "stage", label: "Étape", group: "Pipeline" },
   { key: "score", label: "Score", group: "Pipeline" },
-  { key: "assignedTo", label: "Commercial", group: "Pipeline" },
+  { key: "assignedTo", label: "Conseiller", group: "Pipeline" },
   { key: "source", label: "Source", group: "Acquisition" },
   { key: "program", label: "Filière", group: "Formation" },
   { key: "createdAt", label: "Date création", group: "Dates" },
@@ -536,7 +536,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
+              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
               <select value={filterAssigned} onChange={(e) => setFilterAssigned(e.target.value)} className="input text-sm py-1.5">
                 <option value="">Tous</option>
                 <option value="unassigned">Non assigne</option>

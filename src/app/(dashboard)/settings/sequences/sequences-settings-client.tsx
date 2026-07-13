@@ -36,8 +36,8 @@ const CHANNEL_COLORS: Record<string, string> = {
 
 const CHANNEL_LABELS: Record<string, string> = {
   EMAIL: "Email automatique",
-  WHATSAPP_TASK: "Tâche WhatsApp (commercial)",
-  CALL_TASK: "Tâche d'appel (commercial)",
+  WHATSAPP_TASK: "Tâche WhatsApp (conseiller)",
+  CALL_TASK: "Tâche d'appel (conseiller)",
   AUTO_LOST: "Marquage automatique",
 };
 
