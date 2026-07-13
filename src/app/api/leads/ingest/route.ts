@@ -169,6 +169,16 @@ function classifyTrafficSource(data: Record<string, any>): {
   var msclkid = data.msclkid || data._msclkid || "";
   var ttclid = data.ttclid || data._ttclid || "";
 
+  // 0. Ignorer les self-referrals (referrer du même domaine que la page du formulaire) :
+  // une navigation interne ne doit pas être classée comme « referral externe ».
+  if (referrer) {
+    try {
+      var pageHost = new URL(data._pageUrl || "").hostname.replace(/^www\./, "").toLowerCase();
+      var refHost = new URL(referrer.startsWith("http") ? referrer : "https://" + referrer).hostname.replace(/^www\./, "").toLowerCase();
+      if (pageHost && refHost === pageHost) referrer = "";
+    } catch {}
+  }
+
   // 1. Paid ads (click IDs take priority)
   if (gclid) {
     return { channel: "SEA", source: "Google Ads", medium: "cpc", detail: utmCampaign || "Google Ads (gclid)" };
