@@ -78,9 +78,11 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     reportingDateFilters: false,
     reportingAdvancedFilters: false,
     reportingCustomReports: false,
+    reportingCustomReportsMax: 0,
     reportingExportExcelPdf: false,
     reportingScheduledExport: false,
     reportingPeriodComparison: false,
+    reportingAI: false,
 
     // Lead Scoring
     manualScoring: true,
@@ -170,13 +172,15 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     workflowReportingLevel: "BASIC",
 
     // Reporting
-    reportingLevel: "STANDARD",
+    reportingLevel: "ADVANCED",
     reportingDateFilters: true,
     reportingAdvancedFilters: true,
-    reportingCustomReports: false,
+    reportingCustomReports: true,
+    reportingCustomReportsMax: 3,
     reportingExportExcelPdf: true,
     reportingScheduledExport: false,
-    reportingPeriodComparison: false,
+    reportingPeriodComparison: true,
+    reportingAI: false,
 
     // Lead Scoring
     manualScoring: true,
@@ -270,9 +274,11 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     reportingDateFilters: true,
     reportingAdvancedFilters: true,
     reportingCustomReports: true,
+    reportingCustomReportsMax: 10,
     reportingExportExcelPdf: true,
     reportingScheduledExport: true,
     reportingPeriodComparison: true,
+    reportingAI: true,
 
     // Lead Scoring
     manualScoring: true,

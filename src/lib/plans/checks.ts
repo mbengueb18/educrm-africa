@@ -313,6 +313,7 @@ export async function canAccessFeature(
     REPORTING_EXPORT_DATA: limits.reportingExportExcelPdf,
     REPORTING_SCHEDULED_EXPORT: limits.reportingScheduledExport,
     REPORTING_PERIOD_COMPARISON: limits.reportingPeriodComparison,
+    REPORTING_AI: limits.reportingAI,
     // Lead Scoring
     AUTO_LEAD_SCORING: limits.autoScoring,
     HOT_WARM_COLD_AUTO: limits.hotWarmColdAuto,

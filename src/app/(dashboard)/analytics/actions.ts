@@ -154,19 +154,39 @@ export async function getDashboardData(filters?: {
     select: { id: true, name: true },
   });
 
-  var commercialPerf = await Promise.all(
-    commercials.map(async function(user) {
-      var [assigned, converted, calls, appointments, tasks] = await Promise.all([
-        prisma.lead.count({ where: { organizationId: orgId, assignedToId: user.id, isConverted: false } }),
-        prisma.lead.count({ where: { organizationId: orgId, assignedToId: user.id, isConverted: true, convertedAt: { gte: currentStart } } }),
-        prisma.call.count({ where: { organizationId: orgId, calledById: user.id, calledAt: { gte: currentStart } } }),
-        prisma.appointment.count({ where: { organizationId: orgId, assignedToId: user.id, startAt: { gte: currentStart } } }),
-        prisma.task.count({ where: { organizationId: orgId, assignedToId: user.id, status: { in: ["TODO", "IN_PROGRESS"] } } }),
-      ]);
-      var convRate = (assigned + converted) > 0 ? Math.round((converted / (assigned + converted)) * 100) : 0;
-      return { id: user.id, name: user.name, assigned, converted, calls, appointments, tasks, convRate };
-    })
-  );
+  // Agrégations groupées (une requête par métrique, au lieu de 5 × N commerciaux)
+  var commercialIds = commercials.map(function(u) { return u.id; });
+  var [assignedGrouped, convertedGrouped, callsGrouped, apptsGrouped, tasksGrouped] = await Promise.all([
+    prisma.lead.groupBy({ by: ["assignedToId"], where: { organizationId: orgId, assignedToId: { in: commercialIds }, isConverted: false }, _count: { id: true } }),
+    prisma.lead.groupBy({ by: ["assignedToId"], where: { organizationId: orgId, assignedToId: { in: commercialIds }, isConverted: true, convertedAt: { gte: currentStart } }, _count: { id: true } }),
+    prisma.call.groupBy({ by: ["calledById"], where: { organizationId: orgId, calledById: { in: commercialIds }, calledAt: { gte: currentStart } }, _count: { id: true } }),
+    prisma.appointment.groupBy({ by: ["assignedToId"], where: { organizationId: orgId, assignedToId: { in: commercialIds }, startAt: { gte: currentStart } }, _count: { id: true } }),
+    prisma.task.groupBy({ by: ["assignedToId"], where: { organizationId: orgId, assignedToId: { in: commercialIds }, status: { in: ["TODO", "IN_PROGRESS"] } }, _count: { id: true } }),
+  ]);
+
+  var countBy = function(rows: any[], key: string): Record<string, number> {
+    var m: Record<string, number> = {};
+    rows.forEach(function(r) { if (r[key]) m[r[key]] = r._count.id; });
+    return m;
+  };
+  var assignedMap = countBy(assignedGrouped, "assignedToId");
+  var convertedMap = countBy(convertedGrouped, "assignedToId");
+  var callsMap = countBy(callsGrouped, "calledById");
+  var apptsMap = countBy(apptsGrouped, "assignedToId");
+  var tasksMap = countBy(tasksGrouped, "assignedToId");
+
+  var commercialPerf = commercials.map(function(user) {
+    var assigned = assignedMap[user.id] || 0;
+    var converted = convertedMap[user.id] || 0;
+    var convRate = (assigned + converted) > 0 ? Math.round((converted / (assigned + converted)) * 100) : 0;
+    return {
+      id: user.id, name: user.name, assigned, converted,
+      calls: callsMap[user.id] || 0,
+      appointments: apptsMap[user.id] || 0,
+      tasks: tasksMap[user.id] || 0,
+      convRate,
+    };
+  });
 
   commercialPerf.sort(function(a, b) { return b.converted - a.converted; });
 

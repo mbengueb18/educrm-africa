@@ -41,6 +41,7 @@ export type Feature =
   | "REPORTING_EXPORT_DATA"
   | "REPORTING_SCHEDULED_EXPORT"
   | "REPORTING_PERIOD_COMPARISON"
+  | "REPORTING_AI"
   // Lead Scoring
   | "AUTO_LEAD_SCORING"
   | "HOT_WARM_COLD_AUTO"
@@ -121,10 +122,12 @@ export interface PlanLimits {
   reportingLevel: ReportingLevel;
   reportingDateFilters: boolean;
   reportingAdvancedFilters: boolean;
-  reportingCustomReports: boolean;
+  reportingCustomReports: boolean; // true dès qu'au moins 1 rapport custom est autorisé
+  reportingCustomReportsMax: number; // Nombre de rapports personnalisés (0 = aucun)
   reportingExportExcelPdf: boolean;
   reportingScheduledExport: boolean;
   reportingPeriodComparison: boolean;
+  reportingAI: boolean; // Analyste IA (langage naturel + insights auto)
 
   // Lead Scoring
   manualScoring: boolean;
