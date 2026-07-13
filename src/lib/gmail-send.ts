@@ -92,7 +92,16 @@ export async function sendViaGmail(params: GmailSendParams): Promise<GmailSendRe
 
   var accessToken = await getValidAccessToken(integration);
   if (!accessToken) {
-    return { success: false, error: "Impossible de rafraîchir le token Gmail (reconnexion nécessaire)" };
+    // Refresh token révoqué/expiré (typique d'un écran OAuth en mode « Test » : 7 jours).
+    // On désactive l'intégration pour que l'UI invite clairement à reconnecter.
+    try {
+      await prisma.userIntegration.update({ where: { id: integration.id }, data: { isActive: false } });
+    } catch {}
+    return {
+      success: false,
+      notConnected: true,
+      error: "Connexion Gmail expirée (token non renouvelable). Reconnectez votre boîte Gmail dans Paramètres → Intégrations.",
+    };
   }
 
   var fromEmail = integration.accountEmail || "";
@@ -175,8 +184,34 @@ export async function sendViaGmail(params: GmailSendParams): Promise<GmailSendRe
 
   if (!res.ok) {
     var errText = await res.text();
-    console.error("[Gmail] Send failed", errText);
-    return { success: false, fromEmail, error: "Échec de l'envoi via Gmail" };
+    console.error("[Gmail] Send failed", res.status, errText);
+
+    // Extraire un message lisible renvoyé par Google (au lieu d'un message générique opaque).
+    var reason = "";
+    try {
+      var ej = JSON.parse(errText);
+      reason = ej?.error?.message || ej?.error_description || (typeof ej?.error === "string" ? ej.error : "") || "";
+    } catch {}
+
+    // 401/403 = autorisation invalide (token révoqué, scope gmail.send manquant, consentement expiré).
+    // On désactive l'intégration → l'UI invite à reconnecter, et on l'explique.
+    if (res.status === 401 || res.status === 403) {
+      try {
+        await prisma.userIntegration.update({ where: { id: integration.id }, data: { isActive: false } });
+      } catch {}
+      return {
+        success: false,
+        fromEmail,
+        notConnected: true,
+        error: "Connexion Gmail expirée ou refusée" + (reason ? " (" + reason + ")" : "") + ". Reconnectez votre boîte Gmail dans Paramètres → Intégrations.",
+      };
+    }
+
+    return {
+      success: false,
+      fromEmail,
+      error: "Échec de l'envoi via Gmail" + (reason ? " : " + reason : "") + " (HTTP " + res.status + ").",
+    };
   }
 
   var result = await res.json();

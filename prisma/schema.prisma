@@ -69,6 +69,7 @@ model Organization {
   emailDomain         OrgEmailDomain?
   planChangeLogs      PlanChangeLog[]
   contracts           Contract[]
+  reportingGoals      ReportingGoal[]
 
   @@map("organizations")
 }
@@ -716,6 +717,29 @@ enum PaymentStatus {
   OVERDUE
   CANCELLED
   REFUNDED
+}
+
+// ─── OBJECTIFS DE REPORTING (objectifs de rentrée) ───
+// Cibles chiffrées sur une période (campagne de rentrée) affichées en jauges
+// dans le hub Reporting. Une org peut définir plusieurs objectifs ; l'objectif
+// « actif » est celui dont la période englobe la date du jour (sinon le plus récent).
+model ReportingGoal {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  label                String // ex. « Rentrée 2026–2027 »
+  startDate            DateTime
+  endDate              DateTime
+  targetEnrollments    Int      @default(0) // nouvelles inscriptions visées
+  targetLeads          Int      @default(0) // leads à générer
+  targetConversionRate Float? // taux de conversion cible (%)
+  createdById          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("reporting_goals")
 }
 
 // ─── COMMUNICATION ───

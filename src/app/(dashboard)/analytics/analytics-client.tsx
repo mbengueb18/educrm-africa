@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import {
@@ -9,6 +10,7 @@ import {
   Activity, Target, Filter, Lock,
   CheckCircle2, XCircle, Timer, CalendarDays, Globe2, Repeat,
   Sparkles, LayoutGrid, ArrowRight, Download, Mail, MessageCircle, Gauge,
+  Flag, Pencil, Plus, X,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -16,6 +18,8 @@ import {
 } from "recharts";
 import { getDashboardData } from "./actions";
 import type { ReportingAccess } from "./access";
+import type { GoalProgress } from "./goals";
+import { saveReportingGoal } from "./goals";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -77,9 +81,10 @@ interface AnalyticsClientProps {
   userName: string;
   currentUserId: string;
   access: ReportingAccess;
+  goalData: GoalProgress;
 }
 
-export function AnalyticsClient({ data: initialData, userName, currentUserId, access }: AnalyticsClientProps) {
+export function AnalyticsClient({ data: initialData, userName, currentUserId, access, goalData }: AnalyticsClientProps) {
   var [data, setData] = useState(initialData);
   var [period, setPeriod] = useState(data.period || "30d");
   var [filterUser, setFilterUser] = useState("");
@@ -209,7 +214,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
       {!tabEnabled(tab) ? (
         <UpsellPanel tab={tab} access={access} />
       ) : tab === "overview" ? (
-        <OverviewTab data={data} kpis={kpis} access={access} />
+        <OverviewTab data={data} kpis={kpis} access={access} goalData={goalData} />
       ) : tab === "acquisition" ? (
         <AcquisitionTab data={data} />
       ) : tab === "pipeline" ? (
@@ -227,11 +232,173 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
   );
 }
 
+// ═══════════════════════ OBJECTIFS DE RENTRÉE ═══════════════════════
+function formatGoalRange(start: string, end: string): string {
+  var opt: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
+  return new Date(start).toLocaleDateString("fr-FR", opt) + " → " + new Date(end).toLocaleDateString("fr-FR", opt);
+}
+
+function ObjectivesSection({ goalData }: { goalData: GoalProgress }) {
+  var router = useRouter();
+  var [editing, setEditing] = useState(false);
+  var goal = goalData.goal;
+  var progress = goalData.progress;
+
+  var onSaved = function() { setEditing(false); router.refresh(); };
+
+  if (!goal) {
+    if (!goalData.canEdit) return null;
+    return (
+      <>
+        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-5 mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center"><Flag size={20} className="text-brand-600" /></div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Objectifs de rentrée</h3>
+              <p className="text-xs text-gray-500">Fixez des cibles d'inscriptions et de leads pour suivre votre campagne.</p>
+            </div>
+          </div>
+          <button onClick={function() { setEditing(true); }} className="btn-primary text-xs"><Plus size={14} /> Définir un objectif</button>
+        </div>
+        {editing && <GoalEditor goal={null} onClose={function() { setEditing(false); }} onSaved={onSaved} />}
+      </>
+    );
+  }
+
+  var convTarget = goal.targetConversionRate;
+  var convPct = convTarget && convTarget > 0 ? Math.min(100, Math.round((progress!.conversionRate / convTarget) * 100)) : 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Flag size={16} className="text-brand-600" />
+            <h3 className="text-sm font-semibold text-gray-900">{goal.label}</h3>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {formatGoalRange(goal.startDate, goal.endDate)}
+            {goalData.daysLeft !== null && goalData.daysLeft > 0 ? " — " + goalData.daysLeft + " jours restants" : ""}
+          </p>
+        </div>
+        {goalData.canEdit && (
+          <button onClick={function() { setEditing(true); }} className="btn-secondary text-xs py-1.5"><Pencil size={13} /> Modifier</button>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <GoalGauge label="Nouvelles inscriptions" now={progress!.enrollments} target={goal.targetEnrollments} color="#2E86C1" />
+        <GoalGauge label="Leads générés" now={progress!.leads} target={goal.targetLeads} color="#27AE60" />
+        <GoalGauge label="Taux de conversion" now={progress!.conversionRate} target={convTarget ?? 0} color="#F39C12" suffix=" %" pctOverride={convTarget ? convPct : null} noTarget={!convTarget} />
+      </div>
+      {editing && <GoalEditor goal={goal} onClose={function() { setEditing(false); }} onSaved={onSaved} />}
+    </div>
+  );
+}
+
+function GoalGauge({ label, now, target, color, suffix, pctOverride, noTarget }: {
+  label: string; now: number; target: number; color: string; suffix?: string; pctOverride?: number | null; noTarget?: boolean;
+}) {
+  var pct = pctOverride != null ? pctOverride : (target > 0 ? Math.min(100, Math.round((now / target) * 100)) : 0);
+  var fmt = function(n: number) { return n.toLocaleString("fr-FR", { maximumFractionDigits: 2 }); };
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-xs text-gray-500">{label}</span>
+        {!noTarget && <span className="text-[10px] font-semibold text-gray-400">{pct}%</span>}
+      </div>
+      <div className="flex items-baseline gap-1.5 mb-2">
+        <span className="text-xl font-bold text-gray-900">{fmt(now)}{suffix || ""}</span>
+        {noTarget ? <span className="text-xs text-gray-400">cible non définie</span> : <span className="text-xs text-gray-400">/ {fmt(target)}{suffix || ""}</span>}
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: pct + "%", backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; onClose: () => void; onSaved: () => void }) {
+  var [label, setLabel] = useState(goal?.label ?? "Rentrée 2026–2027");
+  var [startDate, setStartDate] = useState(goal ? goal.startDate.slice(0, 10) : "");
+  var [endDate, setEndDate] = useState(goal ? goal.endDate.slice(0, 10) : "");
+  var [enrollments, setEnrollments] = useState(String(goal?.targetEnrollments ?? ""));
+  var [leads, setLeads] = useState(String(goal?.targetLeads ?? ""));
+  var [convRate, setConvRate] = useState(goal?.targetConversionRate != null ? String(goal.targetConversionRate) : "");
+  var [error, setError] = useState("");
+  var [pending, startTransition] = useTransition();
+
+  var submit = function() {
+    setError("");
+    startTransition(async function() {
+      var res = await saveReportingGoal({
+        id: goal?.id,
+        label: label,
+        startDate: startDate,
+        endDate: endDate,
+        targetEnrollments: Number(enrollments) || 0,
+        targetLeads: Number(leads) || 0,
+        targetConversionRate: convRate === "" ? null : Number(convRate),
+      });
+      if (res.ok) onSaved();
+      else setError(res.error || "Erreur");
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-scale-in" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gray-900">{goal ? "Modifier l'objectif" : "Nouvel objectif de rentrée"}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Libellé</label>
+            <input value={label} onChange={function(e) { setLabel(e.target.value); }} className="input text-sm" placeholder="Rentrée 2026–2027" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Début</label>
+              <input type="date" value={startDate} onChange={function(e) { setStartDate(e.target.value); }} className="input text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Fin</label>
+              <input type="date" value={endDate} onChange={function(e) { setEndDate(e.target.value); }} className="input text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Inscriptions visées</label>
+              <input type="number" min="0" value={enrollments} onChange={function(e) { setEnrollments(e.target.value); }} className="input text-sm" placeholder="450" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Leads visés</label>
+              <input type="number" min="0" value={leads} onChange={function(e) { setLeads(e.target.value); }} className="input text-sm" placeholder="3000" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Taux de conversion cible (%) — optionnel</label>
+            <input type="number" min="0" max="100" step="0.1" value={convRate} onChange={function(e) { setConvRate(e.target.value); }} className="input text-sm" placeholder="15" />
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
+          <button onClick={submit} disabled={pending} className="btn-primary text-sm">{pending ? "Enregistrement…" : "Enregistrer"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════ ONGLET : VUE D'ENSEMBLE ═══════════════════════
-function OverviewTab({ data, kpis, access }: { data: any; kpis: any; access: ReportingAccess }) {
+function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; access: ReportingAccess; goalData: GoalProgress }) {
   var cmp = access.periodComparison;
   return (
     <div>
+      {/* Objectifs de rentrée */}
+      {access.objectives && <ObjectivesSection goalData={goalData} />}
+
       {/* Main KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={cmp ? kpis.leadsGrowth : undefined} prev={cmp ? kpis.leadsPreviousPeriod : undefined} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
