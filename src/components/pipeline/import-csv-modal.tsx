@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   X, Upload, FileSpreadsheet, ArrowRight, ArrowLeft,
-  Check, AlertCircle, Loader2, Zap, Eye, Users, Plus,
+  Check, AlertCircle, Loader2, Zap, Eye, Users, Plus, MapPin, Info,
 } from "lucide-react";
 import { importLeadsFromCSV } from "@/app/(dashboard)/pipeline/actions";
 import { createAudienceFromImport } from "@/app/(dashboard)/audiences/actions";
@@ -107,6 +107,23 @@ function parseCSVText(text: string, sep: string): string[][] {
   });
 }
 
+// Provenance déclarée pour tout le lot (label affiché → valeur de l'enum LeadSource).
+var PROVENANCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "FACEBOOK", label: "Facebook" },
+  { value: "INSTAGRAM", label: "Instagram" },
+  { value: "WHATSAPP", label: "WhatsApp" },
+  { value: "WEBSITE", label: "Site web" },
+  { value: "SALON", label: "Salon" },
+  { value: "REFERRAL", label: "Parrainage" },
+  { value: "PHONE_CALL", label: "Appel téléphonique" },
+  { value: "WALK_IN", label: "Visite spontanée" },
+  { value: "RADIO", label: "Radio" },
+  { value: "TV", label: "TV" },
+  { value: "PARTNER", label: "Partenaire" },
+  { value: "IMPORT", label: "Import (générique)" },
+  { value: "OTHER", label: "Autre" },
+];
+
 export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSVModalProps) {
 
   // ─── Build CRM fields from dynamic properties or fallback ───
@@ -194,6 +211,9 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   var [newFieldType, setNewFieldType] = useState<"text" | "number" | "date" | "email" | "phone" | "select">("text");
   var [creatingField, setCreatingField] = useState(false);
   var [isExcelFile, setIsExcelFile] = useState(false);
+  // Provenance du lot (obligatoire avant import)
+  var [provenanceSource, setProvenanceSource] = useState("");
+  var [provenanceDetail, setProvenanceDetail] = useState("");
   var fileInputRef = useRef<HTMLInputElement>(null);
 
   // Traitement commun : transforme allRows (headers + données) en colonnes mappables
@@ -411,7 +431,10 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
       console.log("[IMPORT] 3 premières lignes:", rows.slice(0, 3));
       console.log("[IMPORT] Téléphones des 10 premières:", rows.slice(0, 10).map(function(r) { return r.phone; }));
 
-      var res: any = await importLeadsFromCSV(rows);
+      var res: any = await importLeadsFromCSV(rows, {
+        defaultSource: provenanceSource || undefined,
+        defaultSourceDetail: provenanceDetail.trim() || undefined,
+      });
 
       // Création optionnelle d'une audience à partir des leads importés
       var audienceData: { audienceId?: string; audienceName?: string } = {};
@@ -444,6 +467,7 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
   var resetAndClose = function(imported?: boolean) {
     setStep(1); setFile(null); setRawText(""); setColumns([]); setDataRows([]); setResult(null);
     setCreateAudience(false); setAudienceName("");
+    setProvenanceSource(""); setProvenanceDetail("");
     onClose(imported);
   };
 
@@ -722,6 +746,48 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 <div className="text-xs text-gray-400">Les doublons seront ignores automatiquement</div>
               </div>
 
+              {/* Provenance du lot (source) — obligatoire */}
+              <div className="mt-4 p-4 bg-brand-50 border border-brand-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <MapPin size={14} className="text-brand-600" />
+                  <p className="text-sm font-semibold text-brand-800">Provenance de ces leads <span className="text-red-500">*</span></p>
+                </div>
+                <p className="text-xs text-brand-700/80 mt-1">
+                  D'où vient ce fichier ? La source s'appliquera à tous les leads importés (analytics par source).
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-brand-800 uppercase tracking-wider mb-1 block">Source</label>
+                    <select
+                      value={provenanceSource}
+                      onChange={(e) => setProvenanceSource(e.target.value)}
+                      className="input text-sm py-1.5 w-full bg-white border-brand-300"
+                    >
+                      <option value="">— Choisir la provenance —</option>
+                      {PROVENANCE_OPTIONS.map(function(o) {
+                        return <option key={o.value} value={o.value}>{o.label}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-brand-800 uppercase tracking-wider mb-1 block">
+                      Détail / campagne <span className="normal-case tracking-normal font-medium text-brand-600/70">(optionnel)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={provenanceDetail}
+                      onChange={(e) => setProvenanceDetail(e.target.value)}
+                      placeholder="Ex : Campagne FB Rentrée 2026"
+                      className="input text-sm py-1.5 px-2 w-full bg-white border-brand-300"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-brand-700/80 mt-2 flex items-start gap-1.5">
+                  <Info size={12} className="mt-0.5 shrink-0" />
+                  <span>Si le fichier contient une colonne « source » par ligne, elle reste prioritaire.</span>
+                </p>
+              </div>
+
               {/* Option : créer une audience */}
               <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-lg">
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -837,7 +903,12 @@ export function ImportCSVModal({ open, onClose, programs, crmFields }: ImportCSV
                 </button>
               )}
               {step === 3 && (
-                <button onClick={handleImport} className="btn-primary py-2 text-sm">
+                <button
+                  onClick={handleImport}
+                  disabled={!provenanceSource}
+                  title={!provenanceSource ? "Choisissez d'abord la provenance des leads" : undefined}
+                  className={cn("btn-primary py-2 text-sm", !provenanceSource && "opacity-50 cursor-not-allowed")}
+                >
                   <Upload size={14} /> Importer {dataRows.length} leads
                 </button>
               )}
