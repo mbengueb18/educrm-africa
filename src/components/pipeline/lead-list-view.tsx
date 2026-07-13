@@ -26,6 +26,7 @@ interface Lead {
   email: string | null;
   score: number;
   source: any;
+  sourceDetail?: string | null;
   city: string | null;
   stageId: string;
   createdAt: Date;
@@ -81,6 +82,12 @@ const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "score", label: "Score", group: "Pipeline" },
   { key: "assignedTo", label: "Conseiller", group: "Pipeline" },
   { key: "source", label: "Source", group: "Acquisition" },
+  { key: "sourceDetail", label: "Détail", group: "Acquisition" },
+  { key: "custom__trafficSource", label: "Source origine", group: "Acquisition" },
+  { key: "custom__trafficChannel", label: "Canal", group: "Acquisition" },
+  { key: "custom__trafficMedium", label: "Medium", group: "Acquisition" },
+  { key: "custom__referrer", label: "Referrer", group: "Acquisition" },
+  { key: "custom__utmCampaign", label: "Campagne (UTM)", group: "Acquisition" },
   { key: "program", label: "Filière", group: "Formation" },
   { key: "createdAt", label: "Date création", group: "Dates" },
   { key: "updatedAt", label: "Dernière maj", group: "Dates" },
@@ -329,6 +336,8 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
             {SOURCE_LABELS[lead.source] || lead.source}
           </span>
         );
+      case "sourceDetail":
+        return <span className="text-sm text-gray-600 truncate block max-w-[220px]" title={lead.sourceDetail || ""}>{lead.sourceDetail || "—"}</span>;
       case "program":
         return <span className="text-xs text-brand-600 font-medium">{lead.program?.code || lead.program?.name || "—"}</span>;
       case "assignedTo":
