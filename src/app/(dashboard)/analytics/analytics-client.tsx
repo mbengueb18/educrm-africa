@@ -229,7 +229,7 @@ function OverviewTab({ data, kpis, access }: { data: any; kpis: any; access: Rep
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={cmp ? kpis.leadsGrowth : undefined} prev={cmp ? kpis.leadsPreviousPeriod : undefined} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
         <KpiCard label="Convertis" value={kpis.convertedCurrentPeriod} change={cmp ? kpis.conversionGrowth : undefined} prev={cmp ? kpis.convertedPreviousPeriod : undefined} icon={UserCheck} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
-        <KpiCard label="Taux de conversion" value={kpis.conversionRate + "%"} change={cmp ? kpis.conversionGrowth : undefined} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
+        <KpiCard label="Taux de conversion" value={(kpis.conversionRate ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %"} change={cmp ? kpis.conversionGrowth : undefined} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
         <KpiCard label="Étudiants actifs" value={kpis.activeStudents} icon={GraduationCap} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel={"Total : " + kpis.totalStudents} />
       </div>
 

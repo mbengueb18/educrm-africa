@@ -45,7 +45,7 @@ export async function getDashboardData(filters?: {
   ]);
 
   var leadsGrowth = leadsPreviousPeriod > 0 ? Math.round(((leadsCurrentPeriod - leadsPreviousPeriod) / leadsPreviousPeriod) * 100) : 0;
-  var conversionRate = leadsCurrentPeriod > 0 ? Math.round((convertedCurrentPeriod / leadsCurrentPeriod) * 100) : 0;
+  var conversionRate = leadsCurrentPeriod > 0 ? Math.round((convertedCurrentPeriod / leadsCurrentPeriod) * 10000) / 100 : 0;
   var conversionGrowth = convertedPreviousPeriod > 0 ? Math.round(((convertedCurrentPeriod - convertedPreviousPeriod) / convertedPreviousPeriod) * 100) : 0;
 
   // ─── CALLS & APPOINTMENTS KPIs ───
