@@ -469,6 +469,9 @@ export async function GET(request: NextRequest) {
 
   // ─── Send to EduCRM ───
   function sendLead(data) {
+    // Source de trafic de la session (referrer + UTM + click IDs) pour l'attribution du lead.
+    // getOrCreateSession() garantit la capture même si le tracking de pages vues est désactivé.
+    var _src = ECRM.sessionData || getOrCreateSession();
     var payload = {
       firstName: data.firstName || '',
       lastName: data.lastName || '',
@@ -487,6 +490,15 @@ export async function GET(request: NextRequest) {
       _capturedBy: 'ecrm-tracker',
       _pageUrl: data._pageUrl || '',
       _visitorId: ECRM.visitorId,
+      // ── Attribution : signaux de source de trafic ──
+      _referrer: (_src && _src.referrer) || document.referrer || '',
+      utm_source: (_src && _src.utm_source) || '',
+      utm_medium: (_src && _src.utm_medium) || '',
+      utm_campaign: (_src && _src.utm_campaign) || '',
+      utm_content: (_src && _src.utm_content) || '',
+      utm_term: (_src && _src.utm_term) || '',
+      gclid: (_src && _src.gclid) || '',
+      fbclid: (_src && _src.fbclid) || '',
     };
 
     if (data._raw) {
