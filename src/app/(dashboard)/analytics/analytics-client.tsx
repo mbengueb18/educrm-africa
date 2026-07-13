@@ -33,6 +33,13 @@ var SOURCE_COLORS: Record<string, string> = {
 
 var PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#6b7280"];
 
+// Canaux de campagne (extensible : SMS, etc.)
+var CHANNEL_META: Record<string, { label: string; icon: typeof Mail; bg: string; color: string }> = {
+  EMAIL: { label: "Email", icon: Mail, bg: "bg-blue-50", color: "text-blue-600" },
+  WHATSAPP: { label: "WhatsApp", icon: MessageCircle, bg: "bg-emerald-50", color: "text-emerald-600" },
+  SMS: { label: "SMS", icon: MessageCircle, bg: "bg-amber-50", color: "text-amber-600" },
+};
+
 function getGreeting(): string {
   var h = new Date().getHours();
   if (h < 12) return "Bonjour";
@@ -350,7 +357,7 @@ function AcquisitionTab({ data }: { data: any }) {
           <ArrowRight size={18} className="text-gray-300 group-hover:text-brand-500 transition-colors" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Analytics web détaillé</h3>
-        <p className="text-xs text-gray-500">Trafic du site, canaux (style GA4), parcours visiteurs et funnel de conversion visiteur → lead → étudiant.</p>
+        <p className="text-xs text-gray-500">Trafic du site, canaux d'acquisition, parcours visiteurs et funnel de conversion visiteur → lead → étudiant.</p>
       </Link>
     </div>
 
@@ -366,6 +373,7 @@ function AcquisitionTab({ data }: { data: any }) {
             <thead>
               <tr className="border-b border-gray-100 text-gray-500">
                 <th className="text-left py-2 font-medium">Campagne</th>
+                <th className="text-left py-2 font-medium">Type</th>
                 <th className="text-right py-2 font-medium">Envoyés</th>
                 <th className="text-right py-2 font-medium">Délivrés</th>
                 <th className="text-right py-2 font-medium">Ouverts</th>
@@ -374,22 +382,27 @@ function AcquisitionTab({ data }: { data: any }) {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {data.campaignPerf.map(function(c: any) {
-                var isEmail = c.channel === "EMAIL";
+                var meta = CHANNEL_META[c.channel] || CHANNEL_META.EMAIL;
+                var deliveredPct = c.sent > 0 ? Math.round((c.delivered / c.sent) * 100) : 0;
                 var openPct = c.delivered > 0 ? Math.round((c.opened / c.delivered) * 100) : 0;
+                var clickPct = c.delivered > 0 && c.clicked !== null ? Math.round((c.clicked / c.delivered) * 100) : null;
                 return (
                   <tr key={c.id} className="hover:bg-gray-50/50">
                     <td className="py-2.5">
                       <div className="flex items-center gap-2">
-                        <div className={cn("w-6 h-6 rounded-md flex items-center justify-center shrink-0", isEmail ? "bg-blue-50" : "bg-emerald-50")}>
-                          {isEmail ? <Mail size={12} className="text-blue-600" /> : <MessageCircle size={12} className="text-emerald-600" />}
+                        <div className={cn("w-6 h-6 rounded-md flex items-center justify-center shrink-0", meta.bg)}>
+                          <meta.icon size={12} className={meta.color} />
                         </div>
-                        <span className="font-medium text-gray-900 truncate max-w-[220px]">{c.name}</span>
+                        <span className="font-medium text-gray-900 truncate max-w-[200px]">{c.name}</span>
                       </div>
                     </td>
+                    <td className="py-2.5">
+                      <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold", meta.bg, meta.color)}>{meta.label}</span>
+                    </td>
                     <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.sent.toLocaleString("fr-FR")}</td>
-                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.delivered.toLocaleString("fr-FR")}</td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.delivered.toLocaleString("fr-FR")} <span className="text-gray-400">({deliveredPct}%)</span></td>
                     <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.opened.toLocaleString("fr-FR")} <span className="text-gray-400">({openPct}%)</span></td>
-                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.clicked === null ? "—" : c.clicked.toLocaleString("fr-FR")}</td>
+                    <td className="text-right py-2.5 text-gray-700 tabular-nums">{c.clicked === null ? "—" : c.clicked.toLocaleString("fr-FR") + " (" + clickPct + "%)"}</td>
                   </tr>
                 );
               })}
@@ -531,7 +544,7 @@ function TeamTab({ data }: { data: any }) {
                         user.convRate >= 20 ? "bg-emerald-50 text-emerald-600" :
                         user.convRate >= 10 ? "bg-amber-50 text-amber-600" :
                         "bg-gray-100 text-gray-500"
-                      )}>{user.convRate}%</span>
+                      )}>{user.convRate.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %</span>
                     </td>
                     <td className="text-center py-2.5 text-gray-700 hidden sm:table-cell">{user.calls}</td>
                     <td className="text-center py-2.5 text-gray-700 hidden sm:table-cell">{user.appointments}</td>
@@ -544,6 +557,11 @@ function TeamTab({ data }: { data: any }) {
         </div>
       ) : (
         <p className="text-xs text-gray-400 text-center py-8">Aucun commercial</p>
+      )}
+      {data.unattributedConverted > 0 && (
+        <p className="text-[11px] text-gray-400 mt-3 pt-3 border-t border-gray-100">
+          {data.unattributedConverted} conversion{data.unattributedConverted > 1 ? "s" : ""} de la période non attribuée{data.unattributedConverted > 1 ? "s" : ""} à un commercial (leads importés ou non assignés) — d'où l'écart avec le KPI « Convertis ».
+        </p>
       )}
     </div>
   );

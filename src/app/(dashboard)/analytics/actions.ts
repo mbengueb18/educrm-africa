@@ -178,7 +178,7 @@ export async function getDashboardData(filters?: {
   var commercialPerf = commercials.map(function(user) {
     var assigned = assignedMap[user.id] || 0;
     var converted = convertedMap[user.id] || 0;
-    var convRate = (assigned + converted) > 0 ? Math.round((converted / (assigned + converted)) * 100) : 0;
+    var convRate = (assigned + converted) > 0 ? Math.round((converted / (assigned + converted)) * 10000) / 100 : 0;
     return {
       id: user.id, name: user.name, assigned, converted,
       calls: callsMap[user.id] || 0,
@@ -189,6 +189,11 @@ export async function getDashboardData(filters?: {
   });
 
   commercialPerf.sort(function(a, b) { return b.converted - a.converted; });
+
+  // Réconciliation : conversions de la période non attribuées à un commercial actif
+  // (leads importés ou non assignés). Explique l'écart avec le KPI « Convertis ».
+  var attributedConverted = commercialPerf.reduce(function(sum, u) { return sum + u.converted; }, 0);
+  var unattributedConverted = Math.max(convertedCurrentPeriod - attributedConverted, 0);
 
   // ─── CALLS BY DAY (for chart) ───
   var callsRaw = await prisma.call.findMany({
@@ -287,6 +292,7 @@ export async function getDashboardData(filters?: {
     leadsBySource,
     leadsByProgram,
     commercialPerf,
+    unattributedConverted,
     campaignPerf,
     recentActivities,
     filterOptions: { users, campuses },
