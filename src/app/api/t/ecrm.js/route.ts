@@ -142,6 +142,52 @@ export async function GET(request: NextRequest) {
     return stored;
   }
 
+  // ─── First-touch attribution (persistant, self-referral exclu) ───
+  var FIRST_TOUCH_KEY = '_ecrm_ft';
+
+  function currentHost() {
+    try { return (window.location.hostname || '').replace(/^www\\./, ''); } catch(e) { return ''; }
+  }
+
+  // Referrer uniquement s'il est EXTERNE (ignore les navigations internes = self-referral).
+  function referrerIfExternal() {
+    var r = document.referrer || '';
+    if (!r) return '';
+    try {
+      var h = new URL(r).hostname.replace(/^www\\./, '');
+      if (h && h === currentHost()) return '';
+      return r;
+    } catch(e) { return ''; }
+  }
+
+  // Capture l'attribution d'ENTRÉE une seule fois (localStorage), indépendamment du tracking
+  // de pages vues. Une campagne (utm/gclid/fbclid) écrase (dernière campagne = acquisition) ;
+  // sinon on ne fixe le referrer externe qu'à la première visite. Les self-referrals sont exclus.
+  function captureFirstTouch() {
+    var cur = captureCurrentSource();
+    var extRef = referrerIfExternal();
+    var hasCampaign = !!(cur.utm_source || cur.gclid || cur.fbclid);
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem(FIRST_TOUCH_KEY) || 'null'); } catch(e) {}
+
+    if (hasCampaign) {
+      var ft = {
+        referrer: extRef || '',
+        utm_source: cur.utm_source || '', utm_medium: cur.utm_medium || '',
+        utm_campaign: cur.utm_campaign || '', utm_content: cur.utm_content || '',
+        utm_term: cur.utm_term || '', gclid: cur.gclid || '', fbclid: cur.fbclid || '',
+      };
+      try { localStorage.setItem(FIRST_TOUCH_KEY, JSON.stringify(ft)); } catch(e) {}
+      return ft;
+    }
+    if (!stored && extRef) {
+      var ft2 = { referrer: extRef, utm_source: '', utm_medium: '', utm_campaign: '', utm_content: '', utm_term: '', gclid: '', fbclid: '' };
+      try { localStorage.setItem(FIRST_TOUCH_KEY, JSON.stringify(ft2)); } catch(e) {}
+      return ft2;
+    }
+    return stored;
+  }
+
   // ─── Engagement tracking (Page Visibility API) ───
   var lastEngagedTime = null;
   var pageStartTime = null;
@@ -469,8 +515,8 @@ export async function GET(request: NextRequest) {
 
   // ─── Send to EduCRM ───
   function sendLead(data) {
-    // Source de trafic de la session (referrer + UTM + click IDs) pour l'attribution du lead.
-    // getOrCreateSession() garantit la capture même si le tracking de pages vues est désactivé.
+    // Attribution : first-touch persistant (self-referral exclu) en priorité, session en secours.
+    var _ft = captureFirstTouch();
     var _src = ECRM.sessionData || getOrCreateSession();
     var payload = {
       firstName: data.firstName || '',
@@ -490,15 +536,15 @@ export async function GET(request: NextRequest) {
       _capturedBy: 'ecrm-tracker',
       _pageUrl: data._pageUrl || '',
       _visitorId: ECRM.visitorId,
-      // ── Attribution : signaux de source de trafic ──
-      _referrer: (_src && _src.referrer) || document.referrer || '',
-      utm_source: (_src && _src.utm_source) || '',
-      utm_medium: (_src && _src.utm_medium) || '',
-      utm_campaign: (_src && _src.utm_campaign) || '',
-      utm_content: (_src && _src.utm_content) || '',
-      utm_term: (_src && _src.utm_term) || '',
-      gclid: (_src && _src.gclid) || '',
-      fbclid: (_src && _src.fbclid) || '',
+      // ── Attribution : first-touch (persistant) prioritaire, session en secours ──
+      _referrer:    (_ft && _ft.referrer)    || referrerIfExternal() || '',
+      utm_source:   (_ft && _ft.utm_source)  || (_src && _src.utm_source)   || '',
+      utm_medium:   (_ft && _ft.utm_medium)  || (_src && _src.utm_medium)   || '',
+      utm_campaign: (_ft && _ft.utm_campaign)|| (_src && _src.utm_campaign) || '',
+      utm_content:  (_ft && _ft.utm_content) || (_src && _src.utm_content)  || '',
+      utm_term:     (_ft && _ft.utm_term)    || (_src && _src.utm_term)     || '',
+      gclid:        (_ft && _ft.gclid)       || (_src && _src.gclid)        || '',
+      fbclid:       (_ft && _ft.fbclid)      || (_src && _src.fbclid)       || '',
     };
 
     if (data._raw) {
@@ -883,6 +929,9 @@ export async function GET(request: NextRequest) {
   // ─── Attach form listeners ───
   function attachListeners() {
     log('info', 'EduCRM Tracker initialise (org: ' + ECRM.orgSlug + ', visitor: ' + ECRM.visitorId + ', pageviewTracking: ${pageviewTrackingEnabled})');
+
+    // Attribution first-touch : enregistrée dès le chargement, même si le tracking de pages vues est off.
+    captureFirstTouch();
 
     ${pageviewTrackingEnabled ? `
     // Pageview tracking activé pour cette organisation
