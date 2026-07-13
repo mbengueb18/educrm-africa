@@ -166,7 +166,7 @@ export function CallsClient({ calls, stats, users, leads, currentUserId }: Calls
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Commercial</label>
+              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
               <select value={filterUser} onChange={function(e) { setFilterUser(e.target.value); }} className="input text-sm py-1.5">
                 <option value="">Tous</option>
                 <option value="me">Mes appels</option>

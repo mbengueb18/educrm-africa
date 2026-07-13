@@ -71,7 +71,7 @@ const features = [
   {
     icon: "📈",
     title: "Dashboard analytics",
-    desc: "Tableau de bord avec KPIs en temps réel : taux de conversion, performance par source et par commercial.",
+    desc: "Tableau de bord avec KPIs en temps réel : taux de conversion, performance par source et par conseiller.",
   },
 ];
 

@@ -21,7 +21,7 @@ type User = {
 
 var ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; desc: string }> = {
   ADMIN: { label: "Administrateur", color: "text-purple-600", bg: "bg-purple-50", desc: "Accès complet" },
-  COMMERCIAL: { label: "Commercial", color: "text-blue-600", bg: "bg-blue-50", desc: "Leads, appels, tâches, rendez-vous" },
+  COMMERCIAL: { label: "Conseiller", color: "text-blue-600", bg: "bg-blue-50", desc: "Leads, appels, tâches, rendez-vous" },
   TEACHER: { label: "Enseignant", color: "text-emerald-600", bg: "bg-emerald-50", desc: "Notes, présences" },
   ACCOUNTANT: { label: "Comptable", color: "text-amber-600", bg: "bg-amber-50", desc: "Paiements et finances" },
   VIEWER: { label: "Lecteur", color: "text-gray-600", bg: "bg-gray-100", desc: "Consultation uniquement" },
@@ -75,7 +75,7 @@ export default function UsersSettingsPage() {
             { label: "Actifs", value: stats.active, color: "text-emerald-600" },
             { label: "Inactifs", value: stats.inactive, color: "text-red-500" },
             { label: "Admins", value: stats.admins, color: "text-purple-600" },
-            { label: "Commerciaux", value: stats.commercials, color: "text-blue-600" },
+            { label: "Conseillers", value: stats.commercials, color: "text-blue-600" },
           ].map(function(s) {
             return (
               <div key={s.label} className={cn("rounded-xl border border-gray-200 bg-white px-4 py-3 text-center", s.value > 0 && s.label === "Inactifs" && "border-red-200 bg-red-50/50")}>

@@ -30,7 +30,7 @@ interface ProfileClientProps {
 var ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
   ADMIN: "Administrateur",
-  COMMERCIAL: "Commercial",
+  COMMERCIAL: "Conseiller",
   TEACHER: "Enseignant",
   ACCOUNTANT: "Comptable",
   VIEWER: "Lecteur",

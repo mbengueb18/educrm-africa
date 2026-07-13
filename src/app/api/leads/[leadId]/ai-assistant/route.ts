@@ -203,7 +203,7 @@ function buildLeadContext(lead: any): string {
   lines.push("Source : " + lead.source + (lead.sourceDetail ? " (" + lead.sourceDetail + ")" : ""));
   if (lead.program) lines.push("Filière souhaitée : " + lead.program.name);
   if (lead.campus) lines.push("Campus : " + lead.campus.name);
-  if (lead.assignedTo) lines.push("Commercial assigné : " + lead.assignedTo.name);
+  if (lead.assignedTo) lines.push("Conseiller assigné : " + lead.assignedTo.name);
   lines.push("Date de création : " + new Date(lead.createdAt).toLocaleDateString("fr-FR"));
   lines.push("Statut : " + (lead.isConverted ? "Converti en étudiant ✓" : "Non converti"));
 
@@ -271,7 +271,7 @@ function buildPrompt(mode: string, leadContext: string, extraContext?: string): 
 
   if (mode === "brief") {
     return baseContext +
-      "TÂCHE : Rédige un BRIEF COMMERCIAL court et utile sur ce lead pour un commercial qui doit le contacter.\n\n" +
+      "TÂCHE : Rédige un BRIEF COMMERCIAL court et utile sur ce lead pour un conseiller qui doit le contacter.\n\n" +
       "Réponds STRICTEMENT en JSON valide avec cette structure :\n" +
       "{\n" +
       '  "summary": "Résumé en 2-3 phrases de qui est ce lead et où il en est dans son parcours",\n' +

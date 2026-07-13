@@ -132,7 +132,7 @@ function getFieldDefinitions(opts: FilterOptions): FieldDefinition[] {
     // Assignation
     {
       value: "assignedToId",
-      label: "Commercial assigné",
+      label: "Conseiller assigné",
       type: "select",
       options: opts.users.map(u => ({ value: u.id, label: u.name })),
       category: "Assignation",
