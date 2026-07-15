@@ -26,8 +26,10 @@ import {
 } from "./report-config";
 import {
   runReportConfig, saveCustomReport, deleteCustomReport,
-  type CustomReportsList, type CustomReportItem, type ReportRow,
+  type CustomReportsList, type CustomReportItem,
 } from "./custom-reports";
+import type { ReportRow } from "./report-engine";
+import { askAnalyst, getAnalystHistory, type AnalystResult, type AnalystHistoryItem } from "./ai-analyst";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -1047,16 +1049,98 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
   );
 }
 
-// ═══════════════════════ ONGLET : ANALYSTE IA (à venir) ═══════════════════════
+// ═══════════════════════ ONGLET : ANALYSTE IA ═══════════════════════
+var AI_EXAMPLES = [
+  "Quelle filière convertit le mieux ?",
+  "Répartition des leads par source",
+  "Appels par conseiller ce trimestre",
+  "Étudiants par campus",
+];
+
 function AiTab() {
+  var [question, setQuestion] = useState("");
+  var [result, setResult] = useState<AnalystResult | null>(null);
+  var [history, setHistory] = useState<AnalystHistoryItem[]>([]);
+  var [pending, startAsk] = useTransition();
+
+  useEffect(function() {
+    getAnalystHistory().then(setHistory).catch(function() {});
+  }, []);
+
+  var ask = function(qq?: string) {
+    var text = (qq !== undefined ? qq : question).trim();
+    if (!text) return;
+    setQuestion(text);
+    startAsk(async function() {
+      var r = await askAnalyst(text);
+      setResult(r);
+      if (r.ok) getAnalystHistory().then(setHistory).catch(function() {});
+    });
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center max-w-2xl mx-auto">
-      <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-4"><Sparkles size={28} className="text-brand-600" /></div>
-      <h3 className="text-lg font-semibold text-gray-900">Analyste IA</h3>
-      <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-        Interrogez vos données en langage naturel et recevez des synthèses automatiques.
-      </p>
-      <span className="inline-block mt-4 text-xs font-medium text-brand-600 bg-brand-50 px-3 py-1.5 rounded-full">Bientôt disponible</span>
+    <div className="max-w-3xl">
+      {/* Hero + input */}
+      <div className="bg-gradient-to-br from-brand-50 to-white rounded-xl border border-gray-200 p-5">
+        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-white border border-gray-200 rounded-full px-3 py-1"><Sparkles size={12} /> Analyste IA</div>
+        <h3 className="text-base font-semibold text-gray-900 mt-3">Interrogez vos données en langage naturel</h3>
+        <p className="text-xs text-gray-500 mt-1">L'IA choisit le bon rapport, l'exécute sur vos vraies données, puis vous l'explique. <span className="text-gray-400">(2 crédits IA / question)</span></p>
+        <div className="flex gap-2 mt-4">
+          <input value={question} onChange={function(e) { setQuestion(e.target.value); }}
+            onKeyDown={function(e) { if (e.key === "Enter") ask(); }}
+            placeholder="Ex. Quelle filière convertit le mieux ce trimestre ?" className="input text-sm flex-1" />
+          <button onClick={function() { ask(); }} disabled={pending || !question.trim()} className="btn-primary text-sm disabled:opacity-50 whitespace-nowrap">
+            {pending ? "Analyse…" : "Analyser"}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          {AI_EXAMPLES.map(function(ex) {
+            return <button key={ex} onClick={function() { ask(ex); }} disabled={pending} className="text-[11px] border border-gray-200 bg-white rounded-full px-3 py-1 text-gray-600 hover:border-brand-300 hover:text-brand-600 disabled:opacity-50">{ex}</button>;
+          })}
+        </div>
+      </div>
+
+      {pending && (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+          <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /> L'IA analyse vos données…
+        </div>
+      )}
+
+      {!pending && result && (
+        result.ok ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 mb-3">
+                <span className="w-5 h-5 rounded-md bg-brand-50 flex items-center justify-center"><Sparkles size={11} className="text-brand-600" /></span> Analyse
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{result.answer || "Voici les résultats correspondants à votre question."}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              {result.config && <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">{summarizeConfig({ id: "", name: "", ...result.config } as CustomReportItem)}</p>}
+              <ReportResult rows={result.rows || []} format={result.format || "int"} vizType={result.config?.vizType || "bar"} />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 mt-4"><p className="text-sm text-red-600">{result.error}</p></div>
+        )
+      )}
+
+      {history.length > 0 && (
+        <div className="mt-6">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Questions récentes</h4>
+          <div className="space-y-2">
+            {history.map(function(h) {
+              return (
+                <button key={h.id} onClick={function() { ask(h.question); }} disabled={pending}
+                  className="w-full text-left bg-white rounded-lg border border-gray-200 p-3 hover:border-brand-200 transition-all disabled:opacity-50">
+                  <p className="text-xs font-medium text-gray-800">{h.question}</p>
+                  {h.answer && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{h.answer}</p>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

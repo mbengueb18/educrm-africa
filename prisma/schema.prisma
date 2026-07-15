@@ -71,6 +71,7 @@ model Organization {
   contracts           Contract[]
   reportingGoals      ReportingGoal[]
   customReports       CustomReport[]
+  aiReportQueries     AiReportQuery[]
 
   @@map("organizations")
 }
@@ -764,6 +765,29 @@ model CustomReport {
 
   @@index([organizationId])
   @@map("custom_reports")
+}
+
+// ─── ANALYSTE IA (Performance) ───
+// Historique des questions en langage naturel : la question, la config de
+// rapport déduite par l'IA (whitelist), et la narration générée à partir des
+// chiffres réels. Sert d'historique + de re-visualisation.
+model AiReportQuery {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  question       String
+  source         String
+  dimension      String
+  measure        String
+  period         String
+  vizType        String
+  answer         String // narration IA (analyse + recommandation)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("ai_report_queries")
 }
 
 // ─── COMMUNICATION ───
