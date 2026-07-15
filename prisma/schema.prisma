@@ -72,6 +72,7 @@ model Organization {
   reportingGoals      ReportingGoal[]
   customReports       CustomReport[]
   aiReportQueries     AiReportQuery[]
+  reportDashboards    ReportDashboard[]
 
   @@map("organizations")
 }
@@ -761,10 +762,43 @@ model CustomReport {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dashboardItems DashboardItem[]
 
   @@index([organizationId])
   @@map("custom_reports")
+}
+
+// ─── TABLEAUX DE BORD ───
+// Un tableau de bord regroupe plusieurs rapports personnalisés (style HubSpot).
+// Quota par plan : Croissance 1, Performance 5 (au-delà : sur devis).
+model ReportDashboard {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items        DashboardItem[]
+
+  @@index([organizationId])
+  @@map("report_dashboards")
+}
+
+model DashboardItem {
+  id          String @id @default(cuid())
+  dashboardId String
+  reportId    String
+  position    Int    @default(0)
+  width       String @default("half") // "half" | "full"
+
+  dashboard ReportDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  report    CustomReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([dashboardId])
+  @@map("dashboard_items")
 }
 
 // ─── ANALYSTE IA (Performance) ───

@@ -124,6 +124,7 @@ export interface PlanLimits {
   reportingAdvancedFilters: boolean;
   reportingCustomReports: boolean; // true dès qu'au moins 1 rapport custom est autorisé
   reportingCustomReportsMax: number; // Nombre de rapports personnalisés (0 = aucun)
+  reportingDashboardsMax: number; // Nombre de tableaux de bord (0 = aucun ; au-delà = sur devis)
   reportingExportExcelPdf: boolean;
   reportingScheduledExport: boolean;
   reportingPeriodComparison: boolean;

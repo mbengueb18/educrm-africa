@@ -30,6 +30,11 @@ import {
 } from "./custom-reports";
 import type { ReportRow } from "./report-engine";
 import { askAnalyst, getAnalystHistory, type AnalystResult, type AnalystHistoryItem } from "./ai-analyst";
+import {
+  listDashboards, getDashboard, createDashboard, deleteDashboard,
+  addReportToDashboard, removeDashboardItem, setDashboardItemWidth,
+  type DashboardsList, type DashboardDetail,
+} from "./dashboards";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -235,7 +240,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
       ) : tab === "sequences" ? (
         <SequencesTab />
       ) : tab === "custom" ? (
-        <CustomReportsTab list={customReports} />
+        <CustomReportsTab list={customReports} access={access} />
       ) : tab === "ai" ? (
         <AiTab />
       ) : null}
@@ -891,7 +896,24 @@ function ReportResult({ rows, format, vizType, total }: { rows: ReportRow[]; for
   );
 }
 
-function CustomReportsTab({ list }: { list: CustomReportsList }) {
+function CustomReportsTab({ list, access }: { list: CustomReportsList; access: ReportingAccess }) {
+  var [view, setView] = useState<"reports" | "dashboards">("reports");
+  return (
+    <div>
+      {access.tabs.dashboards && (
+        <div className="inline-flex bg-gray-100 rounded-lg p-1 mb-5">
+          <button onClick={function() { setView("reports"); }}
+            className={cn("px-4 py-1.5 rounded-md text-xs font-semibold transition-colors", view === "reports" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}>Rapports</button>
+          <button onClick={function() { setView("dashboards"); }}
+            className={cn("px-4 py-1.5 rounded-md text-xs font-semibold transition-colors", view === "dashboards" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}>Tableaux de bord</button>
+        </div>
+      )}
+      {view === "reports" ? <ReportsPanel list={list} /> : <DashboardsPanel access={access} reports={list.reports} />}
+    </div>
+  );
+}
+
+function ReportsPanel({ list }: { list: CustomReportsList }) {
   var router = useRouter();
   var [builder, setBuilder] = useState<CustomReportItem | "new" | null>(null);
   var [viewing, setViewing] = useState<CustomReportItem | null>(null);
@@ -1108,6 +1130,175 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
           <button onClick={submit} disabled={saving || !name.trim()} className="btn-primary text-sm disabled:opacity-50">{saving ? "Enregistrement…" : "Enregistrer"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════ TABLEAUX DE BORD ═══════════════════════
+function DashboardsPanel({ access, reports }: { access: ReportingAccess; reports: CustomReportItem[] }) {
+  var [data, setData] = useState<DashboardsList | null>(null);
+  var [openId, setOpenId] = useState<string | null>(null);
+  var [creating, setCreating] = useState(false);
+  var [name, setName] = useState("");
+  var [error, setError] = useState("");
+  var [pending, start] = useTransition();
+
+  var refresh = function() { listDashboards().then(setData).catch(function() {}); };
+  useEffect(function() { refresh(); }, []);
+
+  if (openId) {
+    return <DashboardView id={openId} reports={reports} canManage={!!data?.canManage} onBack={function() { setOpenId(null); refresh(); }} />;
+  }
+
+  var dashboards = data?.dashboards || [];
+  var max = data?.max ?? access.dashboardsMax;
+  var atQuota = dashboards.length >= max;
+  var canManage = !!data?.canManage;
+
+  var submitCreate = function() {
+    setError("");
+    start(async function() {
+      var r = await createDashboard(name.trim());
+      if (r.ok) { setCreating(false); setName(""); refresh(); if (r.id) setOpenId(r.id); }
+      else setError(r.error || "Erreur");
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Tableaux de bord</h3>
+          <p className="text-xs text-gray-500">{dashboards.length} / {max} tableau{max > 1 ? "x" : ""} de bord</p>
+        </div>
+        {canManage && (
+          <button onClick={function() { setCreating(true); setError(""); }} disabled={atQuota}
+            className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={14} /> Créer</button>
+        )}
+      </div>
+
+      {atQuota && canManage && (
+        <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-4">
+          Vous avez atteint {max} tableau{max > 1 ? "x" : ""} de bord. Pour aller au-delà, <b>contactez-nous pour un devis</b>.
+        </p>
+      )}
+
+      {!data ? (
+        <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : dashboards.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-3"><LayoutGrid size={24} className="text-brand-600" /></div>
+          <h4 className="text-sm font-semibold text-gray-900">Aucun tableau de bord</h4>
+          <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">Regroupez plusieurs rapports sur une même vue pour un suivi d'un coup d'œil.</p>
+          {canManage && <button onClick={function() { setCreating(true); }} className="btn-primary text-xs mt-4"><Plus size={14} /> Créer un tableau de bord</button>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {dashboards.map(function(d) {
+            return (
+              <button key={d.id} onClick={function() { setOpenId(d.id); }}
+                className="bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-brand-200 hover:shadow-card-hover transition-all">
+                <div className="w-9 h-9 rounded-lg bg-brand-50 flex items-center justify-center mb-3"><LayoutGrid size={16} className="text-brand-600" /></div>
+                <h4 className="text-sm font-semibold text-gray-900 truncate">{d.name}</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">{d.itemCount} rapport{d.itemCount > 1 ? "s" : ""}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {creating && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={function() { setCreating(false); }}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 animate-scale-in" onClick={function(e) { e.stopPropagation(); }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900">Nouveau tableau de bord</h3>
+              <button onClick={function() { setCreating(false); }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <input value={name} onChange={function(e) { setName(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") submitCreate(); }}
+              className="input text-sm" placeholder="Ex. Suivi rentrée" autoFocus />
+            {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={function() { setCreating(false); }} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={submitCreate} disabled={pending || !name.trim()} className="btn-primary text-sm disabled:opacity-50">{pending ? "Création…" : "Créer"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardView({ id, reports, canManage, onBack }: { id: string; reports: CustomReportItem[]; canManage: boolean; onBack: () => void }) {
+  var [detail, setDetail] = useState<DashboardDetail | null>(null);
+  var [adding, setAdding] = useState(false);
+  var [, start] = useTransition();
+
+  var refresh = function() { getDashboard(id).then(setDetail).catch(function() {}); };
+  useEffect(function() { refresh(); /* eslint-disable-next-line */ }, [id]);
+
+  var items = detail?.items || [];
+  var usedIds = new Set(items.map(function(i) { return i.reportId; }));
+  var available = reports.filter(function(r) { return !usedIds.has(r.id); });
+
+  var addRep = function(reportId: string) { start(async function() { await addReportToDashboard(id, reportId); setAdding(false); refresh(); }); };
+  var removeIt = function(itemId: string) { start(async function() { await removeDashboardItem(itemId); refresh(); }); };
+  var toggleW = function(item: any) { start(async function() { await setDashboardItemWidth(item.id, item.width === "full" ? "half" : "full"); refresh(); }); };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <button onClick={onBack} className="text-xs font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1">← Tableaux de bord</button>
+        {canManage && (
+          <div className="relative">
+            <button onClick={function() { setAdding(!adding); }} className="btn-secondary text-xs py-1.5"><Plus size={13} /> Ajouter un rapport</button>
+            {adding && (
+              <div className="absolute right-0 mt-1 w-64 bg-white rounded-xl border border-gray-200 shadow-lg z-20 p-1.5 max-h-72 overflow-y-auto">
+                {available.length === 0 ? (
+                  <p className="text-xs text-gray-400 p-3 text-center">Tous vos rapports sont déjà ajoutés.</p>
+                ) : available.map(function(r) {
+                  return <button key={r.id} onClick={function() { addRep(r.id); }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-xs">
+                    <span className="font-medium text-gray-800 block truncate">{r.name}</span>
+                    <span className="text-[10px] text-gray-400">{summarizeConfig(r)}</span>
+                  </button>;
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {detail && detail.name && <h3 className="text-lg font-bold text-gray-900 mb-4">{detail.name}</h3>}
+
+      {!detail ? (
+        <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : items.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <h4 className="text-sm font-semibold text-gray-900">Tableau de bord vide</h4>
+          <p className="text-xs text-gray-500 mt-1">{canManage ? "Ajoutez des rapports avec le bouton ci-dessus." : "Aucun rapport pour le moment."}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {items.map(function(item) {
+            return (
+              <div key={item.id} className={cn("bg-white rounded-xl border border-gray-200 p-5", item.width === "full" && "lg:col-span-2")}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">{item.name}</h4>
+                    <p className="text-[11px] text-gray-400">{summarizeConfig({ id: "", name: "", ...item.config } as CustomReportItem)}</p>
+                  </div>
+                  {canManage && (
+                    <div className="flex gap-1">
+                      <button onClick={function() { toggleW(item); }} className="text-[10px] text-gray-400 hover:text-brand-600 border border-gray-200 rounded px-1.5 py-0.5" title="Largeur">{item.width === "full" ? "½" : "□"}</button>
+                      <button onClick={function() { removeIt(item.id); }} className="text-gray-300 hover:text-red-500 p-1" title="Retirer"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+                {item.ok ? <ReportResult rows={item.rows} format={item.format} vizType={item.config.vizType} total={item.total} /> : <p className="text-xs text-red-400 py-6 text-center">Rapport indisponible</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

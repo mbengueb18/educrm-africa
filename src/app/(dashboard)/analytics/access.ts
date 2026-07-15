@@ -22,6 +22,7 @@ export interface ReportingAccess {
     acquisition: boolean;
     sequences: boolean;
     custom: boolean;
+    dashboards: boolean;
     ai: boolean;
   };
   // Capacités transverses
@@ -32,6 +33,7 @@ export interface ReportingAccess {
   scheduledExport: boolean;
   objectives: boolean;
   customReportsMax: number;
+  dashboardsMax: number;
   ai: boolean;
 }
 
@@ -66,6 +68,7 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
       acquisition: isAdvanced,
       sequences: limits.sequenceReportingLevel !== null,
       custom: limits.reportingCustomReportsMax > 0,
+      dashboards: limits.reportingDashboardsMax > 0,
       ai: limits.reportingAI,
     },
     dateFilters: limits.reportingDateFilters,
@@ -75,6 +78,7 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
     scheduledExport: limits.reportingScheduledExport,
     objectives: isAdvanced,
     customReportsMax: limits.reportingCustomReportsMax,
+    dashboardsMax: limits.reportingDashboardsMax,
     ai: limits.reportingAI,
   };
 }

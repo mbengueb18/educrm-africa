@@ -74,8 +74,21 @@ export async function askAnalyst(question: string): Promise<AnalystResult> {
     const raw = await callGemini(
       [{ role: "user", parts: [{ text: q }] }],
       `Tu convertis une question en UNE configuration de rapport pour un CRM d'école supérieure.
+
+ÉTAPE 1 — Identifie le SUJET de la question et choisis la "source" correspondante (règle prioritaire) :
+- "tâche(s)", "à faire", "todo" → source "tasks"
+- "appel(s)", "téléphone", "décroché" → source "calls"
+- "prospect(s)", "lead(s)", "conversion" → source "leads"
+- "étudiant(s)", "inscrit(s)", "inscription(s)" → source "students"
+- "rendez-vous", "rdv", "présence" → source "appointments"
+- "message(s)", "communication(s)", "email", "whatsapp", "sms" → source "messages"
+Ne choisis JAMAIS une autre source que celle du sujet. En cas de doute sur le sujet, choisis "leads".
+
+ÉTAPE 2 — Avec les champs autorisés de CETTE source uniquement, choisis dimension et mesure :
 ${whitelistPrompt()}
-Choisis les valeurs les plus pertinentes. Par défaut period="90d" et vizType="bar".
+Une notion d'état (ex. "en cours", "terminées", "honorés") s'exprime en regroupant par la dimension "status" (pas en changeant de source).
+Par défaut period="90d" et vizType="bar".
+
 Réponds STRICTEMENT en JSON : {"source": "...", "dimension": "...", "measure": "...", "period": "...", "vizType": "..."}`
     );
     const parsed = parseJson(raw);
