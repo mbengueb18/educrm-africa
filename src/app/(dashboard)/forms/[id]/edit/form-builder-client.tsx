@@ -185,8 +185,23 @@ function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: F
   const cond = field.showIf;
   const ctrl = cond ? fields.find((f) => f.name === cond.field) : undefined;
   const valueOpts = ctrl ? condValueOptions(ctrl) : null;
+  // Change le type d'un champ existant (ex : « Cases à cocher » → « Choix unique »).
+  // On garantit des options par défaut si on bascule vers un type à options qui n'en a pas.
+  const changeType = (next: FieldType) => {
+    const patch: Partial<FormField> = { type: next };
+    if (hasOptions(next) && !(field.options && field.options.length)) patch.options = ["Option 1", "Option 2"];
+    onPatch(patch);
+  };
   return (
     <div>
+      <Lbl>Type de champ</Lbl>
+      <select className="input text-sm mb-3" value={field.type} onChange={(e) => changeType(e.target.value as FieldType)}>
+        {PALETTE.map((g) => (
+          <optgroup key={g.cat} label={g.cat}>
+            {g.items.map((it) => <option key={it.t} value={it.t}>{it.lbl}</option>)}
+          </optgroup>
+        ))}
+      </select>
       {(field.type === "heading" || field.type === "paragraph" || field.type === "consent") ? (
         <><Lbl>Texte</Lbl><Inp value={field.content || ""} onChange={(e: any) => onPatch({ content: e.target.value })} /></>
       ) : (
