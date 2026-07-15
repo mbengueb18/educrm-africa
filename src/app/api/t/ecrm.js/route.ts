@@ -658,19 +658,25 @@ export async function GET(request: NextRequest) {
   }
   function gravityMarkSent(formId) { _gravitySent[formId] = Date.now(); }
 
-  // Un formulaire Gravity est en mode AJAX si sa cible est l'iframe gform_ajax_frame_X
-  // (ou si cette iframe existe). En AJAX, gform_confirmation_loaded gère l'envoi.
-  function isGravityAjax(form, formId) {
-    if (/^gform_ajax_frame/.test(form.target || '')) return true;
-    return !!document.getElementById('gform_ajax_frame_' + formId);
+  // Multi-page : ne capturer qu'à la soumission FINALE. Gravity met le champ caché
+  // gform_target_page_number_X à 0 au dernier « Envoyer » ; >0 sur « Suivant/Précédent ».
+  // Champ absent = formulaire mono-page → toujours final.
+  function isFinalGravitySubmit(form, formId) {
+    var tp = form.querySelector('input[name="gform_target_page_number_' + formId + '"]');
+    if (!tp) return true;
+    var v = (tp.value || '').trim();
+    return v === '' || v === '0';
   }
 
-  // Capture d'une soumission Gravity NON-AJAX (rechargement/redirection de page).
-  // Le listener 'submit' natif se déclenche avant la navigation : on fait une passe
-  // finale de capture puis on envoie en keepalive (résiste à la navigation).
+  // Capture au 'submit' natif — qui se déclenche AUSSI en mode AJAX (la soumission
+  // poste vers l'iframe gform_ajax_frame_X). On envoie ICI pour couvrir TOUS les cas
+  // de confirmation, y compris la « redirection » qui ne déclenche jamais
+  // gform_confirmation_loaded et navigue avant tout autre hook. Envoi keepalive →
+  // survit à la redirection. La garde _gravitySent évite le doublon avec le chemin
+  // gform_confirmation_loaded (confirmations inline).
   function captureGravityOnSubmit(form) {
     var formId = form.id.replace('gform_', '');
-    if (isGravityAjax(form, formId)) return; // AJAX → géré par gform_confirmation_loaded
+    if (!isFinalGravitySubmit(form, formId)) return; // navigation multi-page, pas une soumission
     if (gravityRecentlySent(formId)) return;
 
     // TinyMCE (éditeur riche WordPress) : recopier le contenu vers les textarea.
@@ -686,11 +692,11 @@ export async function GET(request: NextRequest) {
 
     var raw = _gravityRaw[formId];
     if (!raw || Object.keys(raw).length === 0) {
-      log('info', 'Gravity non-AJAX: aucune donnée capturée pour', form.id);
+      log('info', 'Gravity: aucune donnée capturée au submit pour', form.id);
       return;
     }
     var data = buildLeadFromRaw(formId);
-    log('info', 'Gravity non-AJAX: envoi keepalive du lead pour', form.id);
+    log('info', 'Gravity: envoi keepalive du lead au submit pour', form.id);
     gravityMarkSent(formId);
     sendLeadKeepalive(data);
     delete _gravityRaw[formId];
@@ -1043,9 +1049,9 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      // Formulaires Gravity :
-      //  - en AJAX → capturés par gform_confirmation_loaded (captureGravityOnSubmit sort tout de suite)
-      //  - sans AJAX (rechargement/redirection) → capturés ICI et envoyés en keepalive avant navigation
+      // Formulaires Gravity : capturés au 'submit' (AJAX comme non-AJAX), envoi keepalive.
+      // Couvre les confirmations « redirection » qui ne déclenchent pas gform_confirmation_loaded.
+      // La garde _gravitySent empêche le doublon avec le chemin gform_confirmation_loaded.
       if (form.id && form.id.indexOf('gform_') === 0) { captureGravityOnSubmit(form); return; }
       if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
