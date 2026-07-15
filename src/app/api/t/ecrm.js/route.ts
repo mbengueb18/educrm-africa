@@ -514,7 +514,9 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── Send to EduCRM ───
-  function sendLead(data) {
+  // Construit le payload lead (attribution incluse). Retourne null si aucun champ
+  // identifiant (prénom/nom/email/téléphone) → soumission ignorée.
+  function buildLeadPayload(data) {
     // Attribution : first-touch persistant (self-referral exclu) en priorité, session en secours.
     var _ft = captureFirstTouch();
     var _src = ECRM.sessionData || getOrCreateSession();
@@ -555,7 +557,7 @@ export async function GET(request: NextRequest) {
 
     if (!payload.firstName && !payload.lastName && !payload.email && !payload.phone) {
       log('info', 'Formulaire ignoré: aucun champ identifiant detecte', data._raw);
-      return;
+      return null;
     }
 
     if (payload.lastName && !payload.firstName) {
@@ -565,6 +567,13 @@ export async function GET(request: NextRequest) {
         payload.lastName = parts.slice(1).join(' ');
       }
     }
+
+    return payload;
+  }
+
+  function sendLead(data) {
+    var payload = buildLeadPayload(data);
+    if (!payload) return;
 
     log('info', 'Lead capturé:', payload.firstName + ' ' + payload.lastName);
 
@@ -592,6 +601,42 @@ export async function GET(request: NextRequest) {
     xhr.send(JSON.stringify(payload));
   }
 
+  // Envoi resilient a la navigation : fetch({keepalive:true}) survit au
+  // rechargement/redirection de page (contrairement au XHR async, annulé au unload).
+  // Utilisé pour les formulaires Gravity NON-AJAX qui redirigent après soumission.
+  // fetch garde les en-têtes custom (x-api-key), ce que sendBeacon ne permet pas.
+  function sendLeadKeepalive(data) {
+    var payload = buildLeadPayload(data);
+    if (!payload) return;
+
+    log('info', 'Lead capturé (keepalive):', payload.firstName + ' ' + payload.lastName);
+
+    try {
+      fetch(ECRM.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': ECRM.apiKey },
+        body: JSON.stringify(payload),
+        keepalive: true,
+        mode: 'cors',
+      }).then(function(r) {
+        return r.json().catch(function() { return null; });
+      }).then(function(result) {
+        if (!result) return;
+        log('info', 'Lead envoye (keepalive):', result);
+        if (window.dataLayer) {
+          window.dataLayer.push({
+            event: 'educrm_lead_captured',
+            ecrmLeadId: result.leadId,
+            ecrmDuplicate: result.duplicate || false,
+          });
+        }
+      }).catch(function() { log('warn', 'Erreur envoi lead (keepalive)'); });
+    } catch (e) {
+      // Navigateur sans fetch/keepalive : repli best-effort sur le XHR classique.
+      sendLead(data);
+    }
+  }
+
 // ─── Gravity Forms support (AJAX) ───
   // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
   // Stratégie : on ACCUMULE les valeurs des champs que l'utilisateur modifie
@@ -603,6 +648,55 @@ export async function GET(request: NextRequest) {
   var _gravityRaw = {};         // _gravityRaw[formId] = { "input_37": "Ingénierie Électrique", ... }
   var _gravityCheckbox = {};    // _gravityCheckbox[formId] = { "input_31": { "Sciences": true, ... } }
   var _gravityLabels = {};      // _gravityLabels[formId] = { "input_1.3": "prénom", ... }
+  var _gravitySent = {};        // _gravitySent[formId] = timestamp du dernier envoi (anti-doublon)
+
+  // Anti-doublon entre les deux chemins d'envoi Gravity (submit non-AJAX vs
+  // gform_confirmation_loaded AJAX) : le premier qui envoie verrouille ~5s.
+  function gravityRecentlySent(formId) {
+    var t = _gravitySent[formId];
+    return !!t && (Date.now() - t) < 5000;
+  }
+  function gravityMarkSent(formId) { _gravitySent[formId] = Date.now(); }
+
+  // Un formulaire Gravity est en mode AJAX si sa cible est l'iframe gform_ajax_frame_X
+  // (ou si cette iframe existe). En AJAX, gform_confirmation_loaded gère l'envoi.
+  function isGravityAjax(form, formId) {
+    if (/^gform_ajax_frame/.test(form.target || '')) return true;
+    return !!document.getElementById('gform_ajax_frame_' + formId);
+  }
+
+  // Capture d'une soumission Gravity NON-AJAX (rechargement/redirection de page).
+  // Le listener 'submit' natif se déclenche avant la navigation : on fait une passe
+  // finale de capture puis on envoie en keepalive (résiste à la navigation).
+  function captureGravityOnSubmit(form) {
+    var formId = form.id.replace('gform_', '');
+    if (isGravityAjax(form, formId)) return; // AJAX → géré par gform_confirmation_loaded
+    if (gravityRecentlySent(formId)) return;
+
+    // TinyMCE (éditeur riche WordPress) : recopier le contenu vers les textarea.
+    try { if (window.tinymce && window.tinymce.triggerSave) window.tinymce.triggerSave(); } catch(e) {}
+    var els = form.elements;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!el) continue;
+      // Les textarea d'éditeurs riches sont display:none (offsetParent null) mais valides
+      if (el.offsetParent === null && el.tagName !== 'TEXTAREA') continue;
+      accumulateField(form, el);
+    }
+
+    var raw = _gravityRaw[formId];
+    if (!raw || Object.keys(raw).length === 0) {
+      log('info', 'Gravity non-AJAX: aucune donnée capturée pour', form.id);
+      return;
+    }
+    var data = buildLeadFromRaw(formId);
+    log('info', 'Gravity non-AJAX: envoi keepalive du lead pour', form.id);
+    gravityMarkSent(formId);
+    sendLeadKeepalive(data);
+    delete _gravityRaw[formId];
+    delete _gravityCheckbox[formId];
+    delete _gravityLabels[formId];
+  }
 
   function isGravityForm(form) {
     return form && form.id && form.id.indexOf('gform_') === 0;
@@ -767,6 +861,7 @@ export async function GET(request: NextRequest) {
       // (offsetParent !== null) → les selects cachés des branches non choisies sont ignorés,
       // ce qui évite les valeurs résiduelles.
 
+      if (gravityRecentlySent(key)) return; // déjà envoyé par le chemin submit non-AJAX
       var raw = _gravityRaw[key];
       if (!raw || Object.keys(raw).length === 0) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
@@ -774,6 +869,7 @@ export async function GET(request: NextRequest) {
       }
       var data = buildLeadFromRaw(key);
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
+      gravityMarkSent(key);
       sendLead(data);
       delete _gravityRaw[key];
       delete _gravityCheckbox[key];
@@ -947,8 +1043,10 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      // Les formulaires Gravity sont gérés par setupGravityForms (AJAX) → on les ignore ici
-      if (form.id && form.id.indexOf('gform_') === 0) return;
+      // Formulaires Gravity :
+      //  - en AJAX → capturés par gform_confirmation_loaded (captureGravityOnSubmit sort tout de suite)
+      //  - sans AJAX (rechargement/redirection) → capturés ICI et envoyés en keepalive avant navigation
+      if (form.id && form.id.indexOf('gform_') === 0) { captureGravityOnSubmit(form); return; }
       if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);
