@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getDashboardData } from "./actions";
 import { getReportingAccess } from "./access";
 import { getGoalWithProgress } from "./goals";
+import { listCustomReports } from "./custom-reports";
 import { AnalyticsClient } from "./analytics-client";
 
 export var metadata: Metadata = {
@@ -15,10 +16,11 @@ export default async function AnalyticsPage() {
   var session = await auth();
   if (!session?.user) return null;
 
-  var [data, access, goalData] = await Promise.all([
+  var [data, access, goalData, customReports] = await Promise.all([
     getDashboardData(),
     getReportingAccess(),
     getGoalWithProgress(),
+    listCustomReports(),
   ]);
 
   if (!access) return null;
@@ -30,6 +32,7 @@ export default async function AnalyticsPage() {
       currentUserId={session.user.id}
       access={access}
       goalData={goalData}
+      customReports={customReports}
     />
   );
 }

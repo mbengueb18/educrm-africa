@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
@@ -20,6 +20,14 @@ import { getDashboardData } from "./actions";
 import type { ReportingAccess } from "./access";
 import type { GoalProgress } from "./goals";
 import { saveReportingGoal } from "./goals";
+import {
+  REPORT_SOURCES, REPORT_PERIODS, VIZ_TYPES,
+  type ReportSource, type ReportConfig,
+} from "./report-config";
+import {
+  runReportConfig, saveCustomReport, deleteCustomReport,
+  type CustomReportsList, type CustomReportItem, type ReportRow,
+} from "./custom-reports";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -82,9 +90,10 @@ interface AnalyticsClientProps {
   currentUserId: string;
   access: ReportingAccess;
   goalData: GoalProgress;
+  customReports: CustomReportsList;
 }
 
-export function AnalyticsClient({ data: initialData, userName, currentUserId, access, goalData }: AnalyticsClientProps) {
+export function AnalyticsClient({ data: initialData, userName, currentUserId, access, goalData, customReports }: AnalyticsClientProps) {
   var [data, setData] = useState(initialData);
   var [period, setPeriod] = useState(data.period || "30d");
   var [filterUser, setFilterUser] = useState("");
@@ -224,7 +233,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
       ) : tab === "sequences" ? (
         <SequencesTab />
       ) : tab === "custom" ? (
-        <CustomReportsTab access={access} />
+        <CustomReportsTab list={customReports} />
       ) : tab === "ai" ? (
         <AiTab />
       ) : null}
@@ -750,17 +759,290 @@ function SequencesTab() {
   );
 }
 
-// ═══════════════════════ ONGLET : RAPPORTS PERSONNALISÉS (à venir) ═══════════════════════
-function CustomReportsTab({ access }: { access: ReportingAccess }) {
+// ═══════════════════════ ONGLET : RAPPORTS PERSONNALISÉS ═══════════════════════
+function summarizeConfig(item: CustomReportItem): string {
+  var s = REPORT_SOURCES[item.source as ReportSource];
+  var dim = s?.dimensions.find(function(d) { return d.key === item.dimension; })?.label || item.dimension;
+  var meas = s?.measures.find(function(m) { return m.key === item.measure; })?.label || item.measure;
+  var per = REPORT_PERIODS.find(function(p) { return p.key === item.period; })?.label || item.period;
+  return meas + " par " + dim + " · " + per;
+}
+
+function ReportResult({ rows, format, vizType }: { rows: ReportRow[]; format: "int" | "percent"; vizType: string }) {
+  if (!rows || rows.length === 0) return <p className="text-xs text-gray-400 text-center py-10">Aucune donnée sur la période</p>;
+  var fmt = function(v: number) {
+    return format === "percent" ? v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " %" : v.toLocaleString("fr-FR");
+  };
+  if (vizType === "pie") {
+    var pieData = rows.slice(0, 8);
+    return (
+      <ResponsiveContainer width="100%" height={250}>
+        <PieChart>
+          <Pie data={pieData} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={55} outerRadius={95} strokeWidth={2} stroke="#fff">
+            {pieData.map(function(e, i) { return <Cell key={e.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />; })}
+          </Pie>
+          <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={function(v: any) { return fmt(Number(v)); }} />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+  if (vizType === "bar") {
+    var max = Math.max.apply(null, rows.map(function(r) { return r.value; }).concat(1));
+    return (
+      <div className="space-y-2.5">
+        {rows.map(function(r, i) {
+          var pct = max > 0 ? Math.round((r.value / max) * 100) : 0;
+          return (
+            <div key={r.key}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-600 truncate max-w-[70%]">{r.label}</span>
+                <span className="text-xs font-bold text-gray-700 tabular-nums">{fmt(r.value)}</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: Math.max(pct, 2) + "%", backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  // table
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center max-w-2xl mx-auto">
-      <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-4"><LayoutGrid size={28} className="text-brand-600" /></div>
-      <h3 className="text-lg font-semibold text-gray-900">Rapports personnalisés</h3>
-      <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-        Votre plan {access.planName} permet de créer jusqu'à <b>{access.customReportsMax} rapports</b> sur mesure
-        (dimensions, mesures, filtres et visualisation au choix).
-      </p>
-      <span className="inline-block mt-4 text-xs font-medium text-brand-600 bg-brand-50 px-3 py-1.5 rounded-full">Constructeur bientôt disponible</span>
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <tbody className="divide-y divide-gray-50">
+          {rows.map(function(r) {
+            return (
+              <tr key={r.key} className="hover:bg-gray-50/50">
+                <td className="py-2 text-gray-700">{r.label}</td>
+                <td className="py-2 text-right font-semibold text-gray-900 tabular-nums">{fmt(r.value)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CustomReportsTab({ list }: { list: CustomReportsList }) {
+  var router = useRouter();
+  var [builder, setBuilder] = useState<CustomReportItem | "new" | null>(null);
+  var [viewing, setViewing] = useState<CustomReportItem | null>(null);
+  var [pendingDelete, startDelete] = useTransition();
+  var reports = list.reports;
+  var atQuota = reports.length >= list.max;
+
+  var onDelete = function(id: string) {
+    if (!confirm("Supprimer ce rapport ?")) return;
+    startDelete(async function() { await deleteCustomReport(id); router.refresh(); });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Rapports personnalisés</h3>
+          <p className="text-xs text-gray-500">{reports.length} / {list.max} rapports utilisés</p>
+        </div>
+        {list.canManage && (
+          <button onClick={function() { setBuilder("new"); }} disabled={atQuota}
+            className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+            <Plus size={14} /> Créer un rapport
+          </button>
+        )}
+      </div>
+
+      {atQuota && list.canManage && (
+        <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-4">
+          Quota atteint ({list.max} rapports). Supprimez-en un ou passez au plan supérieur pour en créer davantage.
+        </p>
+      )}
+
+      {reports.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-3"><LayoutGrid size={24} className="text-brand-600" /></div>
+          <h4 className="text-sm font-semibold text-gray-900">Aucun rapport pour le moment</h4>
+          <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">Composez un rapport à partir de vos données : choisissez une source, une dimension, une mesure et une visualisation.</p>
+          {list.canManage && <button onClick={function() { setBuilder("new"); }} className="btn-primary text-xs mt-4"><Plus size={14} /> Créer mon premier rapport</button>}
+          {!list.canManage && <p className="text-[11px] text-gray-400 mt-3">Seuls les administrateurs peuvent créer des rapports.</p>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {reports.map(function(r) {
+            return (
+              <div key={r.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-200 hover:shadow-card-hover transition-all">
+                <div className="flex items-start justify-between">
+                  <div className="w-9 h-9 rounded-lg bg-brand-50 flex items-center justify-center"><LayoutGrid size={16} className="text-brand-600" /></div>
+                  {list.canManage && (
+                    <div className="flex gap-0.5">
+                      <button onClick={function() { setBuilder(r); }} className="text-gray-300 hover:text-brand-500 p-1" title="Modifier"><Pencil size={13} /></button>
+                      <button onClick={function() { onDelete(r.id); }} disabled={pendingDelete} className="text-gray-300 hover:text-red-500 p-1" title="Supprimer"><X size={14} /></button>
+                    </div>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-900 mt-3 truncate">{r.name}</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">{summarizeConfig(r)}</p>
+                <button onClick={function() { setViewing(r); }} className="text-xs font-medium text-brand-600 mt-3 inline-flex items-center gap-1 hover:gap-1.5 transition-all">Ouvrir <ArrowRight size={12} /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {builder && <ReportBuilder report={builder === "new" ? null : builder} onClose={function() { setBuilder(null); }} onSaved={function() { setBuilder(null); router.refresh(); }} />}
+      {viewing && <ReportViewer report={viewing} onClose={function() { setViewing(null); }} />}
+    </div>
+  );
+}
+
+function ReportViewer({ report, onClose }: { report: CustomReportItem; onClose: () => void }) {
+  var [res, setRes] = useState<Awaited<ReturnType<typeof runReportConfig>> | null>(null);
+  var [, startRun] = useTransition();
+
+  useEffect(function() {
+    startRun(async function() {
+      var r = await runReportConfig({
+        source: report.source, dimension: report.dimension, measure: report.measure,
+        period: report.period, vizType: report.vizType as any,
+      });
+      setRes(r);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 animate-scale-in" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="flex items-start justify-between mb-1">
+          <h3 className="text-base font-semibold text-gray-900">{report.name}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">{summarizeConfig(report)}</p>
+        {!res ? (
+          <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : res.ok ? (
+          <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={report.vizType} />
+        ) : (
+          <p className="text-xs text-red-500 text-center py-8">{res.error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem | null; onClose: () => void; onSaved: () => void }) {
+  var [name, setName] = useState(report?.name ?? "");
+  var [source, setSource] = useState<ReportSource>(report?.source ?? "leads");
+  var srcDef = REPORT_SOURCES[source];
+  var [dimension, setDimension] = useState(report?.dimension ?? srcDef.dimensions[0].key);
+  var [measure, setMeasure] = useState(report?.measure ?? srcDef.measures[0].key);
+  var [period, setPeriod] = useState(report?.period ?? "90d");
+  var [vizType, setVizType] = useState<ReportConfig["vizType"]>((report?.vizType as any) ?? "bar");
+  var [res, setRes] = useState<Awaited<ReturnType<typeof runReportConfig>> | null>(null);
+  var [error, setError] = useState("");
+  var [, startPreview] = useTransition();
+  var [saving, startSaving] = useTransition();
+
+  var changeSource = function(s: ReportSource) {
+    setSource(s);
+    var d = REPORT_SOURCES[s];
+    setDimension(d.dimensions[0].key);
+    setMeasure(d.measures[0].key);
+  };
+
+  // Aperçu live (ne dépend pas de vizType : simple re-rendu côté client)
+  useEffect(function() {
+    startPreview(async function() {
+      var r = await runReportConfig({ source: source, dimension: dimension, measure: measure, period: period, vizType: vizType });
+      setRes(r);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, dimension, measure, period]);
+
+  var submit = function() {
+    setError("");
+    startSaving(async function() {
+      var r = await saveCustomReport({ id: report?.id, name: name, source: source, dimension: dimension, measure: measure, period: period, vizType: vizType });
+      if (r.ok) onSaved();
+      else setError(r.error || "Erreur");
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-3xl p-6 animate-scale-in max-h-[90vh] overflow-y-auto" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gray-900">{report ? "Modifier le rapport" : "Nouveau rapport personnalisé"}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Form */}
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Nom du rapport</label>
+              <input value={name} onChange={function(e) { setName(e.target.value); }} className="input text-sm" placeholder="Ex. Leads par filière" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Source de données</label>
+              <select value={source} onChange={function(e) { changeSource(e.target.value as ReportSource); }} className="input text-sm py-1.5">
+                {Object.values(REPORT_SOURCES).map(function(s) { return <option key={s.key} value={s.key}>{s.label}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Dimension (regrouper par)</label>
+              <select value={dimension} onChange={function(e) { setDimension(e.target.value); }} className="input text-sm py-1.5">
+                {srcDef.dimensions.map(function(d) { return <option key={d.key} value={d.key}>{d.label}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Mesure</label>
+              <select value={measure} onChange={function(e) { setMeasure(e.target.value); }} className="input text-sm py-1.5">
+                {srcDef.measures.map(function(m) { return <option key={m.key} value={m.key}>{m.label}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Période</label>
+              <select value={period} onChange={function(e) { setPeriod(e.target.value); }} className="input text-sm py-1.5">
+                {REPORT_PERIODS.map(function(p) { return <option key={p.key} value={p.key}>{p.label}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Visualisation</label>
+              <div className="flex gap-2">
+                {VIZ_TYPES.map(function(v) {
+                  return (
+                    <button key={v.key} onClick={function() { setVizType(v.key); }}
+                      className={cn("flex-1 text-xs py-1.5 rounded-lg border font-medium",
+                        vizType === v.key ? "border-brand-400 bg-brand-50 text-brand-700" : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      )}>{v.label}</button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="bg-gray-50/70 rounded-xl border border-gray-100 p-4">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Aperçu</p>
+            {!res ? (
+              <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+            ) : res.ok ? (
+              <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={vizType} />
+            ) : (
+              <p className="text-xs text-red-500 text-center py-8">{res.error}</p>
+            )}
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
+          <button onClick={submit} disabled={saving || !name.trim()} className="btn-primary text-sm disabled:opacity-50">{saving ? "Enregistrement…" : "Enregistrer"}</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -70,6 +70,7 @@ model Organization {
   planChangeLogs      PlanChangeLog[]
   contracts           Contract[]
   reportingGoals      ReportingGoal[]
+  customReports       CustomReport[]
 
   @@map("organizations")
 }
@@ -740,6 +741,29 @@ model ReportingGoal {
 
   @@index([organizationId])
   @@map("reporting_goals")
+}
+
+// ─── RAPPORTS PERSONNALISÉS ───
+// Configuration d'un rapport sur mesure (source + dimension + mesure + période
+// + visualisation), exécutée à la volée par le moteur report-engine. Le quota
+// par org (3 ou 10) dépend du plan. Champs contraints à une whitelist serveur.
+model CustomReport {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  source         String // "leads" | "students" | "appointments" | "calls"
+  dimension      String // ex. "source", "program", "assignedTo"
+  measure        String // ex. "count", "conversionRate"
+  period         String   @default("90d") // "30d" | "90d" | "12m" | "all"
+  vizType        String   @default("table") // "table" | "bar" | "pie"
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("custom_reports")
 }
 
 // ─── COMMUNICATION ───
