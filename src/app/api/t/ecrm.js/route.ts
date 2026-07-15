@@ -514,9 +514,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── Send to EduCRM ───
-  // Construit le payload lead (attribution incluse). Retourne null si aucun champ
-  // identifiant (prénom/nom/email/téléphone) → soumission ignorée.
-  function buildLeadPayload(data) {
+  function sendLead(data) {
     // Attribution : first-touch persistant (self-referral exclu) en priorité, session en secours.
     var _ft = captureFirstTouch();
     var _src = ECRM.sessionData || getOrCreateSession();
@@ -557,7 +555,7 @@ export async function GET(request: NextRequest) {
 
     if (!payload.firstName && !payload.lastName && !payload.email && !payload.phone) {
       log('info', 'Formulaire ignoré: aucun champ identifiant detecte', data._raw);
-      return null;
+      return;
     }
 
     if (payload.lastName && !payload.firstName) {
@@ -567,13 +565,6 @@ export async function GET(request: NextRequest) {
         payload.lastName = parts.slice(1).join(' ');
       }
     }
-
-    return payload;
-  }
-
-  function sendLead(data) {
-    var payload = buildLeadPayload(data);
-    if (!payload) return;
 
     log('info', 'Lead capturé:', payload.firstName + ' ' + payload.lastName);
 
@@ -601,48 +592,6 @@ export async function GET(request: NextRequest) {
     xhr.send(JSON.stringify(payload));
   }
 
-  // Envoi resilient a la navigation : fetch({keepalive:true}) survit au
-  // rechargement/redirection de page (contrairement au XHR async, annulé au unload).
-  // Utilisé pour les formulaires Gravity NON-AJAX qui redirigent après soumission.
-  // fetch garde les en-têtes custom (x-api-key), ce que sendBeacon ne permet pas.
-  function sendLeadKeepalive(data) {
-    var payload = buildLeadPayload(data);
-    if (!payload) return;
-
-    log('info', 'Lead capturé (beacon):', payload.firstName + ' ' + payload.lastName);
-
-    var body = JSON.stringify(payload);
-    // Requête "simple" (text/plain, SANS en-tête custom) → PAS de preflight CORS.
-    // Le preflight OPTIONS est abandonné pendant une navigation/redirection, ce qui
-    // faisait échouer l'envoi (x-api-key en en-tête). La clé passe donc en query param
-    // et la réponse est ignorée (fire-and-forget).
-    var url = ECRM.endpoint + (ECRM.endpoint.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(ECRM.apiKey);
-
-    // 1) sendBeacon : conçu pour survivre à l'unload, requête simple (pas de preflight).
-    try {
-      if (navigator && navigator.sendBeacon) {
-        var blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
-        if (navigator.sendBeacon(url, blob)) { log('info', 'Lead envoyé (beacon)'); return; }
-      }
-    } catch (e) {}
-
-    // 2) Repli : fetch keepalive en requête simple (text/plain, sans en-tête custom).
-    try {
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: body,
-        keepalive: true,
-        mode: 'cors',
-      }).catch(function() {});
-      log('info', 'Lead envoyé (fetch keepalive)');
-      return;
-    } catch (e2) {}
-
-    // 3) Dernier repli : XHR classique (peut être annulé si navigation).
-    sendLead(data);
-  }
-
 // ─── Gravity Forms support (AJAX) ───
   // Gravity intercepte la soumission : l'événement submit natif ne remonte pas.
   // Stratégie : on ACCUMULE les valeurs des champs que l'utilisateur modifie
@@ -654,61 +603,6 @@ export async function GET(request: NextRequest) {
   var _gravityRaw = {};         // _gravityRaw[formId] = { "input_37": "Ingénierie Électrique", ... }
   var _gravityCheckbox = {};    // _gravityCheckbox[formId] = { "input_31": { "Sciences": true, ... } }
   var _gravityLabels = {};      // _gravityLabels[formId] = { "input_1.3": "prénom", ... }
-  var _gravitySent = {};        // _gravitySent[formId] = timestamp du dernier envoi (anti-doublon)
-
-  // Anti-doublon entre les deux chemins d'envoi Gravity (submit non-AJAX vs
-  // gform_confirmation_loaded AJAX) : le premier qui envoie verrouille ~5s.
-  function gravityRecentlySent(formId) {
-    var t = _gravitySent[formId];
-    return !!t && (Date.now() - t) < 5000;
-  }
-  function gravityMarkSent(formId) { _gravitySent[formId] = Date.now(); }
-
-  // Multi-page : ne capturer qu'à la soumission FINALE. Gravity met le champ caché
-  // gform_target_page_number_X à 0 au dernier « Envoyer » ; >0 sur « Suivant/Précédent ».
-  // Champ absent = formulaire mono-page → toujours final.
-  function isFinalGravitySubmit(form, formId) {
-    var tp = form.querySelector('input[name="gform_target_page_number_' + formId + '"]');
-    if (!tp) return true;
-    var v = (tp.value || '').trim();
-    return v === '' || v === '0';
-  }
-
-  // Capture au 'submit' natif — qui se déclenche AUSSI en mode AJAX (la soumission
-  // poste vers l'iframe gform_ajax_frame_X). On envoie ICI pour couvrir TOUS les cas
-  // de confirmation, y compris la « redirection » qui ne déclenche jamais
-  // gform_confirmation_loaded et navigue avant tout autre hook. Envoi keepalive →
-  // survit à la redirection. La garde _gravitySent évite le doublon avec le chemin
-  // gform_confirmation_loaded (confirmations inline).
-  function captureGravityOnSubmit(form) {
-    var formId = form.id.replace('gform_', '');
-    if (!isFinalGravitySubmit(form, formId)) return; // navigation multi-page, pas une soumission
-    if (gravityRecentlySent(formId)) return;
-
-    // TinyMCE (éditeur riche WordPress) : recopier le contenu vers les textarea.
-    try { if (window.tinymce && window.tinymce.triggerSave) window.tinymce.triggerSave(); } catch(e) {}
-    var els = form.elements;
-    for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      if (!el) continue;
-      // Les textarea d'éditeurs riches sont display:none (offsetParent null) mais valides
-      if (el.offsetParent === null && el.tagName !== 'TEXTAREA') continue;
-      accumulateField(form, el);
-    }
-
-    var raw = _gravityRaw[formId];
-    if (!raw || Object.keys(raw).length === 0) {
-      log('info', 'Gravity: aucune donnée capturée au submit pour', form.id);
-      return;
-    }
-    var data = buildLeadFromRaw(formId);
-    log('info', 'Gravity: envoi keepalive du lead au submit pour', form.id);
-    gravityMarkSent(formId);
-    sendLeadKeepalive(data);
-    delete _gravityRaw[formId];
-    delete _gravityCheckbox[formId];
-    delete _gravityLabels[formId];
-  }
 
   function isGravityForm(form) {
     return form && form.id && form.id.indexOf('gform_') === 0;
@@ -873,7 +767,6 @@ export async function GET(request: NextRequest) {
       // (offsetParent !== null) → les selects cachés des branches non choisies sont ignorés,
       // ce qui évite les valeurs résiduelles.
 
-      if (gravityRecentlySent(key)) return; // déjà envoyé par le chemin submit non-AJAX
       var raw = _gravityRaw[key];
       if (!raw || Object.keys(raw).length === 0) {
         log('info', 'Gravity: confirmation reçue mais aucune donnée capturée pour', formId);
@@ -881,7 +774,6 @@ export async function GET(request: NextRequest) {
       }
       var data = buildLeadFromRaw(key);
       log('info', 'Gravity: soumission confirmée, envoi du lead pour le formulaire', formId);
-      gravityMarkSent(key);
       sendLead(data);
       delete _gravityRaw[key];
       delete _gravityCheckbox[key];
@@ -1055,10 +947,8 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      // Formulaires Gravity : capturés au 'submit' (AJAX comme non-AJAX), envoi keepalive.
-      // Couvre les confirmations « redirection » qui ne déclenchent pas gform_confirmation_loaded.
-      // La garde _gravitySent empêche le doublon avec le chemin gform_confirmation_loaded.
-      if (form.id && form.id.indexOf('gform_') === 0) { captureGravityOnSubmit(form); return; }
+      // Les formulaires Gravity sont gérés par setupGravityForms (AJAX) → on les ignore ici
+      if (form.id && form.id.indexOf('gform_') === 0) return;
       if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);
