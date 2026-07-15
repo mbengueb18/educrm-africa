@@ -367,10 +367,22 @@ async function createInboundMessageIfPresent(
 // ─── POST: Ingest lead ───
 export async function POST(request: NextRequest) {
   try {
+    // Clé API : en-tête (envoi XHR/fetch classique) OU query param `key`/`api_key`.
+    // La query est indispensable pour les envois via sendBeacon/keepalive en requête
+    // "simple" (sans en-tête custom → pas de preflight CORS), utilisés au moment d'une
+    // navigation/redirection (formulaires Gravity à confirmation "redirection").
     var apiKey =
       request.headers.get("x-api-key") ||
       request.headers.get("authorization")?.replace("Bearer ", "") ||
+      request.nextUrl.searchParams.get("key") ||
+      request.nextUrl.searchParams.get("api_key") ||
       "";
+
+    var contentType = request.headers.get("content-type") || "";
+    console.log("[Lead Ingest] POST", {
+      keySource: request.headers.get("x-api-key") ? "header" : (request.nextUrl.searchParams.get("key") || request.nextUrl.searchParams.get("api_key") ? "query" : "none"),
+      ct: contentType,
+    });
 
     var organizationId = await validateApiKey(apiKey);
     if (!organizationId) {
@@ -381,7 +393,6 @@ export async function POST(request: NextRequest) {
     }
 
     var rawData: Record<string, any>;
-    var contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
       rawData = await request.json();

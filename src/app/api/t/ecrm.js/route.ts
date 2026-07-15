@@ -609,32 +609,38 @@ export async function GET(request: NextRequest) {
     var payload = buildLeadPayload(data);
     if (!payload) return;
 
-    log('info', 'Lead capturé (keepalive):', payload.firstName + ' ' + payload.lastName);
+    log('info', 'Lead capturé (beacon):', payload.firstName + ' ' + payload.lastName);
 
+    var body = JSON.stringify(payload);
+    // Requête "simple" (text/plain, SANS en-tête custom) → PAS de preflight CORS.
+    // Le preflight OPTIONS est abandonné pendant une navigation/redirection, ce qui
+    // faisait échouer l'envoi (x-api-key en en-tête). La clé passe donc en query param
+    // et la réponse est ignorée (fire-and-forget).
+    var url = ECRM.endpoint + (ECRM.endpoint.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(ECRM.apiKey);
+
+    // 1) sendBeacon : conçu pour survivre à l'unload, requête simple (pas de preflight).
     try {
-      fetch(ECRM.endpoint, {
+      if (navigator && navigator.sendBeacon) {
+        var blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
+        if (navigator.sendBeacon(url, blob)) { log('info', 'Lead envoyé (beacon)'); return; }
+      }
+    } catch (e) {}
+
+    // 2) Repli : fetch keepalive en requête simple (text/plain, sans en-tête custom).
+    try {
+      fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': ECRM.apiKey },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: body,
         keepalive: true,
         mode: 'cors',
-      }).then(function(r) {
-        return r.json().catch(function() { return null; });
-      }).then(function(result) {
-        if (!result) return;
-        log('info', 'Lead envoye (keepalive):', result);
-        if (window.dataLayer) {
-          window.dataLayer.push({
-            event: 'educrm_lead_captured',
-            ecrmLeadId: result.leadId,
-            ecrmDuplicate: result.duplicate || false,
-          });
-        }
-      }).catch(function() { log('warn', 'Erreur envoi lead (keepalive)'); });
-    } catch (e) {
-      // Navigateur sans fetch/keepalive : repli best-effort sur le XHR classique.
-      sendLead(data);
-    }
+      }).catch(function() {});
+      log('info', 'Lead envoyé (fetch keepalive)');
+      return;
+    } catch (e2) {}
+
+    // 3) Dernier repli : XHR classique (peut être annulé si navigation).
+    sendLead(data);
   }
 
 // ─── Gravity Forms support (AJAX) ───
