@@ -4,14 +4,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getReportingAccess } from "./access";
-import { validateReportConfig, type ReportConfig, type ReportSource } from "./report-config";
+import { validateReportConfig, type ReportConfig, type ReportSource, type MeasureFormat } from "./report-config";
 import { executeReport, type ReportRow } from "./report-engine";
 
 export interface RunReportResult {
   ok: boolean;
   error?: string;
   rows?: ReportRow[];
-  format?: "int" | "percent";
+  format?: MeasureFormat;
+  total?: number;
 }
 
 /** Exécute une configuration de rapport (whitelistée) — onglet Rapports personnalisés. */
@@ -28,8 +29,8 @@ export async function runReportConfig(config: ReportConfig): Promise<RunReportRe
   if (err) return { ok: false, error: err };
 
   try {
-    const { rows, format } = await executeReport(session.user.organizationId, config);
-    return { ok: true, rows, format };
+    const { rows, format, total } = await executeReport(session.user.organizationId, config);
+    return { ok: true, rows, format, total };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Impossible d'exécuter le rapport." };
   }

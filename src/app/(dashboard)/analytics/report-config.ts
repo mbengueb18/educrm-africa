@@ -2,9 +2,9 @@
 // Aucune dépendance Prisma ici — sert au constructeur (UI) et à valider les
 // configurations côté serveur avant exécution par report-engine.
 
-export type ReportSource = "leads" | "students" | "appointments" | "calls";
-export type VizType = "table" | "bar" | "pie";
-export type MeasureFormat = "int" | "percent";
+export type ReportSource = "leads" | "students" | "appointments" | "calls" | "tasks" | "messages";
+export type VizType = "table" | "bar" | "column" | "line" | "area" | "pie" | "donut" | "kpi";
+export type MeasureFormat = "int" | "percent" | "duration";
 
 export interface DimensionDef {
   key: string;
@@ -30,10 +30,27 @@ export const REPORT_PERIODS: { key: string; label: string }[] = [
 ];
 
 export const VIZ_TYPES: { key: VizType; label: string }[] = [
-  { key: "table", label: "Tableau" },
   { key: "bar", label: "Barres" },
+  { key: "column", label: "Colonnes" },
+  { key: "line", label: "Courbe" },
+  { key: "area", label: "Aire" },
   { key: "pie", label: "Camembert" },
+  { key: "donut", label: "Donut" },
+  { key: "kpi", label: "Grand nombre" },
+  { key: "table", label: "Tableau" },
 ];
+
+// Dimensions temporelles communes (bucketing par date sur le champ de date de la source)
+const TIME_DIMENSIONS: DimensionDef[] = [
+  { key: "month", label: "Par mois" },
+  { key: "week", label: "Par semaine" },
+  { key: "day", label: "Par jour" },
+];
+
+/** Vrai si la dimension est temporelle (courbe/aire, ordre chronologique). */
+export function isTimeDimension(key: string): boolean {
+  return key === "day" || key === "week" || key === "month";
+}
 
 export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
   leads: {
@@ -45,11 +62,20 @@ export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
       { key: "program", label: "Filière" },
       { key: "assignedTo", label: "Conseiller" },
       { key: "campus", label: "Campus" },
+      { key: "campaign", label: "Campagne" },
+      { key: "pipeline", label: "Pipeline" },
+      { key: "country", label: "Pays" },
+      { key: "city", label: "Ville" },
+      { key: "civility", label: "Civilité" },
+      { key: "lostReason", label: "Motif de perte" },
+      { key: "isConverted", label: "Converti (oui/non)" },
+      ...TIME_DIMENSIONS,
     ],
     measures: [
       { key: "count", label: "Nombre de leads", format: "int" },
       { key: "converted", label: "Convertis", format: "int" },
       { key: "conversionRate", label: "Taux de conversion", format: "percent" },
+      { key: "avgScore", label: "Score moyen", format: "int" },
     ],
   },
   students: {
@@ -59,6 +85,8 @@ export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
       { key: "program", label: "Filière" },
       { key: "campus", label: "Campus" },
       { key: "status", label: "Statut" },
+      { key: "civility", label: "Civilité" },
+      ...TIME_DIMENSIONS,
     ],
     measures: [{ key: "count", label: "Nombre d'étudiants", format: "int" }],
   },
@@ -67,11 +95,15 @@ export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
     label: "Rendez-vous",
     dimensions: [
       { key: "status", label: "Statut" },
+      { key: "type", label: "Type" },
       { key: "assignedTo", label: "Conseiller" },
+      ...TIME_DIMENSIONS,
     ],
     measures: [
       { key: "count", label: "Nombre de RDV", format: "int" },
       { key: "completed", label: "Honorés", format: "int" },
+      { key: "completionRate", label: "Taux de présence", format: "percent" },
+      { key: "noShow", label: "Absents", format: "int" },
     ],
   },
   calls: {
@@ -79,12 +111,46 @@ export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
     label: "Appels",
     dimensions: [
       { key: "outcome", label: "Résultat" },
+      { key: "direction", label: "Sens (entrant/sortant)" },
       { key: "assignedTo", label: "Conseiller" },
+      ...TIME_DIMENSIONS,
     ],
     measures: [
       { key: "count", label: "Nombre d'appels", format: "int" },
       { key: "answered", label: "Décrochés", format: "int" },
       { key: "answerRate", label: "Taux de décroché", format: "percent" },
+      { key: "avgDuration", label: "Durée moyenne", format: "duration" },
+    ],
+  },
+  tasks: {
+    key: "tasks",
+    label: "Tâches",
+    dimensions: [
+      { key: "status", label: "Statut" },
+      { key: "type", label: "Type" },
+      { key: "priority", label: "Priorité" },
+      { key: "assignedTo", label: "Assigné à" },
+      ...TIME_DIMENSIONS,
+    ],
+    measures: [
+      { key: "count", label: "Nombre de tâches", format: "int" },
+      { key: "done", label: "Terminées", format: "int" },
+      { key: "doneRate", label: "Taux de complétion", format: "percent" },
+    ],
+  },
+  messages: {
+    key: "messages",
+    label: "Communications",
+    dimensions: [
+      { key: "channel", label: "Canal" },
+      { key: "direction", label: "Sens (reçu/envoyé)" },
+      { key: "sentBy", label: "Envoyé par" },
+      ...TIME_DIMENSIONS,
+    ],
+    measures: [
+      { key: "count", label: "Nombre de messages", format: "int" },
+      { key: "inbound", label: "Reçus", format: "int" },
+      { key: "outbound", label: "Envoyés", format: "int" },
     ],
   },
 };

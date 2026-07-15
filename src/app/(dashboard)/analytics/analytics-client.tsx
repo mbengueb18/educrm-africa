@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid,
+  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, LineChart, Line,
 } from "recharts";
 import { getDashboardData } from "./actions";
 import type { ReportingAccess } from "./access";
@@ -770,17 +770,39 @@ function summarizeConfig(item: CustomReportItem): string {
   return meas + " par " + dim + " · " + per;
 }
 
-function ReportResult({ rows, format, vizType }: { rows: ReportRow[]; format: "int" | "percent"; vizType: string }) {
+function formatReportValue(v: number, format: string): string {
+  if (format === "percent") return v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " %";
+  if (format === "duration") {
+    var s = Math.round(v);
+    if (s < 60) return s + " s";
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + " min" + (r ? " " + r + " s" : "");
+  }
+  return v.toLocaleString("fr-FR");
+}
+
+function ReportResult({ rows, format, vizType, total }: { rows: ReportRow[]; format: string; vizType: string; total?: number }) {
+  var fmt = function(v: number) { return formatReportValue(v, format); };
+
+  // Grand nombre (KPI) : n'a pas besoin de lignes
+  if (vizType === "kpi") {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className="text-4xl font-bold text-gray-900 tabular-nums">{fmt(total ?? 0)}</div>
+        <div className="text-xs text-gray-400 mt-1">total sur la période</div>
+      </div>
+    );
+  }
+
   if (!rows || rows.length === 0) return <p className="text-xs text-gray-400 text-center py-10">Aucune donnée sur la période</p>;
-  var fmt = function(v: number) {
-    return format === "percent" ? v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " %" : v.toLocaleString("fr-FR");
-  };
-  if (vizType === "pie") {
+
+  if (vizType === "pie" || vizType === "donut") {
     var pieData = rows.slice(0, 8);
     return (
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
-          <Pie data={pieData} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={55} outerRadius={95} strokeWidth={2} stroke="#fff">
+          <Pie data={pieData} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={vizType === "donut" ? 60 : 0} outerRadius={95} strokeWidth={2} stroke="#fff">
             {pieData.map(function(e, i) { return <Cell key={e.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />; })}
           </Pie>
           <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={function(v: any) { return fmt(Number(v)); }} />
@@ -788,42 +810,83 @@ function ReportResult({ rows, format, vizType }: { rows: ReportRow[]; format: "i
       </ResponsiveContainer>
     );
   }
-  if (vizType === "bar") {
-    var max = Math.max.apply(null, rows.map(function(r) { return r.value; }).concat(1));
+
+  if (vizType === "line" || vizType === "area") {
+    var Chart: any = vizType === "line" ? LineChart : AreaChart;
     return (
-      <div className="space-y-2.5">
-        {rows.map(function(r, i) {
-          var pct = max > 0 ? Math.round((r.value / max) * 100) : 0;
-          return (
-            <div key={r.key}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-600 truncate max-w-[70%]">{r.label}</span>
-                <span className="text-xs font-bold text-gray-700 tabular-nums">{fmt(r.value)}</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: Math.max(pct, 2) + "%", backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-              </div>
-            </div>
-          );
-        })}
+      <ResponsiveContainer width="100%" height={250}>
+        <Chart data={rows}>
+          <defs>
+            <linearGradient id="gradReport" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#2E86C1" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#2E86C1" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={function(v: any) { return fmt(Number(v)); }} />
+          {vizType === "line"
+            ? <Line type="monotone" dataKey="value" stroke="#2E86C1" strokeWidth={2} dot={false} />
+            : <Area type="monotone" dataKey="value" stroke="#2E86C1" strokeWidth={2} fill="url(#gradReport)" />}
+        </Chart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (vizType === "column") {
+    return (
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={rows.slice(0, 25)}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={0} angle={-30} textAnchor="end" height={60} />
+          <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={function(v: any) { return fmt(Number(v)); }} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+            {rows.slice(0, 25).map(function(e, i) { return <Cell key={e.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />; })}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (vizType === "table") {
+    return (
+      <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+        <table className="w-full text-xs">
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(function(r) {
+              return (
+                <tr key={r.key} className="hover:bg-gray-50/50">
+                  <td className="py-2 text-gray-700">{r.label}</td>
+                  <td className="py-2 text-right font-semibold text-gray-900 tabular-nums">{fmt(r.value)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     );
   }
-  // table
+
+  // bar (barres horizontales) — défaut
+  var max = Math.max.apply(null, rows.map(function(r) { return r.value; }).concat(1));
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <tbody className="divide-y divide-gray-50">
-          {rows.map(function(r) {
-            return (
-              <tr key={r.key} className="hover:bg-gray-50/50">
-                <td className="py-2 text-gray-700">{r.label}</td>
-                <td className="py-2 text-right font-semibold text-gray-900 tabular-nums">{fmt(r.value)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-2.5 max-h-[320px] overflow-y-auto">
+      {rows.map(function(r, i) {
+        var pct = max > 0 ? Math.round((r.value / max) * 100) : 0;
+        return (
+          <div key={r.key}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-600 truncate max-w-[70%]">{r.label}</span>
+              <span className="text-xs font-bold text-gray-700 tabular-nums">{fmt(r.value)}</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: Math.max(pct, 2) + "%", backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -925,7 +988,7 @@ function ReportViewer({ report, onClose }: { report: CustomReportItem; onClose: 
         {!res ? (
           <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
         ) : res.ok ? (
-          <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={report.vizType} />
+          <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={report.vizType} total={res.total} />
         ) : (
           <p className="text-xs text-red-500 text-center py-8">{res.error}</p>
         )}
@@ -1013,11 +1076,11 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Visualisation</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {VIZ_TYPES.map(function(v) {
                   return (
                     <button key={v.key} onClick={function() { setVizType(v.key); }}
-                      className={cn("flex-1 text-xs py-1.5 rounded-lg border font-medium",
+                      className={cn("text-[11px] py-1.5 rounded-lg border font-medium",
                         vizType === v.key ? "border-brand-400 bg-brand-50 text-brand-700" : "border-gray-200 text-gray-500 hover:border-gray-300"
                       )}>{v.label}</button>
                   );
@@ -1032,7 +1095,7 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
             {!res ? (
               <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
             ) : res.ok ? (
-              <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={vizType} />
+              <ReportResult rows={res.rows || []} format={res.format || "int"} vizType={vizType} total={res.total} />
             ) : (
               <p className="text-xs text-red-500 text-center py-8">{res.error}</p>
             )}
@@ -1117,7 +1180,7 @@ function AiTab() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               {result.config && <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">{summarizeConfig({ id: "", name: "", ...result.config } as CustomReportItem)}</p>}
-              <ReportResult rows={result.rows || []} format={result.format || "int"} vizType={result.config?.vizType || "bar"} />
+              <ReportResult rows={result.rows || []} format={result.format || "int"} vizType={result.config?.vizType || "bar"} total={result.total} />
             </div>
           </div>
         ) : (

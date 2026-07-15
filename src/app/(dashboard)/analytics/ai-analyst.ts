@@ -9,8 +9,8 @@ import { getReportingAccess } from "./access";
 import { executeReport, type ReportRow } from "./report-engine";
 import {
   REPORT_SOURCES, REPORT_PERIODS, VIZ_TYPES,
-  validateReportConfig, measureFormat,
-  type ReportConfig, type ReportSource, type VizType,
+  validateReportConfig,
+  type ReportConfig, type ReportSource, type VizType, type MeasureFormat,
 } from "./report-config";
 
 const AI_COST = 2; // 2 crédits : interprétation + narration
@@ -22,7 +22,8 @@ export interface AnalystResult {
   answer?: string;
   config?: ReportConfig;
   rows?: ReportRow[];
-  format?: "int" | "percent";
+  format?: MeasureFormat;
+  total?: number;
 }
 
 /** Extrait un objet JSON d'une réponse LLM (retire d'éventuelles clôtures ```json). */
@@ -96,11 +97,13 @@ Réponds STRICTEMENT en JSON : {"source": "...", "dimension": "...", "measure": 
 
   // ─── Exécution ancrée ───
   let rows: ReportRow[];
-  let format: "int" | "percent";
+  let format: MeasureFormat;
+  let total = 0;
   try {
     const out = await executeReport(orgId, config);
     rows = out.rows;
     format = out.format;
+    total = out.total;
   } catch {
     return { ok: false, error: "Impossible d'exécuter le rapport correspondant." };
   }
@@ -149,7 +152,7 @@ Réponds STRICTEMENT en JSON : {"answer": "..."}`
     });
   } catch {}
 
-  return { ok: true, question: q, answer, config, rows, format };
+  return { ok: true, question: q, answer, config, rows, format, total };
 }
 
 export interface AnalystHistoryItem {
