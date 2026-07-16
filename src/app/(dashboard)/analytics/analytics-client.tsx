@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
@@ -35,6 +35,10 @@ import {
   addReportToDashboard, removeDashboardItem, setDashboardItemWidth,
   type DashboardsList, type DashboardDetail,
 } from "./dashboards";
+import {
+  getProgramFunnel, getProgramGoalsForEdit, saveProgramGoals,
+  type ProgramFunnel, type FunnelRow, type ProgramGoalEditItem,
+} from "./program-funnel";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -234,7 +238,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
       ) : tab === "acquisition" ? (
         <AcquisitionTab data={data} />
       ) : tab === "pipeline" ? (
-        <PipelineTab data={data} />
+        <PipelineTab data={data} access={access} />
       ) : tab === "team" ? (
         <TeamTab data={data} />
       ) : tab === "sequences" ? (
@@ -601,7 +605,7 @@ function AcquisitionTab({ data }: { data: any }) {
 }
 
 // ═══════════════════════ ONGLET : PIPELINE ═══════════════════════
-function PipelineTab({ data }: { data: any }) {
+function PipelineTab({ data, access }: { data: any; access: ReportingAccess }) {
   var kpis = data.kpis;
   return (
     <div className="flex flex-col gap-4">
@@ -687,6 +691,149 @@ function PipelineTab({ data }: { data: any }) {
         )}
       </div>
     </div>
+    {access.objectives && <ProgramFunnelSection />}
+    </div>
+  );
+}
+
+// ═══════════════════════ RECRUTEMENT PAR PROGRAMME ═══════════════════════
+function fmtPct(v: number): string {
+  return v.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " %";
+}
+
+function FunnelTableRow({ r, kind }: { r: FunnelRow; kind: "prog" | "sub" | "total" }) {
+  var base = kind === "total" ? "bg-amber-50 font-bold" : kind === "sub" ? "bg-gray-50 font-semibold" : "";
+  return (
+    <tr className={cn("border-b border-gray-50", base)}>
+      <td className="py-2 px-2 text-left whitespace-nowrap">{r.name}</td>
+      {r.reached.map(function(v, i) { return <td key={i} className="py-2 px-2 text-right tabular-nums">{v}</td>; })}
+      <td className="py-2 px-2 text-right tabular-nums text-emerald-700">{r.inscrits}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{fmtPct(r.transformationRate)}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.target || "—"}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.realized}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.target > 0 ? fmtPct(r.realizationRate) : "—"}</td>
+    </tr>
+  );
+}
+
+function ProgramFunnelSection() {
+  var [fn, setFn] = useState<ProgramFunnel | null>(null);
+  var [editing, setEditing] = useState(false);
+
+  var refresh = function() { getProgramFunnel().then(setFn).catch(function() {}); };
+  useEffect(function() { refresh(); }, []);
+
+  if (!fn) {
+    return <div className="bg-white rounded-xl border border-gray-200 p-5"><div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div></div>;
+  }
+  if (!fn.ok) return null;
+
+  var stages = fn.stages || [];
+  var colCount = 1 + stages.length + 5;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <h3 className="text-sm font-semibold text-gray-700">Recrutement par programme</h3>
+        {fn.canEdit && <button onClick={function() { setEditing(true); }} className="btn-secondary text-xs py-1.5"><Pencil size={13} /> Objectifs par programme</button>}
+      </div>
+      <p className="text-[11px] text-gray-400 mb-4">Cumulatif (instantané) · les colonnes suivent vos étapes de pipeline · taux de transformation = inscrits / admis · taux de réalisation = inscrits / objectif</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 text-gray-500">
+              <th className="py-2 px-2 text-left font-medium">Programme</th>
+              {stages.map(function(s) { return <th key={s.id} className="py-2 px-2 text-right font-medium whitespace-nowrap">{s.name}</th>; })}
+              <th className="py-2 px-2 text-right font-medium">Inscrits</th>
+              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx transf.</th>
+              <th className="py-2 px-2 text-right font-medium">Objectif</th>
+              <th className="py-2 px-2 text-right font-medium">Réalisé</th>
+              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx réal.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(fn.groups || []).map(function(g) {
+              return (
+                <Fragment key={g.type}>
+                  <tr className="bg-brand-50/60"><td colSpan={colCount} className="py-1.5 px-2 text-left font-semibold text-brand-700 uppercase text-[10px] tracking-wider">{g.label}</td></tr>
+                  {g.rows.map(function(r) { return <FunnelTableRow key={r.programId} r={r} kind="prog" />; })}
+                  <FunnelTableRow r={g.subtotal} kind="sub" />
+                </Fragment>
+              );
+            })}
+            {fn.total && <FunnelTableRow r={fn.total} kind="total" />}
+          </tbody>
+        </table>
+      </div>
+      {(!fn.groups || fn.groups.length === 0) && <p className="text-xs text-gray-400 text-center py-6">Aucun programme actif.</p>}
+      {editing && <ProgramGoalsEditor onClose={function() { setEditing(false); }} onSaved={function() { setEditing(false); refresh(); }} />}
+    </div>
+  );
+}
+
+function ProgramGoalsEditor({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  var [items, setItems] = useState<ProgramGoalEditItem[]>([]);
+  var [loaded, setLoaded] = useState(false);
+  var [err, setErr] = useState("");
+  var [pending, start] = useTransition();
+
+  useEffect(function() {
+    getProgramGoalsForEdit().then(function(x) { setItems(x); setLoaded(true); }).catch(function() { setLoaded(true); });
+  }, []);
+
+  var setTarget = function(pid: string, val: number) {
+    setItems(function(prev) { return prev.map(function(i) { return i.programId === pid ? { ...i, target: val } : i; }); });
+  };
+  var save = function() {
+    setErr("");
+    start(async function() {
+      var r = await saveProgramGoals(items.map(function(i) { return { programId: i.programId, target: Number(i.target) || 0 }; }));
+      if (r.ok) onSaved();
+      else setErr(r.error || "Erreur");
+    });
+  };
+
+  var groups: Record<string, ProgramGoalEditItem[]> = {};
+  items.forEach(function(i) { (groups[i.typeLabel] ||= []).push(i); });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-scale-in max-h-[85vh] overflow-y-auto" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gray-900">Objectifs d'inscrits par programme</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        {!loaded ? (
+          <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : items.length === 0 ? (
+          <p className="text-xs text-gray-400 py-6 text-center">Aucun programme actif.</p>
+        ) : (
+          Object.keys(groups).map(function(label) {
+            return (
+              <div key={label} className="mb-4">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+                <div className="space-y-2">
+                  {groups[label].map(function(i) {
+                    return (
+                      <div key={i.programId} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-700 flex-1 truncate">{i.name}</span>
+                        <input type="number" min="0" value={i.target}
+                          onChange={function(e) { setTarget(i.programId, e.target.value === "" ? 0 : Number(e.target.value)); }}
+                          className="input text-sm w-24 py-1.5" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        )}
+        {err && <p className="text-xs text-red-500 mt-2">{err}</p>}
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
+          <button onClick={save} disabled={pending} className="btn-primary text-sm disabled:opacity-50">{pending ? "Enregistrement…" : "Enregistrer"}</button>
+        </div>
+      </div>
     </div>
   );
 }
