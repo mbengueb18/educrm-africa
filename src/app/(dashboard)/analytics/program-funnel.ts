@@ -23,10 +23,15 @@ export interface FunnelRow {
   realized: number;           // = inscrits
   realizationRate: number;    // inscrits / objectif (%)
 }
+export interface DiplomaGroup {
+  diploma: string;
+  rows: FunnelRow[];
+  subtotal: FunnelRow;
+}
 export interface FunnelGroup {
   type: string;
   label: string;
-  rows: FunnelRow[];
+  diplomas: DiplomaGroup[];
   subtotal: FunnelRow;
 }
 export interface FunnelSummary {
@@ -89,7 +94,7 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
 
   const [allLeads, programs, stages, callLeads, msgLeads] = await Promise.all([
     prisma.lead.findMany({ where: { organizationId: orgId }, select: { id: true, programId: true, stageId: true, isConverted: true } }),
-    prisma.program.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, formationType: true, targetEnrollments: true } }),
+    prisma.program.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, formationType: true, targetEnrollments: true, diploma: true } }),
     prisma.pipelineStage.findMany({ where: { organizationId: orgId }, select: { id: true, name: true } }),
     prisma.call.findMany({ where: { organizationId: orgId, leadId: { not: null } }, select: { leadId: true }, distinct: ["leadId"] }),
     prisma.message.findMany({ where: { organizationId: orgId, leadId: { not: null }, direction: "OUTBOUND" }, select: { leadId: true }, distinct: ["leadId"] }),
@@ -145,11 +150,22 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
   for (const type of TYPE_ORDER) {
     const progs = programs.filter((p) => p.formationType === type);
     if (progs.length === 0) continue;
-    const rows = progs.map(buildRow);
-    groups.push({ type, label: TYPE_LABELS[type], rows, subtotal: aggregate(rows, "Sous-total " + TYPE_LABELS[type]) });
+
+    // Sous-regroupement par Programme/diplôme
+    const byDiploma: Record<string, FunnelRow[]> = {};
+    for (const p of progs) {
+      const dip = (p.diploma && p.diploma.trim()) || "(sans programme)";
+      (byDiploma[dip] ||= []).push(buildRow(p));
+    }
+    const diplomas: DiplomaGroup[] = Object.keys(byDiploma)
+      .sort((a, b) => a.localeCompare(b))
+      .map((dip) => ({ diploma: dip, rows: byDiploma[dip], subtotal: aggregate(byDiploma[dip], "Sous-total " + dip) }));
+
+    const allTypeRows = diplomas.flatMap((d) => d.rows);
+    groups.push({ type, label: TYPE_LABELS[type], diplomas, subtotal: aggregate(allTypeRows, "Sous-total " + TYPE_LABELS[type]) });
   }
 
-  const total = aggregate(groups.flatMap((g) => g.rows), "TOTAL");
+  const total = aggregate(groups.flatMap((g) => g.diplomas.flatMap((d) => d.rows)), "TOTAL");
 
   return {
     ok: true,

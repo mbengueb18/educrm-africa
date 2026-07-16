@@ -407,6 +407,7 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
   var [level, setLevel] = useState(program?.level || "LICENCE");
   var [tuition, setTuition] = useState(program?.tuitionAmount ? String(program.tuitionAmount) : "");
   var [targetEnrollments, setTargetEnrollments] = useState(program?.targetEnrollments ? String(program.targetEnrollments) : "");
+  var [diploma, setDiploma] = useState(program?.diploma || "");
   var [formationType, setFormationType] = useState<"INITIAL" | "CONTINUE" | "BOTH">(program?.formationType || "INITIAL");
   var [campusId, setCampusId] = useState(program?.campusId || (campuses.length > 0 ? campuses[0].id : ""));
   var [pipelineId, setPipelineId] = useState(function() {
@@ -442,6 +443,7 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
           campusId,
           formationType,
           targetEnrollments: targetEnrollments ? parseInt(targetEnrollments) : undefined,
+          diploma: diploma || undefined,
           pipelineId: pipelineId || undefined,
         });
         toast.success("Filière créée");
@@ -452,6 +454,7 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
           tuitionAmount: tuition ? parseInt(tuition) : undefined,
           formationType,
           targetEnrollments: targetEnrollments ? parseInt(targetEnrollments) : 0,
+          diploma: diploma,
           pipelineId: pipelineId || undefined,
         });
         toast.success("Filière mise à jour");
@@ -512,6 +515,9 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
         </div>
         <div><label className="text-xs font-medium text-gray-600 mb-1 block">Objectif d'inscrits (rentrée)</label>
           <input type="number" min="0" value={targetEnrollments} onChange={function(e) { setTargetEnrollments(e.target.value); }} className="input text-sm" placeholder="50" />
+        </div>
+        <div><label className="text-xs font-medium text-gray-600 mb-1 block">Programme / diplôme (optionnel)</label>
+          <input type="text" value={diploma} onChange={function(e) { setDiploma(e.target.value); }} className="input text-sm" placeholder="Cycle Licence" />
         </div>
       </div>
       <div className="flex justify-end gap-2">

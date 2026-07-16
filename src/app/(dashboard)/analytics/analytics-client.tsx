@@ -37,7 +37,7 @@ import {
 } from "./dashboards";
 import {
   getProgramFunnel,
-  type ProgramFunnel, type FunnelRow, type FunnelSummary,
+  type ProgramFunnel, type FunnelRow, type FunnelSummary, type FunnelGroup,
 } from "./program-funnel";
 
 var SOURCE_LABELS: Record<string, string> = {
@@ -83,12 +83,13 @@ function formatDateShort(dateStr: string): string {
 }
 
 // ─── Onglets du hub ───
-type TabKey = "overview" | "acquisition" | "pipeline" | "team" | "sequences" | "custom" | "ai";
+type TabKey = "overview" | "acquisition" | "pipeline" | "recruitment" | "team" | "sequences" | "custom" | "ai";
 
 var TAB_DEFS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: "overview", label: "Vue d'ensemble", icon: LayoutGrid },
   { key: "acquisition", label: "Acquisition", icon: Globe2 },
   { key: "pipeline", label: "Pipeline", icon: Target },
+  { key: "recruitment", label: "Recrutement", icon: GraduationCap },
   { key: "team", label: "Équipe", icon: Users },
   { key: "sequences", label: "Relances", icon: Repeat },
   { key: "custom", label: "Rapports personnalisés", icon: LayoutGrid },
@@ -239,6 +240,8 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
         <AcquisitionTab data={data} />
       ) : tab === "pipeline" ? (
         <PipelineTab data={data} />
+      ) : tab === "recruitment" ? (
+        <RecruitmentTab />
       ) : tab === "team" ? (
         <TeamTab data={data} />
       ) : tab === "sequences" ? (
@@ -258,35 +261,44 @@ function formatGoalRange(start: string, end: string): string {
   return new Date(start).toLocaleDateString("fr-FR", opt) + " → " + new Date(end).toLocaleDateString("fr-FR", opt);
 }
 
-function ObjectivesSection({ goalData }: { goalData: GoalProgress }) {
+function GoalMetric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="text-[11px] text-gray-500">{label}</div>
+      <div className="text-xl font-bold text-gray-900 mt-0.5 tabular-nums">{value}</div>
+      {sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function ActivityRow({ title, items }: { title: string; items: { label: string; value: any; color?: string; alert?: boolean }[] }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <span className="text-xs font-semibold text-gray-500 sm:w-28 shrink-0">{title}</span>
+        <div className="grid grid-cols-5 gap-2 flex-1">
+          {items.map(function(it, i) {
+            return (
+              <div key={i} className={cn("text-center rounded-lg py-1", it.alert && "bg-red-50/60")}>
+                <div className={cn("text-base sm:text-lg font-bold tabular-nums", it.color || "text-gray-900")}>{it.value}</div>
+                <div className="text-[9px] uppercase tracking-wider text-gray-400 mt-0.5">{it.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ObjectivesSection({ goalData, summary }: { goalData: GoalProgress; summary: FunnelSummary | null }) {
   var router = useRouter();
   var [editing, setEditing] = useState(false);
   var goal = goalData.goal;
-  var progress = goalData.progress;
-
   var onSaved = function() { setEditing(false); router.refresh(); };
 
-  if (!goal) {
-    if (!goalData.canEdit) return null;
-    return (
-      <>
-        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-5 mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center"><Flag size={20} className="text-brand-600" /></div>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Objectifs de rentrée</h3>
-              <p className="text-xs text-gray-500">Fixez des cibles d'inscriptions et de leads pour suivre votre campagne.</p>
-            </div>
-          </div>
-          <button onClick={function() { setEditing(true); }} className="btn-primary text-xs"><Plus size={14} /> Définir un objectif</button>
-        </div>
-        {editing && <GoalEditor goal={null} onClose={function() { setEditing(false); }} onSaved={onSaved} />}
-      </>
-    );
-  }
-
-  var convTarget = goal.targetConversionRate;
-  var convPct = convTarget && convTarget > 0 ? Math.min(100, Math.round((progress!.conversionRate / convTarget) * 100)) : 0;
+  var fmtN = function(n: number | undefined) { return summary ? (n ?? 0).toLocaleString("fr-FR") : "…"; };
+  var fmtP = function(n: number | undefined) { return summary ? fmtPct(n ?? 0) : "…"; };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
@@ -294,45 +306,34 @@ function ObjectivesSection({ goalData }: { goalData: GoalProgress }) {
         <div>
           <div className="flex items-center gap-2">
             <Flag size={16} className="text-brand-600" />
-            <h3 className="text-sm font-semibold text-gray-900">{goal.label}</h3>
+            <h3 className="text-sm font-semibold text-gray-900">{goal ? goal.label : "Recrutement — rentrée"}</h3>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {formatGoalRange(goal.startDate, goal.endDate)}
-            {goalData.daysLeft !== null && goalData.daysLeft > 0 ? " — " + goalData.daysLeft + " jours restants" : ""}
-          </p>
+          {goal && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {formatGoalRange(goal.startDate, goal.endDate)}
+              {goalData.daysLeft !== null && goalData.daysLeft > 0 ? " — " + goalData.daysLeft + " jours restants" : ""}
+            </p>
+          )}
         </div>
         {goalData.canEdit && (
-          <button onClick={function() { setEditing(true); }} className="btn-secondary text-xs py-1.5"><Pencil size={13} /> Modifier</button>
+          <button onClick={function() { setEditing(true); }} className="btn-secondary text-xs py-1.5">
+            {goal ? <><Pencil size={13} /> Modifier</> : <><Plus size={14} /> Définir la campagne</>}
+          </button>
         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <GoalGauge label="Nouvelles inscriptions" now={progress!.enrollments} target={goal.targetEnrollments} color="#2E86C1" />
-        <GoalGauge label="Leads générés" now={progress!.leads} target={goal.targetLeads} color="#27AE60" />
-        <GoalGauge label="Taux de conversion" now={progress!.conversionRate} target={convTarget ?? 0} color="#F39C12" suffix=" %" pctOverride={convTarget ? convPct : null} noTarget={!convTarget} />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <GoalMetric label="Leads total" value={fmtN(summary?.leadsTotal)} />
+        <GoalMetric label="Contactés" value={fmtN(summary?.contacted)} sub="≥ 1 appel / message" />
+        <GoalMetric label="Qualifiés" value={fmtN(summary?.qualified)} sub="contactés + filière" />
+        <GoalMetric label="Convertis" value={fmtN(summary?.inscrits)} />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
+        <GoalMetric label="Taux de transformation" value={fmtP(summary?.transformationRate)} sub="inscrits / qualifiés" />
+        <GoalMetric label="Objectifs" value={fmtN(summary?.target)} sub="somme par filière" />
+        <GoalMetric label="Réalisés" value={fmtN(summary?.inscrits)} />
+        <GoalMetric label="Taux de réalisation" value={fmtP(summary?.realizationRate)} sub="inscrits / objectif" />
       </div>
       {editing && <GoalEditor goal={goal} onClose={function() { setEditing(false); }} onSaved={onSaved} />}
-    </div>
-  );
-}
-
-function GoalGauge({ label, now, target, color, suffix, pctOverride, noTarget }: {
-  label: string; now: number; target: number; color: string; suffix?: string; pctOverride?: number | null; noTarget?: boolean;
-}) {
-  var pct = pctOverride != null ? pctOverride : (target > 0 ? Math.min(100, Math.round((now / target) * 100)) : 0);
-  var fmt = function(n: number) { return n.toLocaleString("fr-FR", { maximumFractionDigits: 2 }); };
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-1.5">
-        <span className="text-xs text-gray-500">{label}</span>
-        {!noTarget && <span className="text-[10px] font-semibold text-gray-400">{pct}%</span>}
-      </div>
-      <div className="flex items-baseline gap-1.5 mb-2">
-        <span className="text-xl font-bold text-gray-900">{fmt(now)}{suffix || ""}</span>
-        {noTarget ? <span className="text-xs text-gray-400">cible non définie</span> : <span className="text-xs text-gray-400">/ {fmt(target)}{suffix || ""}</span>}
-      </div>
-      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: pct + "%", backgroundColor: color }} />
-      </div>
     </div>
   );
 }
@@ -341,9 +342,6 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
   var [label, setLabel] = useState(goal?.label ?? "Rentrée 2026–2027");
   var [startDate, setStartDate] = useState(goal ? goal.startDate.slice(0, 10) : "");
   var [endDate, setEndDate] = useState(goal ? goal.endDate.slice(0, 10) : "");
-  var [enrollments, setEnrollments] = useState(String(goal?.targetEnrollments ?? ""));
-  var [leads, setLeads] = useState(String(goal?.targetLeads ?? ""));
-  var [convRate, setConvRate] = useState(goal?.targetConversionRate != null ? String(goal.targetConversionRate) : "");
   var [error, setError] = useState("");
   var [pending, startTransition] = useTransition();
 
@@ -355,9 +353,9 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
         label: label,
         startDate: startDate,
         endDate: endDate,
-        targetEnrollments: Number(enrollments) || 0,
-        targetLeads: Number(leads) || 0,
-        targetConversionRate: convRate === "" ? null : Number(convRate),
+        targetEnrollments: 0,
+        targetLeads: 0,
+        targetConversionRate: null,
       });
       if (res.ok) onSaved();
       else setError(res.error || "Erreur");
@@ -368,7 +366,7 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-scale-in" onClick={function(e) { e.stopPropagation(); }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-gray-900">{goal ? "Modifier l'objectif" : "Nouvel objectif de rentrée"}</h3>
+          <h3 className="text-base font-semibold text-gray-900">{goal ? "Modifier la campagne" : "Définir la campagne de rentrée"}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
         <div className="space-y-3">
@@ -386,20 +384,7 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
               <input type="date" value={endDate} onChange={function(e) { setEndDate(e.target.value); }} className="input text-sm" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Inscriptions visées</label>
-              <input type="number" min="0" value={enrollments} onChange={function(e) { setEnrollments(e.target.value); }} className="input text-sm" placeholder="450" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Leads visés</label>
-              <input type="number" min="0" value={leads} onChange={function(e) { setLeads(e.target.value); }} className="input text-sm" placeholder="3000" />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">Taux de conversion cible (%) — optionnel</label>
-            <input type="number" min="0" max="100" step="0.1" value={convRate} onChange={function(e) { setConvRate(e.target.value); }} className="input text-sm" placeholder="15" />
-          </div>
+          <p className="text-[11px] text-gray-400">Les objectifs d'inscrits se définissent par filière dans Réglages → Organisation.</p>
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">
@@ -420,19 +405,9 @@ function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; a
 
   return (
     <div>
-      {/* Objectifs de rentrée */}
-      {access.objectives && <ObjectivesSection goalData={goalData} />}
-
-      {/* Main KPIs */}
+      {/* Résumé recrutement / rentrée */}
       {access.objectives ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <KpiCard label="Leads (total)" value={s ? s.leadsTotal : "…"} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
-          <KpiCard label="Contactés" value={s ? s.contacted : "…"} icon={Phone} iconColor="text-blue-600" iconBg="bg-blue-50" subLabel="≥ 1 appel / message" />
-          <KpiCard label="Qualifiés" value={s ? s.qualified : "…"} icon={UserCheck} iconColor="text-violet-600" iconBg="bg-violet-50" subLabel="contactés + filière" />
-          <KpiCard label="Convertis (inscrits)" value={s ? s.inscrits : "…"} icon={GraduationCap} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
-          <KpiCard label="Taux de transformation" value={s ? fmtPct(s.transformationRate) : "…"} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" subLabel="inscrits / qualifiés" />
-          <KpiCard label="Taux de réalisation" value={s ? fmtPct(s.realizationRate) : "…"} icon={Flag} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel="inscrits / objectif" />
-        </div>
+        <ObjectivesSection goalData={goalData} summary={s} />
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={cmp ? kpis.leadsGrowth : undefined} prev={cmp ? kpis.leadsPreviousPeriod : undefined} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
@@ -442,76 +417,30 @@ function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; a
         </div>
       )}
 
-      {/* Mini KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-        <MiniKpi icon={Phone} label="Appels" value={String(kpis.callsTotal)} color="text-blue-600" />
-        <MiniKpi icon={CheckCircle2} label="Joignabilité" value={kpis.callReachRate + "%"} color="text-emerald-600" />
-        <MiniKpi icon={Timer} label="Durée moy." value={formatDurationShort(kpis.avgDuration)} color="text-purple-600" />
-        <MiniKpi icon={CalendarDays} label="RDV" value={String(kpis.apptsTotal)} color="text-teal-600" />
-        <MiniKpi icon={CheckCircle2} label="Présence" value={kpis.apptPresenceRate + "%"} color="text-emerald-600" />
-        <MiniKpi icon={XCircle} label="Absents" value={String(kpis.apptsNoShow)} color="text-red-500" />
-        <MiniKpi icon={ListTodo} label="Tâches" value={String(kpis.tasksOpen)} color="text-indigo-600" />
-        <MiniKpi icon={AlertTriangle} label="En retard" value={String(kpis.tasksOverdue)} color="text-red-600" highlight={kpis.tasksOverdue > 0} />
+      {/* Activités : Tâches / Appels / Rendez-vous */}
+      <div className="flex flex-col gap-3">
+        <ActivityRow title="Tâches" items={[
+          { label: "Total", value: kpis.tasksTotal, color: "text-gray-900" },
+          { label: "À faire", value: kpis.tasksTodo, color: "text-blue-600" },
+          { label: "En cours", value: kpis.tasksInProgress, color: "text-amber-600" },
+          { label: "Réalisées", value: kpis.tasksDone, color: "text-emerald-600" },
+          { label: "En retard", value: kpis.tasksOverdue, color: "text-red-600", alert: kpis.tasksOverdue > 0 },
+        ]} />
+        <ActivityRow title="Appels" items={[
+          { label: "Total", value: kpis.callsTotal, color: "text-gray-900" },
+          { label: "Entrants", value: kpis.callsInbound, color: "text-blue-600" },
+          { label: "Sortants", value: kpis.callsOutbound, color: "text-violet-600" },
+          { label: "Joignabilité", value: kpis.callReachRate + " %", color: "text-emerald-600" },
+          { label: "Durée moy.", value: formatDurationShort(kpis.avgDuration), color: "text-purple-600" },
+        ]} />
+        <ActivityRow title="Rendez-vous" items={[
+          { label: "Total", value: kpis.apptsTotal, color: "text-gray-900" },
+          { label: "Planifiés", value: kpis.apptsScheduled, color: "text-blue-600" },
+          { label: "Terminés", value: kpis.apptsCompleted, color: "text-emerald-600" },
+          { label: "Annulés", value: kpis.apptsCancelled, color: "text-red-500" },
+          { label: "Présence", value: kpis.apptPresenceRate + " %", color: "text-emerald-600" },
+        ]} />
       </div>
-
-      {/* Leads chart + recent activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Leads &amp; Conversions</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data.leadsTimeline}>
-              <defs>
-                <linearGradient id="gradLeads" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradConv" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tickFormatter={formatDateShort} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} labelFormatter={function(label) { return formatDateShort(label); }} />
-              <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#gradLeads)" name="Leads" />
-              <Area type="monotone" dataKey="conversions" stroke="#10b981" strokeWidth={2} fill="url(#gradConv)" name="Conversions" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Activité récente</h3>
-          {data.recentActivities.length > 0 ? (
-            <div className="space-y-3">
-              {data.recentActivities.map(function(a: any) {
-                var person = a.lead ? a.lead.firstName + " " + a.lead.lastName :
-                             a.student ? a.student.firstName + " " + a.student.lastName : "";
-                return (
-                  <div key={a.id} className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                      <Activity size={12} className="text-gray-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-700 leading-relaxed">{a.description}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {a.user && <span className="text-[10px] text-gray-500">{a.user.name}</span>}
-                        {person && <span className="text-[10px] text-brand-600">— {person}</span>}
-                        <span className="text-[10px] text-gray-400">{formatRelative(a.createdAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-8">Aucune activité</p>
-          )}
-        </div>
-      </div>
-
-      {/* Recrutement par programme */}
-      {access.objectives && <div className="mt-6"><ProgramFunnelSection /></div>}
     </div>
   );
 }
@@ -735,60 +664,116 @@ function FunnelTableRow({ r, kind }: { r: FunnelRow; kind: "prog" | "sub" | "tot
   );
 }
 
-function ProgramFunnelSection() {
+var FUNNEL_HEADER = (
+  <tr className="border-b border-gray-200 text-gray-500">
+    <th className="py-2 px-2 text-left font-medium">Filière</th>
+    <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Prospects globaux</th>
+    <th className="py-2 px-2 text-right font-medium">Qualifiés</th>
+    <th className="py-2 px-2 text-right font-medium">Admis</th>
+    <th className="py-2 px-2 text-right font-medium">Inscrits</th>
+    <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx transf.</th>
+    <th className="py-2 px-2 text-right font-medium">Objectif</th>
+    <th className="py-2 px-2 text-right font-medium">Réalisé</th>
+    <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx réal.</th>
+  </tr>
+);
+
+function FormationTable({ group }: { group: FunnelGroup }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{group.label}</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>{FUNNEL_HEADER}</thead>
+          <tbody>
+            {group.diplomas.map(function(d) {
+              var hasDiploma = d.diploma !== "(sans programme)";
+              return (
+                <Fragment key={d.diploma}>
+                  {hasDiploma && <tr className="bg-brand-50/60"><td colSpan={9} className="py-1.5 px-2 text-left font-semibold text-brand-700 uppercase text-[10px] tracking-wider">{d.diploma}</td></tr>}
+                  {d.rows.map(function(r) { return <FunnelTableRow key={r.programId} r={r} kind="prog" />; })}
+                  {hasDiploma && d.rows.length > 1 && <FunnelTableRow r={d.subtotal} kind="sub" />}
+                </Fragment>
+              );
+            })}
+            <FunnelTableRow r={group.subtotal} kind="total" />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RecruitmentTab() {
   var [fn, setFn] = useState<ProgramFunnel | null>(null);
   var [type, setType] = useState("");
 
   useEffect(function() { getProgramFunnel().then(setFn).catch(function() {}); }, []);
 
   if (!fn) {
-    return <div className="bg-white rounded-xl border border-gray-200 p-5"><div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div></div>;
+    return <div className="bg-white rounded-xl border border-gray-200 p-8"><div className="flex justify-center"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div></div>;
   }
-  if (!fn.ok) return null;
+  if (!fn.ok) {
+    return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">{fn.error || "Indisponible."}</div>;
+  }
 
   var groups = fn.groups || [];
   var shown = type ? groups.filter(function(g) { return g.type === type; }) : groups;
+  var total = fn.total;
+  var chartData = shown.flatMap(function(g) {
+    return g.diplomas.map(function(d) {
+      return { name: d.diploma === "(sans programme)" ? g.label : d.diploma, Inscrits: d.subtotal.inscrits, Objectif: d.subtotal.target };
+    });
+  });
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-        <h3 className="text-sm font-semibold text-gray-700">Recrutement par programme</h3>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Recrutement par programme</h3>
+          <p className="text-[11px] text-gray-400 max-w-2xl">Cumulatif · Qualifiés = contactés ≥1 fois (appel/message) + filière · Admis inclut les inscrits · Tx transf. = inscrits/qualifiés · Tx réal. = inscrits/objectif (défini par filière dans Réglages → Organisation).</p>
+        </div>
         <select value={type} onChange={function(e) { setType(e.target.value); }} className="input text-xs py-1.5 w-auto">
           <option value="">Toutes les formations</option>
           {(fn.types || []).map(function(t) { return <option key={t.value} value={t.value}>{t.label}</option>; })}
         </select>
       </div>
-      <p className="text-[11px] text-gray-400 mb-4">Cumulatif (instantané) · Qualifiés = contactés ≥1 fois (appel/message) avec filière renseignée · Admis inclut les inscrits · Tx transf. = inscrits / qualifiés · Tx réal. = inscrits / objectif (défini par filière dans Réglages → Organisation).</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 text-gray-500">
-              <th className="py-2 px-2 text-left font-medium">Programme</th>
-              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Prospects globaux</th>
-              <th className="py-2 px-2 text-right font-medium">Qualifiés</th>
-              <th className="py-2 px-2 text-right font-medium">Admis</th>
-              <th className="py-2 px-2 text-right font-medium">Inscrits</th>
-              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx transf.</th>
-              <th className="py-2 px-2 text-right font-medium">Objectif</th>
-              <th className="py-2 px-2 text-right font-medium">Réalisé</th>
-              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx réal.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map(function(g) {
-              return (
-                <Fragment key={g.type}>
-                  <tr className="bg-brand-50/60"><td colSpan={9} className="py-1.5 px-2 text-left font-semibold text-brand-700 uppercase text-[10px] tracking-wider">{g.label}</td></tr>
-                  {g.rows.map(function(r) { return <FunnelTableRow key={r.programId} r={r} kind="prog" />; })}
-                  <FunnelTableRow r={g.subtotal} kind="sub" />
-                </Fragment>
-              );
-            })}
-            {!type && fn.total && <FunnelTableRow r={fn.total} kind="total" />}
-          </tbody>
-        </table>
-      </div>
-      {groups.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Aucun programme actif. Définissez vos filières et leurs objectifs dans Réglages → Organisation.</p>}
+
+      {total && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <KpiCard label="Prospects globaux" value={total.globaux} icon={Users} iconColor="text-brand-600" iconBg="bg-brand-50" />
+          <KpiCard label="Qualifiés" value={total.qualifies} icon={UserCheck} iconColor="text-violet-600" iconBg="bg-violet-50" />
+          <KpiCard label="Admis" value={total.admis} icon={CheckCircle2} iconColor="text-blue-600" iconBg="bg-blue-50" />
+          <KpiCard label="Inscrits" value={total.inscrits} icon={GraduationCap} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+          <KpiCard label="Objectif" value={total.target} icon={Flag} iconColor="text-amber-600" iconBg="bg-amber-50" />
+          <KpiCard label="Taux de réalisation" value={total.target > 0 ? fmtPct(total.realizationRate) : "—"} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
+        </div>
+      )}
+
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700">Inscrits vs objectif par programme</h3>
+            <div className="flex gap-3 text-[11px] text-gray-500">
+              <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: "#2E86C1" }} />Inscrits</span>
+              <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: "#F39C12" }} />Objectif</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#94a3b8" }} axisLine={false} tickLine={false} interval={0} angle={-25} textAnchor="end" height={80} />
+              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} />
+              <Bar dataKey="Inscrits" fill="#2E86C1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Objectif" fill="#F39C12" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {shown.map(function(g) { return <FormationTable key={g.type} group={g} />; })}
+      {groups.length === 0 && <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500">Aucun programme actif. Définissez vos filières (type de formation, programme/diplôme, objectif) dans Réglages → Organisation.</div>}
     </div>
   );
 }
@@ -1517,7 +1502,7 @@ function AiTab() {
 // ═══════════════════════ UPSELL (onglet verrouillé) ═══════════════════════
 function UpsellPanel({ tab, access }: { tab: TabKey; access: ReportingAccess }) {
   var LABELS: Record<TabKey, string> = {
-    overview: "Vue d'ensemble", acquisition: "Acquisition", pipeline: "Pipeline",
+    overview: "Vue d'ensemble", acquisition: "Acquisition", pipeline: "Pipeline", recruitment: "Recrutement",
     team: "Équipe", sequences: "Relances", custom: "Rapports personnalisés", ai: "Analyste IA",
   };
   var target = tab === "ai" ? "Performance" : access.nextPlanName || "un plan supérieur";

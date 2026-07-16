@@ -55,23 +55,29 @@ export async function getDashboardData(filters?: {
   var apptBaseWhere: any = { organizationId: orgId };
   if (filters?.userId) apptBaseWhere.assignedToId = filters.userId;
 
+  var taskBaseWhere: any = { organizationId: orgId };
+  if (filters?.userId) taskBaseWhere.assignedToId = filters.userId;
+
   var [
-    callsTotal, callsToday, callsThisWeek, callsAnswered, callsAvgDuration,
-    apptsTotal, apptsToday, apptsThisWeek, apptsCompleted, apptsNoShow,
-    tasksOpen, tasksOverdue,
+    callsTotal, callsInbound, callsOutbound, callsAnswered, callsAvgDuration,
+    apptsTotal, apptsScheduled, apptsCompleted, apptsCancelled, apptsNoShow,
+    tasksTotal, tasksTodo, tasksInProgress, tasksDone, tasksOverdue,
   ] = await Promise.all([
     prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart } } }),
-    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: todayStart, lt: todayEnd } } }),
-    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: weekStart } } }),
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, direction: "INBOUND" } }),
+    prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, direction: "OUTBOUND" } }),
     prisma.call.count({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, outcome: "ANSWERED" } }),
     prisma.call.aggregate({ where: { ...callBaseWhere, calledAt: { gte: currentStart }, duration: { not: null } }, _avg: { duration: true } }),
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart } } }),
-    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: todayStart, lt: todayEnd } } }),
-    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: weekStart } } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: { in: ["SCHEDULED", "CONFIRMED"] } } }),
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "COMPLETED" } }),
+    prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "CANCELLED" } }),
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "NO_SHOW" } }),
-    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] } } }),
-    prisma.task.count({ where: { organizationId: orgId, status: { in: ["TODO", "IN_PROGRESS"] }, dueDate: { lt: now } } }),
+    prisma.task.count({ where: taskBaseWhere }),
+    prisma.task.count({ where: { ...taskBaseWhere, status: "TODO" } }),
+    prisma.task.count({ where: { ...taskBaseWhere, status: "IN_PROGRESS" } }),
+    prisma.task.count({ where: { ...taskBaseWhere, status: "DONE" } }),
+    prisma.task.count({ where: { ...taskBaseWhere, status: { in: ["TODO", "IN_PROGRESS"] }, dueDate: { lt: now } } }),
   ]);
 
   var callReachRate = callsTotal > 0 ? Math.round((callsAnswered / callsTotal) * 100) : 0;
@@ -281,9 +287,9 @@ export async function getDashboardData(filters?: {
       totalLeads, leadsCurrentPeriod, leadsPreviousPeriod, leadsGrowth,
       convertedCurrentPeriod, convertedPreviousPeriod, conversionRate, conversionGrowth,
       totalStudents, activeStudents,
-      callsTotal, callsToday, callsThisWeek, callReachRate, avgDuration,
-      apptsTotal, apptsToday, apptsThisWeek, apptsCompleted, apptsNoShow, apptPresenceRate,
-      tasksOpen, tasksOverdue,
+      callsTotal, callsInbound, callsOutbound, callReachRate, avgDuration,
+      apptsTotal, apptsScheduled, apptsCompleted, apptsCancelled, apptsNoShow, apptPresenceRate,
+      tasksTotal, tasksTodo, tasksInProgress, tasksDone, tasksOverdue,
       avgCycleDays, pipelineTotal: totalInPipeline,
     },
     leadsTimeline,

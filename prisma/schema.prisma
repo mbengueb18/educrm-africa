@@ -205,6 +205,7 @@ model Program {
   formationType  FormationType @default(INITIAL)
   pipelineId     String?
   targetEnrollments Int        @default(0) // Objectif d'inscrits (recrutement par programme)
+  diploma        String? // Programme / diplôme de rattachement (ex. « Cycle Licence ») — regroupement dans le rapport recrutement
 
   campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

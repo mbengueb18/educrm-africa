@@ -20,6 +20,7 @@ export interface ReportingAccess {
     pipeline: boolean;
     team: boolean;
     acquisition: boolean;
+    recruitment: boolean;
     sequences: boolean;
     custom: boolean;
     dashboards: boolean;
@@ -66,6 +67,7 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
       pipeline: true,
       team: true,
       acquisition: isAdvanced,
+      recruitment: isAdvanced,
       sequences: limits.sequenceReportingLevel !== null,
       custom: limits.reportingCustomReportsMax > 0,
       dashboards: limits.reportingDashboardsMax > 0,
