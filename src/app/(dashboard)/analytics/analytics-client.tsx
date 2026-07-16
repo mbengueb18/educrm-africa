@@ -707,7 +707,7 @@ function TeamTab({ data }: { data: any }) {
                 <th className="text-center py-2 text-gray-500 font-medium">Taux</th>
                 <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Appels</th>
                 <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">RDV</th>
-                <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Tâches</th>
+                <th className="text-center py-2 text-gray-500 font-medium hidden sm:table-cell">Tâches ouvertes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -741,6 +741,9 @@ function TeamTab({ data }: { data: any }) {
       ) : (
         <p className="text-xs text-gray-400 text-center py-8">Aucun conseiller</p>
       )}
+      <p className="text-[11px] text-gray-400 mt-3">
+        <b>Portefeuille</b> et <b>tâches ouvertes</b> sont des instantanés (charge actuelle, indépendants de la période) ; <b>convertis</b>, <b>appels</b> et <b>RDV</b> portent sur la période sélectionnée.
+      </p>
       {data.unattributedConverted > 0 && (
         <p className="text-[11px] text-gray-400 mt-3 pt-3 border-t border-gray-100">
           {data.unattributedConverted} conversion{data.unattributedConverted > 1 ? "s" : ""} de la période non attribuée{data.unattributedConverted > 1 ? "s" : ""} à un conseiller (leads importés ou non assignés) — d'où l'écart avec le KPI « Convertis ».
