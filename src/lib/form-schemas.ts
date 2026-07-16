@@ -11,6 +11,18 @@ export interface FormSchemaField {
   label: string;
 }
 
+// ─── Clé de mapping scopée par formulaire ───
+// Les `name` Gravity (input_40, input_5…) sont uniques PAR formulaire mais
+// RÉUTILISÉS entre formulaires (input_40 = « Pays de Résidence » sur gform_11
+// mais « Diplôme recherché » sur gform_14). Un mapping doit donc être rattaché
+// à (formId, name). Format : "gform_14::input_40".
+// Rétrocompat : une clé « nue » (sans "::") reste un mapping GLOBAL par défaut,
+// surchargé par une clé scopée pour le formulaire concerné.
+// (Non exportée : "use server" n'autorise que des exports de fonctions async.)
+function scopedFieldKey(formId: string, fieldName: string): string {
+  return formId + "::" + fieldName;
+}
+
 export interface FormSchema {
   formId: string;
   name: string;              // nom détecté (brut)
@@ -107,20 +119,23 @@ export async function getFormsWithMapping(): Promise<FormWithMapping[]> {
         s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const nameLower = stripAccents(field.name);
       const labelLower = stripAccents(field.label || "");
-      
-      // 0. Mappé vers une colonne native via standardMappings ?
-      const nativeCol = standardByField[nameLower];
-      if (nativeCol) {
-        return { ...field, mapping: { kind: "standard" as const, target: nativeCol, label: NATIVE_LABELS[nativeCol] || nativeCol } };
-      }
+      // Clé scopée (formId::name), prioritaire sur la clé nue (repli global).
+      const scopedLower = stripAccents(form.formId) + "::" + nameLower;
 
-      const cf = fieldToConfig[nameLower];
-      if (cf) {
-        if (cf.target === "standard" && cf.standardField) {
-          return { ...field, mapping: { kind: "standard" as const, target: cf.standardField, label: cf.label } };
-        }
-        return { ...field, mapping: { kind: "custom" as const, key: cf.key, label: cf.label } };
-      }
+      // Résolution SCOPE-DOMINANTE : un mapping scopé l'emporte TOUJOURS sur un
+      // mapping nu/global, quel que soit son type. Ordre : standard scopé →
+      // custom scopé → standard nu → custom nu.
+      const asStandard = (nativeCol: string): MappedField =>
+        ({ ...field, mapping: { kind: "standard", target: nativeCol, label: NATIVE_LABELS[nativeCol] || nativeCol } });
+      const asConfig = (cf: any): MappedField =>
+        (cf.target === "standard" && cf.standardField)
+          ? ({ ...field, mapping: { kind: "standard", target: cf.standardField, label: cf.label } })
+          : ({ ...field, mapping: { kind: "custom", key: cf.key, label: cf.label } });
+
+      if (standardByField[scopedLower]) return asStandard(standardByField[scopedLower]);
+      if (fieldToConfig[scopedLower]) return asConfig(fieldToConfig[scopedLower]);
+      if (standardByField[nameLower]) return asStandard(standardByField[nameLower]);
+      if (fieldToConfig[nameLower]) return asConfig(fieldToConfig[nameLower]);
 
       const auto = CORE_AUTO_PATTERNS.find((p) => p.test.test(nameLower) || p.test.test(labelLower));
       if (auto) {
@@ -211,9 +226,9 @@ function toKey(s: string) {
 }
 
 export type MapFieldInput =
-  | { mode: "standard"; fieldName: string; label: string; standardField: string }
-  | { mode: "new_custom"; fieldName: string; label: string; type?: "text" | "select" | "number" | "date" | "email" | "phone" }
-  | { mode: "existing_custom"; fieldName: string; customFieldId: string };
+  | { mode: "standard"; formId: string; fieldName: string; label: string; standardField: string }
+  | { mode: "new_custom"; formId: string; fieldName: string; label: string; type?: "text" | "select" | "number" | "date" | "email" | "phone" }
+  | { mode: "existing_custom"; formId: string; fieldName: string; customFieldId: string };
 
 export async function mapFieldFromForm(input: MapFieldInput) {
   const session = await auth();
@@ -222,17 +237,21 @@ export async function mapFieldFromForm(input: MapFieldInput) {
     throw new Error("Permission refusée");
   }
 
+  // Clé scopée par formulaire (résout la collision des name réutilisés entre formulaires).
+  if (!input.formId) throw new Error("Formulaire manquant");
+  const key = scopedFieldKey(input.formId, input.fieldName);
+
   if (input.mode === "existing_custom") {
-    // Ajouter le name au champ perso existant (sans doublon)
+    // Ajouter la clé scopée au champ perso existant (sans doublon)
     const existing = await getCustomFields();
     const target = existing.find((f) => f.id === input.customFieldId);
     if (!target) throw new Error("Champ personnalisé introuvable");
     const already = target.mappedFormFields.some(
-      (mf) => mf.toLowerCase() === input.fieldName.toLowerCase()
+      (mf) => mf.toLowerCase() === key.toLowerCase()
     );
     if (!already) {
       await updateCustomField(input.customFieldId, {
-        mappedFormFields: [...target.mappedFormFields, input.fieldName],
+        mappedFormFields: [...target.mappedFormFields, key],
       });
     }
     revalidatePath("/settings/forms");
@@ -240,7 +259,7 @@ export async function mapFieldFromForm(input: MapFieldInput) {
   }
 
   if (input.mode === "standard") {
-    // Écrire dans org.settings.standardMappings : { "input_3": "civility", ... }
+    // Écrire dans org.settings.standardMappings : { "gform_14::input_3": "civility", ... }
     // (PAS de customField — le routage standard est séparé des champs personnalisés)
     const org = await prisma.organization.findUnique({
       where: { id: session.user.organizationId },
@@ -248,7 +267,7 @@ export async function mapFieldFromForm(input: MapFieldInput) {
     });
     const settings = (org?.settings as any) || {};
     const standardMappings: Record<string, string> = { ...(settings.standardMappings || {}) };
-    standardMappings[input.fieldName] = input.standardField;
+    standardMappings[key] = input.standardField;
 
     await prisma.organization.update({
       where: { id: session.user.organizationId },
@@ -264,7 +283,7 @@ export async function mapFieldFromForm(input: MapFieldInput) {
     label,
     key: toKey(label) || toKey(input.fieldName),
     type: input.type || "text",
-    mappedFormFields: [input.fieldName],
+    mappedFormFields: [key],
     required: false,
     showInCard: false,
     showInList: true,

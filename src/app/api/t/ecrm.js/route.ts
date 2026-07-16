@@ -659,6 +659,35 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Un champ Gravity est "actif" si son conteneur .gfield est VISIBLE — même si
+  // l'élément natif est masqué par un widget "amélioré" (select2/chosen/thème) qui
+  // affiche un faux contrôle et cache le vrai <select>. En se basant sur le conteneur
+  // plutôt que sur l'élément natif, on : (a) rattrape ces selects améliorés (cause
+  // probable des selects conditionnels ratés sur le trafic payant), (b) continue
+  // d'ignorer les champs conditionnels réellement masqués (wrapper caché) → aucune
+  // valeur résiduelle des branches non choisies.
+  function gravityFieldActive(el) {
+    var wrap = el.closest ? el.closest('.gfield') : null;
+    if (wrap) return wrap.offsetParent !== null;
+    // Pas de conteneur .gfield : repli sur l'ancien critère (élément visible, ou textarea).
+    return el.offsetParent !== null || el.tagName === 'TEXTAREA';
+  }
+
+  // Passe de capture : accumule tous les champs actifs du formulaire. Utilisée au clic
+  // du bouton ET à la soumission. N'ENVOIE rien — l'envoi reste géré par
+  // gform_confirmation_loaded.
+  function gravityCapturePass(form) {
+    // TinyMCE (éditeur riche WordPress) : recopier le contenu vers les textarea.
+    try { if (window.tinymce && window.tinymce.triggerSave) window.tinymce.triggerSave(); } catch(e) {}
+    var els = form.elements;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!el) continue;
+      if (!gravityFieldActive(el)) continue;
+      accumulateField(form, el);
+    }
+  }
+
   // Construit l'objet lead à partir des valeurs brutes accumulées,
   // en réutilisant la logique de mapping (clé → label → contenu).
   function buildLeadFromRaw(formId) {
@@ -743,17 +772,7 @@ export async function GET(request: NextRequest) {
       if (!isGravityForm(form)) return;
       var isSubmit = realBtn.type === 'submit' || /gform_button|gform-button|gform_next_button/i.test(realBtn.className || '');
       if (!isSubmit) return;
-      // TinyMCE (éditeur riche WordPress) garde le texte dans une iframe ;
-      // triggerSave() recopie le contenu vers les textarea sous-jacents.
-      try { if (window.tinymce && window.tinymce.triggerSave) window.tinymce.triggerSave(); } catch(e) {}
-      var els = form.elements;
-      for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        if (!el) continue;
-        // Les textarea d'éditeurs riches sont display:none (offsetParent null) mais valides
-        if (el.offsetParent === null && el.tagName !== 'TEXTAREA') continue;
-        accumulateField(form, el);
-      }
+      gravityCapturePass(form);
       log('info', 'Gravity: capture au clic du bouton pour', form.id);
     }, true);
 
@@ -947,8 +966,9 @@ export async function GET(request: NextRequest) {
     document.addEventListener('submit', function(e) {
       var form = e.target;
       if (!form || form.tagName !== 'FORM') return;
-      // Les formulaires Gravity sont gérés par setupGravityForms (AJAX) → on les ignore ici
-      if (form.id && form.id.indexOf('gform_') === 0) return;
+      // Gravity : passe de capture finale au submit (couvre la soumission au clavier /
+      // programmatique) ; l'ENVOI reste géré par gform_confirmation_loaded (AJAX).
+      if (form.id && form.id.indexOf('gform_') === 0) { gravityCapturePass(form); return; }
       if (!shouldCapture(form)) { log('info', 'Formulaire ignoré:', form.id || form.action); return; }
       var data = extractFormData(form);
       sendLead(data);

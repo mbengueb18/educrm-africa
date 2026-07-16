@@ -82,72 +82,96 @@ function mapSource(source: string): string {
 // mappés vers une propriété standard du Lead.
 var ALLOWED_STANDARD_FIELDS = new Set(["whatsapp", "city", "civility", "country", "message", "subject"]);
 
+// ─── Mapping scopé par formulaire ───
+// Les `name` Gravity (input_40…) sont uniques PAR formulaire mais réutilisés
+// ENTRE formulaires. Le mapping est donc rattaché à (formId, name) via une clé
+// "gform_14::input_40". Rétrocompat : une clé nue reste un mapping global par
+// défaut. Résolution SCOPE-DOMINANTE partout : standard scopé > custom scopé >
+// standard nu > custom nu (cohérent avec l'UI getFormsWithMapping).
+function customConfigFor(orgCustomFieldsConfig: any[], keyLower: string): any {
+  return orgCustomFieldsConfig.find(function(cf: any) {
+    return (cf.mappedFormFields || []).some(function(mf: string) { return String(mf).toLowerCase() === keyLower; });
+  });
+}
+
 // ─── Extract standard-field overrides from standardMappings config ───
-// standardMappings = { "input_3": "civility", "input_42": "city", ... }
-// Mappe les champs de formulaire vers les colonnes natives du Lead.
+// standardMappings = { "gform_14::input_3": "civility", ... } (ou clés nues legacy)
 function extractStandardOverrides(
   rawData: Record<string, any>,
-  standardMappings: Record<string, string>
+  standardMappings: Record<string, string>,
+  orgCustomFieldsConfig: any[],
+  formId: string
 ): Record<string, string> {
   var overrides: Record<string, string> = {};
   if (!standardMappings) return overrides;
 
-  // Index insensible à la casse : "input_3" → "civility"
   var lowerMap: Record<string, string> = {};
   for (var [formField, nativeCol] of Object.entries(standardMappings)) {
     if (nativeCol && ALLOWED_STANDARD_FIELDS.has(nativeCol)) {
       lowerMap[formField.toLowerCase()] = nativeCol;
     }
   }
-
-  for (var [key, value] of Object.entries(rawData)) {
-    if (!value || typeof value !== "string" || !value.trim()) continue;
-    if (key.startsWith("_")) continue;
-
-    var nativeCol2 = lowerMap[key.toLowerCase()];
-    if (nativeCol2) {
-      overrides[nativeCol2] = value.trim();
-    }
-  }
-
-  return overrides;
-}
-
-// ─── Extract custom fields (anything not in CORE_FIELDS, not in standardMappings) ───
-function extractCustomFields(
-  rawData: Record<string, any>,
-  orgCustomFieldsConfig: any[],
-  standardMappings: Record<string, string>
-): Record<string, any> {
-  var custom: Record<string, any> = {};
-
-  // Set des champs de formulaire routés vers une colonne native (à exclure du custom)
-  var standardFormFields = new Set<string>();
-  if (standardMappings) {
-    for (var sf of Object.keys(standardMappings)) {
-      standardFormFields.add(sf.toLowerCase());
-    }
-  }
+  var fid = (formId || "").toLowerCase();
 
   for (var [key, value] of Object.entries(rawData)) {
     if (!value || typeof value !== "string" || !value.trim()) continue;
     if (key.startsWith("_")) continue;
 
     var keyLower = key.toLowerCase();
+    var scopedK = fid ? fid + "::" + keyLower : "";
 
-    if (CORE_FIELDS.has(key) || CORE_FIELDS.has(keyLower)) continue;
-    // Si ce champ est mappé vers une colonne native, il ne va PAS en custom
-    if (standardFormFields.has(keyLower)) continue;
+    // 1. standard scopé (l'emporte sur tout)
+    if (scopedK && lowerMap[scopedK]) { overrides[lowerMap[scopedK]] = value.trim(); continue; }
+    // 2. custom scopé → l'emporte sur un standard nu : ne pas appliquer de standard ici
+    if (scopedK && customConfigFor(orgCustomFieldsConfig, scopedK)) continue;
+    // 3. standard nu (repli global)
+    if (lowerMap[keyLower]) { overrides[lowerMap[keyLower]] = value.trim(); }
+  }
 
-    var configMatch = orgCustomFieldsConfig.find(function(cf: any) {
-      return cf.mappedFormFields.some(function(mf: string) { return mf.toLowerCase() === keyLower; });
-    });
+  return overrides;
+}
 
-    if (configMatch) {
-      custom[configMatch.key] = value.trim();
-    } else {
-      custom[key] = value.trim();
+// ─── Extract custom fields (hors CORE_FIELDS, hors champs mappés en natif) ───
+function extractCustomFields(
+  rawData: Record<string, any>,
+  orgCustomFieldsConfig: any[],
+  standardMappings: Record<string, string>,
+  formId: string
+): Record<string, any> {
+  var custom: Record<string, any> = {};
+
+  // Clés standard, séparées scopées / nues
+  var stdScoped = new Set<string>();
+  var stdBare = new Set<string>();
+  if (standardMappings) {
+    for (var sf of Object.keys(standardMappings)) {
+      var s = sf.toLowerCase();
+      if (s.indexOf("::") !== -1) stdScoped.add(s); else stdBare.add(s);
     }
+  }
+  var fid = (formId || "").toLowerCase();
+
+  for (var [key, value] of Object.entries(rawData)) {
+    if (!value || typeof value !== "string" || !value.trim()) continue;
+    if (key.startsWith("_")) continue;
+
+    var keyLower = key.toLowerCase();
+    if (CORE_FIELDS.has(key) || CORE_FIELDS.has(keyLower)) continue;
+
+    var scopedK = fid ? fid + "::" + keyLower : "";
+
+    // Résolution scope-dominante :
+    // 1. standard scopé → mappé en natif, PAS en custom
+    if (scopedK && stdScoped.has(scopedK)) continue;
+    // 2. custom scopé → prend ce champ perso
+    var scopedCf = scopedK ? customConfigFor(orgCustomFieldsConfig, scopedK) : undefined;
+    if (scopedCf) { custom[scopedCf.key] = value.trim(); continue; }
+    // 3. standard nu → natif, PAS en custom
+    if (stdBare.has(keyLower)) continue;
+    // 4. custom nu (repli global), sinon champ brut sous son name
+    var bareCf = customConfigFor(orgCustomFieldsConfig, keyLower);
+    if (bareCf) { custom[bareCf.key] = value.trim(); }
+    else { custom[key] = value.trim(); }
   }
 
   return custom;
@@ -434,10 +458,15 @@ export async function POST(request: NextRequest) {
     var customFieldsConfig = orgSettings.customFields || [];
     var standardMappings = orgSettings.standardMappings || {};
 
+    // Identifiant du formulaire source (ex. "gform_14"), pour un mapping scopé par
+    // formulaire (les name Gravity input_N sont réutilisés entre formulaires).
+    var pd = parsed.data as Record<string, any>;
+    var srcFormId = String(pd.formName || pd.form_name || pd._formId || pd.form_id || pd.formId || "").trim();
+
     // ─── Extract custom fields ───
-    var customFields = extractCustomFields(parsed.data, customFieldsConfig, standardMappings);
+    var customFields = extractCustomFields(parsed.data, customFieldsConfig, standardMappings, srcFormId);
     // ─── Champs mappés vers des colonnes natives (ville, whatsapp, civilité, pays) ───
-    var standardOverrides = extractStandardOverrides(parsed.data, standardMappings);
+    var standardOverrides = extractStandardOverrides(parsed.data, standardMappings, customFieldsConfig, srcFormId);
     if (standardOverrides.city && !fields.city) fields.city = standardOverrides.city;
     if (standardOverrides.whatsapp) fields.whatsapp = standardOverrides.whatsapp;
     if (standardOverrides.civility) fields.civility = standardOverrides.civility;

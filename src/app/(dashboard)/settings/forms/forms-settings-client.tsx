@@ -406,6 +406,7 @@ function SiteFormsTab() {
                       <FieldRow
                         key={field.name}
                         field={field}
+                        formId={form.formId}
                         isMapping={mappingField === form.formId + "::" + field.name}
                         onStartMap={() => setMappingField(form.formId + "::" + field.name)}
                         onCancelMap={() => setMappingField(null)}
@@ -444,9 +445,10 @@ function SiteFormsTab() {
 }
 
 function FieldRow({
-  field, isMapping, onStartMap, onCancelMap, onMap, customFields, isPending,
+  field, formId, isMapping, onStartMap, onCancelMap, onMap, customFields, isPending,
 }: {
   field: MappedField;
+  formId: string;
   isMapping: boolean;
   onStartMap: () => void;
   onCancelMap: () => void;
@@ -484,20 +486,26 @@ function FieldRow({
               Mapper
             </button>
           )}
+          {mapping.kind !== "none" && !isMapping && (
+            <button onClick={onStartMap} title="Re-mapper ce champ pour ce formulaire" className="text-xs font-medium text-gray-500 hover:text-brand-600 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50">
+              Modifier
+            </button>
+          )}
         </div>
       </div>
 
       {isMapping && (
-        <MapZone field={field} customFields={customFields} onMap={onMap} onCancel={onCancelMap} isPending={isPending} />
+        <MapZone field={field} formId={formId} customFields={customFields} onMap={onMap} onCancel={onCancelMap} isPending={isPending} />
       )}
     </div>
   );
 }
 
 function MapZone({
-  field, customFields, onMap, onCancel, isPending,
+  field, formId, customFields, onMap, onCancel, isPending,
 }: {
   field: MappedField;
+  formId: string;
   customFields: BriefCustom[];
   onMap: (input: any) => void;
   onCancel: () => void;
@@ -518,13 +526,13 @@ function MapZone({
   const submit = () => {
     if (tab === "standard") {
       if (!standardField) return toast.error("Choisissez un champ standard");
-      onMap({ mode: "standard", fieldName: field.name, label, standardField });
+      onMap({ mode: "standard", formId, fieldName: field.name, label, standardField });
     } else if (tab === "new") {
       if (!label.trim()) return toast.error("Le label est requis");
-      onMap({ mode: "new_custom", fieldName: field.name, label, type: fieldType });
+      onMap({ mode: "new_custom", formId, fieldName: field.name, label, type: fieldType });
     } else {
       if (!existingId) return toast.error("Choisissez un champ existant");
-      onMap({ mode: "existing_custom", fieldName: field.name, customFieldId: existingId });
+      onMap({ mode: "existing_custom", formId, fieldName: field.name, customFieldId: existingId });
     }
   };
 

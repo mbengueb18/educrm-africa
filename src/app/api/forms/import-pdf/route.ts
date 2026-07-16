@@ -34,6 +34,7 @@ Règles :
 - "label" = libellé visible en français, tel qu'écrit sur le document.
 - "name" = clé technique en camelCase ASCII (ex: "dateNaissance"). Utilise IMPÉRATIVEMENT ces clés standard quand le champ correspond : firstName (prénom), lastName (nom), email, phone (téléphone), whatsapp, city (ville), message (message/commentaire/motivation).
 - "options" UNIQUEMENT pour select/radio/checkboxes (reprends les choix listés sur le document). NE mets PAS d'options pour country/nationality (listes intégrées).
+- radio vs checkboxes : utilise "radio" (choix UNIQUE) dès qu'une SEULE réponse est attendue, MÊME si le document dessine des petites cases ☐ à cocher (ex : « Programme choisi », « Admission en 1ère/2ème/3ème année », « Situation de famille »). N'utilise "checkboxes" QUE si PLUSIEURS réponses simultanées sont clairement permises (mentions du type « plusieurs choix possibles », « cochez toutes les cases qui s'appliquent »). Dans le doute, préfère TOUJOURS "radio".
 - "content" UNIQUEMENT pour heading/paragraph/consent (le texte).
 - Choisis le type le plus adapté : email→email, téléphone→tel, date de naissance→date, réponse longue→textarea, cases à cocher multiples→checkboxes, oui/non→boolean, acceptation de conditions→consent, document à joindre→file, pays→country, nationalité→nationality.
 - "required": true seulement si le champ est clairement obligatoire (astérisque, mention "obligatoire").
