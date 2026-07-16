@@ -4,11 +4,13 @@
 // directement depuis le client.
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   REPORT_SOURCES,
   validateReportConfig,
   measureFormat,
-  isTimeDimension,
+  isCustomDimension,
+  CUSTOM_DIM_PREFIX,
   type ReportConfig,
   type ReportSource,
   type MeasureFormat,
@@ -186,9 +188,8 @@ export async function executeReport(orgId: string, config: ReportConfig): Promis
 
   const registry = buildRegistry();
   const src = registry[config.source];
-  const dim = src.dimensions[config.dimension];
   const meas = src.measures[config.measure];
-  if (!dim || !meas) throw new Error("Configuration invalide.");
+  if (!meas) throw new Error("Configuration invalide.");
 
   const since = periodSince(config.period);
   const baseWhere: Record<string, any> = { organizationId: orgId };
@@ -197,14 +198,79 @@ export async function executeReport(orgId: string, config: ReportConfig): Promis
   const format = measureFormat(config.source, config.measure);
   const total = await computeTotal(src.model, baseWhere, meas);
 
-  let rows: ReportRow[];
-  if (dim.kind === "time") {
-    rows = await timeSeries(src, baseWhere, dim, meas, config.dimension as "day" | "week" | "month");
-  } else {
-    rows = await grouped(src, baseWhere, dim, meas);
+  // Dimension issue d'une propriété personnalisée (prospects uniquement)
+  if (isCustomDimension(config.dimension)) {
+    const key = config.dimension.slice(CUSTOM_DIM_PREFIX.length);
+    const allowed = await orgCustomFieldKeys(orgId);
+    if (!allowed[key]) throw new Error("Propriété personnalisée inconnue.");
+    const rows = await customLeadGrouped(orgId, key, meas, since);
+    return { rows, format, total };
   }
 
+  const dim = src.dimensions[config.dimension];
+  if (!dim) throw new Error("Configuration invalide.");
+
+  const rows = dim.kind === "time"
+    ? await timeSeries(src, baseWhere, dim, meas, config.dimension as "day" | "week" | "month")
+    : await grouped(src, baseWhere, dim, meas);
+
   return { rows, format, total };
+}
+
+// ─── Dimensions issues des propriétés personnalisées (Lead.customFields JSON) ───
+async function orgCustomFieldKeys(orgId: string): Promise<Record<string, string>> {
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
+  const cfs = (((org?.settings as any)?.customFields) || []) as any[];
+  const map: Record<string, string> = {};
+  for (const f of cfs) if (f && f.target !== "standard" && f.key) map[f.key] = f.label || f.key;
+  return map;
+}
+
+async function customLeadGrouped(orgId: string, key: string, meas: MeasExec, since: Date | null): Promise<ReportRow[]> {
+  const dateCond = since ? Prisma.sql`AND "createdAt" >= ${since}` : Prisma.empty;
+  const lab = (v: any) => (v == null || v === "" ? "(non renseigné)" : String(v));
+
+  if (meas.kind === "avg") {
+    const rows = await prisma.$queryRaw<{ k: string | null; v: number | null }[]>(Prisma.sql`
+      SELECT ("customFields"->>${key}) AS k, AVG("score")::float AS v
+      FROM "leads"
+      WHERE "organizationId" = ${orgId} ${dateCond}
+      GROUP BY k ORDER BY v DESC NULLS LAST LIMIT 25
+    `);
+    return rows.map((r) => ({ key: r.k ?? "null", label: lab(r.k), value: Math.round(r.v || 0) }));
+  }
+
+  if (meas.kind === "rate") {
+    const [tot, num] = await Promise.all([
+      prisma.$queryRaw<{ k: string | null; c: number }[]>(Prisma.sql`
+        SELECT ("customFields"->>${key}) AS k, COUNT(*)::int AS c
+        FROM "leads" WHERE "organizationId" = ${orgId} ${dateCond} GROUP BY k`),
+      prisma.$queryRaw<{ k: string | null; c: number }[]>(Prisma.sql`
+        SELECT ("customFields"->>${key}) AS k, COUNT(*)::int AS c
+        FROM "leads" WHERE "organizationId" = ${orgId} ${dateCond} AND "isConverted" = true GROUP BY k`),
+    ]);
+    const numMap: Record<string, number> = {};
+    num.forEach((r) => { numMap[String(r.k)] = r.c; });
+    const data = tot.map((r) => ({
+      key: r.k ?? "null",
+      label: lab(r.k),
+      value: r.c > 0 ? Math.round(((numMap[String(r.k)] || 0) / r.c) * 10000) / 100 : 0,
+    }));
+    data.sort((a, b) => b.value - a.value);
+    return data.slice(0, 25);
+  }
+
+  // count (avec filtre isConverted optionnel pour la mesure « convertis »)
+  const filterCond = meas.kind === "count" && meas.filter && meas.filter.field === "isConverted"
+    ? Prisma.sql`AND "isConverted" = ${meas.filter.value}`
+    : Prisma.empty;
+  const rows = await prisma.$queryRaw<{ k: string | null; c: number }[]>(Prisma.sql`
+    SELECT ("customFields"->>${key}) AS k, COUNT(*)::int AS c
+    FROM "leads"
+    WHERE "organizationId" = ${orgId} ${dateCond} ${filterCond}
+    GROUP BY k ORDER BY c DESC LIMIT 25
+  `);
+  return rows.map((r) => ({ key: r.k ?? "null", label: lab(r.k), value: r.c }));
 }
 
 // ─── Chemin groupBy (dimensions non temporelles) ───

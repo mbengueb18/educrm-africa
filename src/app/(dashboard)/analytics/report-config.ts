@@ -52,6 +52,13 @@ export function isTimeDimension(key: string): boolean {
   return key === "day" || key === "week" || key === "month";
 }
 
+// Dimensions issues des propriétés personnalisées (leads) — préfixe pour les
+// distinguer des dimensions standard. La clé réelle suit le préfixe.
+export const CUSTOM_DIM_PREFIX = "cf:";
+export function isCustomDimension(key: string): boolean {
+  return key.startsWith(CUSTOM_DIM_PREFIX);
+}
+
 export const REPORT_SOURCES: Record<ReportSource, SourceDef> = {
   leads: {
     key: "leads",
@@ -167,7 +174,14 @@ export interface ReportConfig {
 export function validateReportConfig(c: Partial<ReportConfig>): string | null {
   if (!c.source || !(c.source in REPORT_SOURCES)) return "Source invalide.";
   const src = REPORT_SOURCES[c.source];
-  if (!c.dimension || !src.dimensions.some((d) => d.key === c.dimension)) return "Dimension invalide pour cette source.";
+  if (!c.dimension) return "Dimension invalide pour cette source.";
+  if (isCustomDimension(c.dimension)) {
+    // Les propriétés personnalisées ne concernent que les prospects (Lead.customFields).
+    // La validité de la clé est vérifiée côté serveur (whitelist des champs définis).
+    if (c.source !== "leads") return "Les propriétés personnalisées ne sont disponibles que pour les prospects.";
+  } else if (!src.dimensions.some((d) => d.key === c.dimension)) {
+    return "Dimension invalide pour cette source.";
+  }
   if (!c.measure || !src.measures.some((m) => m.key === c.measure)) return "Mesure invalide pour cette source.";
   if (!c.period || !REPORT_PERIODS.some((p) => p.key === c.period)) return "Période invalide.";
   if (!c.vizType || !VIZ_TYPES.some((v) => v.key === c.vizType)) return "Visualisation invalide.";

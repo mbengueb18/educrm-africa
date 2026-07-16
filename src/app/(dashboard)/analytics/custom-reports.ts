@@ -4,8 +4,25 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getReportingAccess } from "./access";
-import { validateReportConfig, type ReportConfig, type ReportSource, type MeasureFormat } from "./report-config";
+import { validateReportConfig, CUSTOM_DIM_PREFIX, type ReportConfig, type ReportSource, type MeasureFormat } from "./report-config";
 import { executeReport, type ReportRow } from "./report-engine";
+
+/** Dimensions issues des propriétés personnalisées de l'org (prospects). */
+export async function getReportCustomDimensions(): Promise<{ key: string; label: string }[]> {
+  const session = await auth();
+  if (!session?.user) return [];
+  const access = await getReportingAccess();
+  if (!access?.tabs.custom) return [];
+
+  const org = await prisma.organization.findUnique({
+    where: { id: session.user.organizationId },
+    select: { settings: true },
+  });
+  const cfs = (((org?.settings as any)?.customFields) || []) as any[];
+  return cfs
+    .filter((f) => f && f.target !== "standard" && f.key)
+    .map((f) => ({ key: CUSTOM_DIM_PREFIX + f.key, label: (f.label || f.key) + " (perso.)" }));
+}
 
 export interface RunReportResult {
   ok: boolean;

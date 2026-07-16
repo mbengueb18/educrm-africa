@@ -21,11 +21,11 @@ import type { ReportingAccess } from "./access";
 import type { GoalProgress } from "./goals";
 import { saveReportingGoal } from "./goals";
 import {
-  REPORT_SOURCES, REPORT_PERIODS, VIZ_TYPES,
+  REPORT_SOURCES, REPORT_PERIODS, VIZ_TYPES, isCustomDimension, CUSTOM_DIM_PREFIX,
   type ReportSource, type ReportConfig,
 } from "./report-config";
 import {
-  runReportConfig, saveCustomReport, deleteCustomReport,
+  runReportConfig, saveCustomReport, deleteCustomReport, getReportCustomDimensions,
   type CustomReportsList, type CustomReportItem,
 } from "./custom-reports";
 import type { ReportRow } from "./report-engine";
@@ -769,7 +769,9 @@ function SequencesTab() {
 // ═══════════════════════ ONGLET : RAPPORTS PERSONNALISÉS ═══════════════════════
 function summarizeConfig(item: CustomReportItem): string {
   var s = REPORT_SOURCES[item.source as ReportSource];
-  var dim = s?.dimensions.find(function(d) { return d.key === item.dimension; })?.label || item.dimension;
+  var dim = isCustomDimension(item.dimension)
+    ? item.dimension.slice(CUSTOM_DIM_PREFIX.length) + " (perso.)"
+    : s?.dimensions.find(function(d) { return d.key === item.dimension; })?.label || item.dimension;
   var meas = s?.measures.find(function(m) { return m.key === item.measure; })?.label || item.measure;
   var per = REPORT_PERIODS.find(function(p) { return p.key === item.period; })?.label || item.period;
   return meas + " par " + dim + " · " + per;
@@ -1028,9 +1030,17 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
   var [period, setPeriod] = useState(report?.period ?? "90d");
   var [vizType, setVizType] = useState<ReportConfig["vizType"]>((report?.vizType as any) ?? "bar");
   var [res, setRes] = useState<Awaited<ReturnType<typeof runReportConfig>> | null>(null);
+  var [customDims, setCustomDims] = useState<{ key: string; label: string }[]>([]);
   var [error, setError] = useState("");
   var [, startPreview] = useTransition();
   var [saving, startSaving] = useTransition();
+
+  useEffect(function() {
+    getReportCustomDimensions().then(setCustomDims).catch(function() {});
+  }, []);
+
+  // Dimensions custom uniquement pour les prospects
+  var dimOptions = source === "leads" ? [...srcDef.dimensions, ...customDims] : srcDef.dimensions;
 
   var changeSource = function(s: ReportSource) {
     setSource(s);
@@ -1081,7 +1091,7 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Dimension (regrouper par)</label>
               <select value={dimension} onChange={function(e) { setDimension(e.target.value); }} className="input text-sm py-1.5">
-                {srcDef.dimensions.map(function(d) { return <option key={d.key} value={d.key}>{d.label}</option>; })}
+                {dimOptions.map(function(d) { return <option key={d.key} value={d.key}>{d.label}</option>; })}
               </select>
             </div>
             <div>
