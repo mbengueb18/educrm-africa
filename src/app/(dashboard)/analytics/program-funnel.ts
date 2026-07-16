@@ -49,6 +49,7 @@ export interface ProgramFunnel {
   summary?: FunnelSummary;
   groups?: FunnelGroup[];
   total?: FunnelRow;
+  noProgram?: FunnelRow | null; // prospects sans filière renseignée (à qualifier)
   types?: { value: string; label: string }[];
 }
 
@@ -137,16 +138,25 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
   summary.transformationRate = rate(summary.inscrits, summary.qualified);
   summary.realizationRate = rate(summary.inscrits, summary.target);
 
-  // ─── Lignes par programme ───
+  // ─── Lignes par programme (+ bucket sans filière) ───
   const byProgram: Record<string, { g: number; q: number; a: number; i: number }> = {};
+  const np = { g: 0, a: 0, i: 0 }; // sans filière : qualifiés = 0 par définition
   for (const l of allLeads) {
-    if (!l.programId) continue;
+    if (!l.programId) {
+      np.g++;
+      if (l.isConverted || (admisStageId && l.stageId === admisStageId)) np.a++;
+      if (l.isConverted) np.i++;
+      continue;
+    }
     const b = (byProgram[l.programId] ||= { g: 0, q: 0, a: 0, i: 0 });
     b.g++;
     if (isQualified(l)) b.q++;
     if (l.isConverted || (admisStageId && l.stageId === admisStageId)) b.a++;
     if (l.isConverted) b.i++;
   }
+  const noProgram: FunnelRow | null = np.g > 0
+    ? { programId: "", name: "Sans filière renseignée", globaux: np.g, qualifies: 0, admis: np.a, inscrits: np.i, transformationRate: 0, target: 0, realized: np.i, realizationRate: 0 }
+    : null;
 
   const buildRow = (prog: { id: string; name: string; code: string | null; targetEnrollments: number }): FunnelRow => {
     const b = byProgram[prog.id] || { g: 0, q: 0, a: 0, i: 0 };
@@ -179,13 +189,16 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
     groups.push({ type, label: TYPE_LABELS[type], diplomas, subtotal: aggregate(allTypeRows, "Sous-total " + TYPE_LABELS[type]) });
   }
 
-  const total = aggregate(groups.flatMap((g) => g.diplomas.flatMap((d) => d.rows)), "TOTAL");
+  // Total = toutes les filières + les prospects sans filière (→ « Prospects globaux » = tous les leads)
+  const allRows = groups.flatMap((g) => g.diplomas.flatMap((d) => d.rows));
+  const total = aggregate(noProgram ? [...allRows, noProgram] : allRows, "TOTAL");
 
   return {
     ok: true,
     summary,
     groups,
     total,
+    noProgram,
     types: groups.map((g) => ({ value: g.type, label: g.label })),
   };
 }

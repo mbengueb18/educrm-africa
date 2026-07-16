@@ -774,7 +774,21 @@ function RecruitmentTab({ programFunnel }: { programFunnel: ProgramFunnel }) {
       )}
 
       {shown.map(function(g) { return <FormationTable key={g.type} group={g} />; })}
-      {groups.length === 0 && <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500">Aucun programme actif. Définissez vos filières (type de formation, programme/diplôme, objectif) dans Réglages → Organisation.</div>}
+
+      {!type && fn.noProgram && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700">Sans filière renseignée</h3>
+          <p className="text-[11px] text-gray-400 mb-3">Prospects sans filière (à qualifier). Comptés dans « Prospects globaux » mais pas dans les Qualifiés (une filière est requise pour qualifier).</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div><div className="text-lg font-bold text-gray-900 tabular-nums">{fn.noProgram.globaux.toLocaleString("fr-FR")}</div><div className="text-[10px] uppercase tracking-wider text-gray-400 mt-0.5">Prospects globaux</div></div>
+            <div><div className="text-lg font-bold text-blue-600 tabular-nums">{fn.noProgram.admis}</div><div className="text-[10px] uppercase tracking-wider text-gray-400 mt-0.5">Admis</div></div>
+            <div><div className="text-lg font-bold text-emerald-700 tabular-nums">{fn.noProgram.inscrits}</div><div className="text-[10px] uppercase tracking-wider text-gray-400 mt-0.5">Inscrits</div></div>
+            <div><div className="text-lg font-bold text-gray-400 tabular-nums">0</div><div className="text-[10px] uppercase tracking-wider text-gray-400 mt-0.5">Qualifiés</div></div>
+          </div>
+        </div>
+      )}
+
+      {groups.length === 0 && !fn.noProgram && <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500">Aucun prospect. Définissez vos filières (type de formation, programme/diplôme, objectif) dans Réglages → Organisation.</div>}
     </div>
   );
 }
