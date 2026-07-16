@@ -95,7 +95,7 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
   const [allLeads, programs, stages, callLeads, msgLeads, emailCampLeads, waCampLeads] = await Promise.all([
     prisma.lead.findMany({ where: { organizationId: orgId }, select: { id: true, programId: true, stageId: true, isConverted: true } }),
     prisma.program.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, formationType: true, targetEnrollments: true, diploma: true } }),
-    prisma.pipelineStage.findMany({ where: { organizationId: orgId }, select: { id: true, name: true } }),
+    prisma.pipelineStage.findMany({ where: { organizationId: orgId }, select: { id: true, name: true, isLost: true } }),
     prisma.call.findMany({ where: { organizationId: orgId, leadId: { not: null } }, select: { leadId: true }, distinct: ["leadId"] }),
     // Tous les messages (email, WhatsApp, chatbot, SMS… toutes directions)
     prisma.message.findMany({ where: { organizationId: orgId, leadId: { not: null } }, select: { leadId: true }, distinct: ["leadId"] }),
@@ -116,14 +116,19 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
   // Étape « Admis »
   const admisStage = stages.find((s) => normalize(s.name).includes("admis"));
   const admisStageId = admisStage?.id || null;
+  // Étapes « perdu »
+  const lostIds = new Set(stages.filter((s) => s.isLost).map((s) => s.id));
+  // Un lead qualifié : filière renseignée ET (converti OU pas dans une étape perdue)
+  const isQualified = (l: { programId: string | null; stageId: string; isConverted: boolean }) =>
+    !!l.programId && (l.isConverted || !lostIds.has(l.stageId));
 
   // ─── Résumé global (KPIs Vue d'ensemble) ───
   const targetTotal = programs.reduce((sum, p) => sum + (p.targetEnrollments || 0), 0);
   const summary: FunnelSummary = {
     leadsTotal: allLeads.length,
     contacted: allLeads.filter((l) => contacted.has(l.id) || l.isConverted).length,
-    // Qualifiés = filière renseignée ET (contacté OU déjà converti — un inscrit est forcément qualifié)
-    qualified: allLeads.filter((l) => l.programId && (contacted.has(l.id) || l.isConverted)).length,
+    // Qualifiés = filière renseignée ET pas perdu (les inscrits/étudiants sont inclus)
+    qualified: allLeads.filter(isQualified).length,
     inscrits: allLeads.filter((l) => l.isConverted).length,
     target: targetTotal,
     transformationRate: 0,
@@ -138,7 +143,7 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
     if (!l.programId) continue;
     const b = (byProgram[l.programId] ||= { g: 0, q: 0, a: 0, i: 0 });
     b.g++;
-    if (contacted.has(l.id) || l.isConverted) b.q++;
+    if (isQualified(l)) b.q++;
     if (l.isConverted || (admisStageId && l.stageId === admisStageId)) b.a++;
     if (l.isConverted) b.i++;
   }
