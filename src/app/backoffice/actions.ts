@@ -56,6 +56,7 @@ export async function getOrganizations() {
     select: {
       id: true, name: true, slug: true, plan: true, planLockedUntil: true,
       aiAddonEnabled: true, createdAt: true,
+      reportingCustomEnabled: true, reportingAiEnabled: true,
       _count: { select: { users: true, leads: true } },
     },
   });
@@ -67,9 +68,21 @@ export async function getOrganizations() {
       id: o.id, name: o.name, slug: o.slug, plan: o.plan, effectivePlan,
       trialUntil: o.planLockedUntil && !expired && o.plan !== "ESSENTIEL" ? o.planLockedUntil : null,
       aiAddonEnabled: o.aiAddonEnabled, createdAt: o.createdAt,
+      reportingCustomEnabled: o.reportingCustomEnabled, reportingAiEnabled: o.reportingAiEnabled,
       users: o._count.users, maxUsers: getPlanLimits(effectivePlan).maxUsersTotal, leads: o._count.leads,
     };
   });
+}
+
+// Active/désactive les fonctionnalités reporting (rapports personnalisés / IA) par org
+export async function setOrgReportingFeature(data: { orgId: string; feature: "custom" | "ai"; enabled: boolean }) {
+  await requireBo();
+  const field = data.feature === "ai" ? "reportingAiEnabled" : "reportingCustomEnabled";
+  await prisma.organization.update({
+    where: { id: data.orgId },
+    data: { [field]: data.enabled },
+  });
+  return { ok: true };
 }
 
 export async function changePlan(data: { orgId: string; plan: string; temporary?: boolean; durationDays?: number; note?: string }) {

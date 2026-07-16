@@ -39,6 +39,8 @@ import {
   getProgramFunnel,
   type ProgramFunnel, type FunnelRow, type FunnelSummary, type FunnelGroup,
 } from "./program-funnel";
+import { getSequenceAnalytics, getLeadsInSequence, getCohortAnalysis, getSequenceImpact } from "./sequences/actions";
+import { SequenceAnalyticsClient } from "./sequences/sequence-analytics-client";
 
 var SOURCE_LABELS: Record<string, string> = {
   WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
@@ -88,7 +90,6 @@ type TabKey = "overview" | "acquisition" | "pipeline" | "recruitment" | "team" |
 var TAB_DEFS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: "overview", label: "Vue d'ensemble", icon: LayoutGrid },
   { key: "acquisition", label: "Acquisition", icon: Globe2 },
-  { key: "pipeline", label: "Pipeline", icon: Target },
   { key: "recruitment", label: "Recrutement", icon: GraduationCap },
   { key: "team", label: "Équipe", icon: Users },
   { key: "sequences", label: "Relances", icon: Repeat },
@@ -103,9 +104,10 @@ interface AnalyticsClientProps {
   access: ReportingAccess;
   goalData: GoalProgress;
   customReports: CustomReportsList;
+  programFunnel: ProgramFunnel;
 }
 
-export function AnalyticsClient({ data: initialData, userName, currentUserId, access, goalData, customReports }: AnalyticsClientProps) {
+export function AnalyticsClient({ data: initialData, userName, currentUserId, access, goalData, customReports, programFunnel }: AnalyticsClientProps) {
   var [data, setData] = useState(initialData);
   var [period, setPeriod] = useState(data.period || "30d");
   var [filterUser, setFilterUser] = useState("");
@@ -233,15 +235,15 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
 
       {/* Panels */}
       {!tabEnabled(tab) ? (
-        <UpsellPanel tab={tab} access={access} />
+        (tab === "custom" && access.comingSoon.custom) || (tab === "ai" && access.comingSoon.ai)
+          ? <ComingSoonPanel tab={tab} />
+          : <UpsellPanel tab={tab} access={access} />
       ) : tab === "overview" ? (
-        <OverviewTab data={data} kpis={kpis} access={access} goalData={goalData} />
+        <OverviewTab data={data} kpis={kpis} access={access} goalData={goalData} programFunnel={programFunnel} />
       ) : tab === "acquisition" ? (
         <AcquisitionTab data={data} />
-      ) : tab === "pipeline" ? (
-        <PipelineTab data={data} />
       ) : tab === "recruitment" ? (
-        <RecruitmentTab />
+        <RecruitmentTab programFunnel={programFunnel} />
       ) : tab === "team" ? (
         <TeamTab data={data} />
       ) : tab === "sequences" ? (
@@ -402,11 +404,9 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
 }
 
 // ═══════════════════════ ONGLET : VUE D'ENSEMBLE ═══════════════════════
-function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; access: ReportingAccess; goalData: GoalProgress }) {
+function OverviewTab({ data, kpis, access, goalData, programFunnel }: { data: any; kpis: any; access: ReportingAccess; goalData: GoalProgress; programFunnel: ProgramFunnel }) {
   var cmp = access.periodComparison;
-  var [funnel, setFunnel] = useState<ProgramFunnel | null>(null);
-  useEffect(function() { if (access.objectives) getProgramFunnel().then(setFunnel).catch(function() {}); }, []);
-  var s: FunnelSummary | null = funnel && funnel.ok && funnel.summary ? funnel.summary : null;
+  var s: FunnelSummary | null = programFunnel && programFunnel.ok && programFunnel.summary ? programFunnel.summary : null;
 
   return (
     <div>
@@ -709,15 +709,10 @@ function FormationTable({ group }: { group: FunnelGroup }) {
   );
 }
 
-function RecruitmentTab() {
-  var [fn, setFn] = useState<ProgramFunnel | null>(null);
+function RecruitmentTab({ programFunnel }: { programFunnel: ProgramFunnel }) {
+  var fn = programFunnel;
   var [type, setType] = useState("");
 
-  useEffect(function() { getProgramFunnel().then(setFn).catch(function() {}); }, []);
-
-  if (!fn) {
-    return <div className="bg-white rounded-xl border border-gray-200 p-8"><div className="flex justify-center"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div></div>;
-  }
   if (!fn.ok) {
     return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">{fn.error || "Indisponible."}</div>;
   }
@@ -848,17 +843,38 @@ function TeamTab({ data }: { data: any }) {
 
 // ═══════════════════════ ONGLET : RELANCES ═══════════════════════
 function SequencesTab() {
+  var [d, setD] = useState<{ analytics: any; leads: any; cohorts: any; impact: any } | null>(null);
+  var [, start] = useTransition();
+
+  useEffect(function() {
+    start(async function() {
+      var res = await Promise.all([
+        getSequenceAnalytics(30),
+        getLeadsInSequence(),
+        getCohortAnalysis(3),
+        getSequenceImpact(90),
+      ]);
+      setD({ analytics: res[0], leads: res[1], cohorts: res[2], impact: res[3] });
+    });
+  }, []);
+
+  if (!d) {
+    return <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>;
+  }
+  return <SequenceAnalyticsClient initialAnalytics={d.analytics} initialLeads={d.leads} initialCohorts={d.cohorts} initialImpact={d.impact} />;
+}
+
+// ═══════════════════════ « DISPONIBLE TRÈS BIENTÔT » ═══════════════════════
+function ComingSoonPanel({ tab }: { tab: TabKey }) {
+  var isAi = tab === "ai";
+  var Icon = isAi ? Sparkles : LayoutGrid;
   return (
-    <Link href="/analytics/sequences" className="bg-white rounded-xl border border-gray-200 p-6 hover:border-brand-200 hover:shadow-card-hover transition-all group flex items-start gap-4 max-w-2xl">
-      <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center shrink-0"><Repeat size={24} className="text-violet-600" /></div>
-      <div className="flex-1">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">Performance des relances</h3>
-          <ArrowRight size={18} className="text-gray-300 group-hover:text-brand-500 transition-colors" />
-        </div>
-        <p className="text-xs text-gray-500 mt-1">Funnel des séquences automatiques, taux de réponse, cohortes temporelles et impact « avec vs sans relance ». Export CSV disponible.</p>
-      </div>
-    </Link>
+    <div className="bg-white rounded-xl border border-gray-200 p-10 text-center max-w-lg mx-auto">
+      <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-4"><Icon size={26} className="text-brand-600" /></div>
+      <h3 className="text-lg font-semibold text-gray-900">{isAi ? "Analyste IA" : "Rapports personnalisés"}</h3>
+      <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">Cette fonctionnalité arrive très bientôt sur votre espace. Elle sera activée par notre équipe.</p>
+      <span className="inline-block mt-4 text-xs font-medium text-brand-600 bg-brand-50 px-3 py-1.5 rounded-full">Disponible très bientôt</span>
+    </div>
   );
 }
 

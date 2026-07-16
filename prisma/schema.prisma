@@ -32,6 +32,8 @@ model Organization {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
   webTrackingEnabled     Boolean       @default(false)
+  reportingCustomEnabled Boolean       @default(false) // Rapports personnalisés activés (back-office)
+  reportingAiEnabled     Boolean       @default(false) // Analyste IA activé (back-office)
 
   campuses            Campus[]
   users               User[]

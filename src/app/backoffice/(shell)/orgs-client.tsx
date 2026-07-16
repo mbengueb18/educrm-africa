@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
 import { Search, Loader2, Check, History, Pencil } from "lucide-react";
-import { changePlan } from "../actions";
+import { changePlan, setOrgReportingFeature } from "../actions";
 
 type Org = {
   id: string; name: string; slug: string; plan: string; effectivePlan: string;
   trialUntil: string | Date | null; aiAddonEnabled: boolean; createdAt: string | Date;
+  reportingCustomEnabled: boolean; reportingAiEnabled: boolean;
   users: number; maxUsers: number; leads: number;
 };
 type Log = {
@@ -86,7 +87,7 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
           <table className="w-full text-sm min-w-[820px]">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500">
-                {["Organisation", "Plan", "Utilisateurs", "Leads", "Créée le", ""].map((h, i) => (
+                {["Organisation", "Plan", "Utilisateurs", "Leads", "Créée le", "Reporting", ""].map((h, i) => (
                   <th key={i} className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -112,6 +113,7 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
                     <td className="px-4 py-3 text-xs text-gray-500 tabular-nums">{o.users} / {o.maxUsers}</td>
                     <td className="px-4 py-3 text-xs text-gray-500 tabular-nums">{o.leads.toLocaleString("fr-FR")}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(o.createdAt)}</td>
+                    <td className="px-4 py-3"><ReportingCell org={o} /></td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setEditOrg(o)} className="btn-secondary py-1.5 px-3 text-xs"><Pencil size={12} /> Changer le plan</button>
                     </td>
@@ -119,7 +121,7 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">Aucune organisation</td></tr>
+                <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">Aucune organisation</td></tr>
               )}
             </tbody>
           </table>
@@ -146,6 +148,33 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
       )}
 
       {editOrg && <ChangePlanModal org={editOrg} onClose={(saved) => { setEditOrg(null); if (saved) router.refresh(); }} />}
+    </div>
+  );
+}
+
+function ReportingCell({ org }: { org: Org }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const toggle = (feature: "custom" | "ai", enabled: boolean) => {
+    start(async () => {
+      try {
+        await setOrgReportingFeature({ orgId: org.id, feature, enabled });
+        toast.success(enabled ? "Activé" : "Désactivé");
+        router.refresh();
+      } catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
+  const chip = (on: boolean, label: string, onClick: () => void) => (
+    <button onClick={onClick} disabled={pending}
+      className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 whitespace-nowrap",
+        on ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-50 text-gray-400 border-gray-200 hover:border-gray-300")}>
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex gap-1.5">
+      {chip(org.reportingCustomEnabled, "Rapports", () => toggle("custom", !org.reportingCustomEnabled))}
+      {chip(org.reportingAiEnabled, "IA", () => toggle("ai", !org.reportingAiEnabled))}
     </div>
   );
 }

@@ -36,6 +36,8 @@ export interface ReportingAccess {
   customReportsMax: number;
   dashboardsMax: number;
   ai: boolean;
+  // Fonctionnalités activées par le back-office mais non encore ouvertes → « Disponible très bientôt »
+  comingSoon: { custom: boolean; ai: boolean };
 }
 
 export async function getReportingAccess(): Promise<ReportingAccess | null> {
@@ -44,7 +46,7 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
 
   const org = await prisma.organization.findUnique({
     where: { id: session.user.organizationId },
-    select: { plan: true, planLockedUntil: true },
+    select: { plan: true, planLockedUntil: true, reportingCustomEnabled: true, reportingAiEnabled: true },
   });
   if (!org) return null;
 
@@ -69,9 +71,9 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
       acquisition: isAdvanced,
       recruitment: isAdvanced,
       sequences: limits.sequenceReportingLevel !== null,
-      custom: limits.reportingCustomReportsMax > 0,
-      dashboards: limits.reportingDashboardsMax > 0,
-      ai: limits.reportingAI,
+      custom: limits.reportingCustomReportsMax > 0 && org.reportingCustomEnabled,
+      dashboards: limits.reportingDashboardsMax > 0 && org.reportingCustomEnabled,
+      ai: limits.reportingAI && org.reportingAiEnabled,
     },
     dateFilters: limits.reportingDateFilters,
     advancedFilters: limits.reportingAdvancedFilters,
@@ -82,5 +84,9 @@ export async function getReportingAccess(): Promise<ReportingAccess | null> {
     customReportsMax: limits.reportingCustomReportsMax,
     dashboardsMax: limits.reportingDashboardsMax,
     ai: limits.reportingAI,
+    comingSoon: {
+      custom: limits.reportingCustomReportsMax > 0 && !org.reportingCustomEnabled,
+      ai: limits.reportingAI && !org.reportingAiEnabled,
+    },
   };
 }
