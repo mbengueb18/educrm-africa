@@ -73,7 +73,6 @@ model Organization {
   customReports       CustomReport[]
   aiReportQueries     AiReportQuery[]
   reportDashboards    ReportDashboard[]
-  programGoals        ProgramGoal[]
 
   @@map("organizations")
 }
@@ -205,6 +204,7 @@ model Program {
   updatedAt      DateTime      @updatedAt
   formationType  FormationType @default(INITIAL)
   pipelineId     String?
+  targetEnrollments Int        @default(0) // Objectif d'inscrits (recrutement par programme)
 
   campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -212,7 +212,6 @@ model Program {
   leads        Lead[]
   students     Student[]
   subjects     Subject[]
-  goals        ProgramGoal[]
 
   @@index([organizationId])
   @@index([campusId])
@@ -745,24 +744,6 @@ model ReportingGoal {
 
   @@index([organizationId])
   @@map("reporting_goals")
-}
-
-// Objectif d'inscrits par programme (formation). Saisi par les admins, sert au
-// calcul du taux de réalisation dans le rapport « Recrutement par programme ».
-model ProgramGoal {
-  id                String   @id @default(cuid())
-  organizationId    String
-  programId         String
-  targetEnrollments Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  program      Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, programId])
-  @@index([organizationId])
-  @@map("program_goals")
 }
 
 // ─── RAPPORTS PERSONNALISÉS ───

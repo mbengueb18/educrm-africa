@@ -406,6 +406,7 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
   var [code, setCode] = useState(program?.code || "");
   var [level, setLevel] = useState(program?.level || "LICENCE");
   var [tuition, setTuition] = useState(program?.tuitionAmount ? String(program.tuitionAmount) : "");
+  var [targetEnrollments, setTargetEnrollments] = useState(program?.targetEnrollments ? String(program.targetEnrollments) : "");
   var [formationType, setFormationType] = useState<"INITIAL" | "CONTINUE" | "BOTH">(program?.formationType || "INITIAL");
   var [campusId, setCampusId] = useState(program?.campusId || (campuses.length > 0 ? campuses[0].id : ""));
   var [pipelineId, setPipelineId] = useState(function() {
@@ -435,23 +436,25 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
     setSaving(true);
     try {
       if (mode === "create") { 
-        await createProgram({ 
-          name, code, level, 
-          tuitionAmount: tuition ? parseInt(tuition) : undefined, 
+        await createProgram({
+          name, code, level,
+          tuitionAmount: tuition ? parseInt(tuition) : undefined,
           campusId,
           formationType,
+          targetEnrollments: targetEnrollments ? parseInt(targetEnrollments) : undefined,
           pipelineId: pipelineId || undefined,
-        }); 
-        toast.success("Filière créée"); 
+        });
+        toast.success("Filière créée");
       }
       else if (program) { 
-        await updateProgram(program.id, { 
-          name, code, level, 
+        await updateProgram(program.id, {
+          name, code, level,
           tuitionAmount: tuition ? parseInt(tuition) : undefined,
           formationType,
+          targetEnrollments: targetEnrollments ? parseInt(targetEnrollments) : 0,
           pipelineId: pipelineId || undefined,
-        }); 
-        toast.success("Filière mise à jour"); 
+        });
+        toast.success("Filière mise à jour");
       }
       onClose(true);
     } catch (err: any) { toast.error(err.message || "Erreur"); }
@@ -504,8 +507,11 @@ function ProgramForm({ mode, program, campuses, pipelines, onClose }: { mode: "c
           </select>
         </div>
 
-        <div className="sm:col-span-2"><label className="text-xs font-medium text-gray-600 mb-1 block">Frais de scolarité (FCFA)</label>
+        <div><label className="text-xs font-medium text-gray-600 mb-1 block">Frais de scolarité (FCFA)</label>
           <input type="number" value={tuition} onChange={function(e) { setTuition(e.target.value); }} className="input text-sm" placeholder="1500000" />
+        </div>
+        <div><label className="text-xs font-medium text-gray-600 mb-1 block">Objectif d'inscrits (rentrée)</label>
+          <input type="number" min="0" value={targetEnrollments} onChange={function(e) { setTargetEnrollments(e.target.value); }} className="input text-sm" placeholder="50" />
         </div>
       </div>
       <div className="flex justify-end gap-2">

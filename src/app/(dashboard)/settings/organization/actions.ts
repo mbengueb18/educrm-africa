@@ -27,6 +27,7 @@ export async function getOrganization() {
           currency: true,
           formationType: true,
           pipelineId: true,
+          targetEnrollments: true,
         },
         orderBy: { name: "asc" },
       },
@@ -155,6 +156,7 @@ export async function createProgram(data: {
   campusId?: string; 
   durationMonths?: number;
   formationType?: "INITIAL" | "CONTINUE" | "BOTH";
+  targetEnrollments?: number;
    pipelineId?: string;
 }) {
   var session = await auth();
@@ -170,6 +172,7 @@ export async function createProgram(data: {
     currency: data.currency || "XOF",
     durationMonths: data.durationMonths || 12,
     formationType: data.formationType || "INITIAL",
+    targetEnrollments: Math.max(0, Math.round(data.targetEnrollments || 0)),
     isActive: true,
     campus: { connect: { id: data.campusId } },
     organization: { connect: { id: session.user.organizationId } },
@@ -192,6 +195,7 @@ export async function updateProgram(programId: string, data: {
   isActive?: boolean; 
   durationMonths?: number;
   formationType?: "INITIAL" | "CONTINUE" | "BOTH";
+  targetEnrollments?: number;
   pipelineId?: string;
 }) {
   var session = await auth();
@@ -207,6 +211,7 @@ export async function updateProgram(programId: string, data: {
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.durationMonths !== undefined) updateData.durationMonths = data.durationMonths;
   if (data.formationType !== undefined) updateData.formationType = data.formationType;
+  if (data.targetEnrollments !== undefined) updateData.targetEnrollments = Math.max(0, Math.round(data.targetEnrollments || 0));
   if (data.pipelineId !== undefined) updateData.pipelineId = data.pipelineId || null;
 
   await prisma.program.update({ where: { id: programId }, data: updateData });

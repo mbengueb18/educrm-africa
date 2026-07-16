@@ -36,8 +36,8 @@ import {
   type DashboardsList, type DashboardDetail,
 } from "./dashboards";
 import {
-  getProgramFunnel, getProgramGoalsForEdit, saveProgramGoals,
-  type ProgramFunnel, type FunnelRow, type ProgramGoalEditItem,
+  getProgramFunnel,
+  type ProgramFunnel, type FunnelRow, type FunnelSummary,
 } from "./program-funnel";
 
 var SOURCE_LABELS: Record<string, string> = {
@@ -238,7 +238,7 @@ export function AnalyticsClient({ data: initialData, userName, currentUserId, ac
       ) : tab === "acquisition" ? (
         <AcquisitionTab data={data} />
       ) : tab === "pipeline" ? (
-        <PipelineTab data={data} access={access} />
+        <PipelineTab data={data} />
       ) : tab === "team" ? (
         <TeamTab data={data} />
       ) : tab === "sequences" ? (
@@ -414,18 +414,33 @@ function GoalEditor({ goal, onClose, onSaved }: { goal: GoalProgress["goal"]; on
 // ═══════════════════════ ONGLET : VUE D'ENSEMBLE ═══════════════════════
 function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; access: ReportingAccess; goalData: GoalProgress }) {
   var cmp = access.periodComparison;
+  var [funnel, setFunnel] = useState<ProgramFunnel | null>(null);
+  useEffect(function() { if (access.objectives) getProgramFunnel().then(setFunnel).catch(function() {}); }, []);
+  var s: FunnelSummary | null = funnel && funnel.ok && funnel.summary ? funnel.summary : null;
+
   return (
     <div>
       {/* Objectifs de rentrée */}
       {access.objectives && <ObjectivesSection goalData={goalData} />}
 
       {/* Main KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={cmp ? kpis.leadsGrowth : undefined} prev={cmp ? kpis.leadsPreviousPeriod : undefined} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
-        <KpiCard label="Convertis" value={kpis.convertedCurrentPeriod} change={cmp ? kpis.conversionGrowth : undefined} prev={cmp ? kpis.convertedPreviousPeriod : undefined} icon={UserCheck} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
-        <KpiCard label="Taux de conversion" value={(kpis.conversionRate ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %"} change={cmp ? kpis.conversionGrowth : undefined} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
-        <KpiCard label="Étudiants actifs" value={kpis.activeStudents} icon={GraduationCap} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel={"Total : " + kpis.totalStudents} />
-      </div>
+      {access.objectives ? (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <KpiCard label="Leads (total)" value={s ? s.leadsTotal : "…"} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
+          <KpiCard label="Contactés" value={s ? s.contacted : "…"} icon={Phone} iconColor="text-blue-600" iconBg="bg-blue-50" subLabel="≥ 1 appel / message" />
+          <KpiCard label="Qualifiés" value={s ? s.qualified : "…"} icon={UserCheck} iconColor="text-violet-600" iconBg="bg-violet-50" subLabel="contactés + filière" />
+          <KpiCard label="Convertis (inscrits)" value={s ? s.inscrits : "…"} icon={GraduationCap} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+          <KpiCard label="Taux de transformation" value={s ? fmtPct(s.transformationRate) : "…"} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" subLabel="inscrits / qualifiés" />
+          <KpiCard label="Taux de réalisation" value={s ? fmtPct(s.realizationRate) : "…"} icon={Flag} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel="inscrits / objectif" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <KpiCard label="Nouveaux leads" value={kpis.leadsCurrentPeriod} change={cmp ? kpis.leadsGrowth : undefined} prev={cmp ? kpis.leadsPreviousPeriod : undefined} icon={UserPlus} iconColor="text-brand-600" iconBg="bg-brand-50" />
+          <KpiCard label="Convertis" value={kpis.convertedCurrentPeriod} change={cmp ? kpis.conversionGrowth : undefined} prev={cmp ? kpis.convertedPreviousPeriod : undefined} icon={UserCheck} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+          <KpiCard label="Taux de conversion" value={(kpis.conversionRate ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %"} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
+          <KpiCard label="Étudiants actifs" value={kpis.activeStudents} icon={GraduationCap} iconColor="text-amber-600" iconBg="bg-amber-50" subLabel={"Total : " + kpis.totalStudents} />
+        </div>
+      )}
 
       {/* Mini KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
@@ -494,6 +509,9 @@ function OverviewTab({ data, kpis, access, goalData }: { data: any; kpis: any; a
           )}
         </div>
       </div>
+
+      {/* Recrutement par programme */}
+      {access.objectives && <div className="mt-6"><ProgramFunnelSection /></div>}
     </div>
   );
 }
@@ -605,7 +623,7 @@ function AcquisitionTab({ data }: { data: any }) {
 }
 
 // ═══════════════════════ ONGLET : PIPELINE ═══════════════════════
-function PipelineTab({ data, access }: { data: any; access: ReportingAccess }) {
+function PipelineTab({ data }: { data: any }) {
   var kpis = data.kpis;
   return (
     <div className="flex flex-col gap-4">
@@ -691,7 +709,6 @@ function PipelineTab({ data, access }: { data: any; access: ReportingAccess }) {
         )}
       </div>
     </div>
-    {access.objectives && <ProgramFunnelSection />}
     </div>
   );
 }
@@ -706,9 +723,11 @@ function FunnelTableRow({ r, kind }: { r: FunnelRow; kind: "prog" | "sub" | "tot
   return (
     <tr className={cn("border-b border-gray-50", base)}>
       <td className="py-2 px-2 text-left whitespace-nowrap">{r.name}</td>
-      {r.reached.map(function(v, i) { return <td key={i} className="py-2 px-2 text-right tabular-nums">{v}</td>; })}
+      <td className="py-2 px-2 text-right tabular-nums">{r.globaux}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.qualifies}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.admis}</td>
       <td className="py-2 px-2 text-right tabular-nums text-emerald-700">{r.inscrits}</td>
-      <td className="py-2 px-2 text-right tabular-nums">{fmtPct(r.transformationRate)}</td>
+      <td className="py-2 px-2 text-right tabular-nums">{r.qualifies > 0 ? fmtPct(r.transformationRate) : "—"}</td>
       <td className="py-2 px-2 text-right tabular-nums">{r.target || "—"}</td>
       <td className="py-2 px-2 text-right tabular-nums">{r.realized}</td>
       <td className="py-2 px-2 text-right tabular-nums">{r.target > 0 ? fmtPct(r.realizationRate) : "—"}</td>
@@ -718,32 +737,36 @@ function FunnelTableRow({ r, kind }: { r: FunnelRow; kind: "prog" | "sub" | "tot
 
 function ProgramFunnelSection() {
   var [fn, setFn] = useState<ProgramFunnel | null>(null);
-  var [editing, setEditing] = useState(false);
+  var [type, setType] = useState("");
 
-  var refresh = function() { getProgramFunnel().then(setFn).catch(function() {}); };
-  useEffect(function() { refresh(); }, []);
+  useEffect(function() { getProgramFunnel().then(setFn).catch(function() {}); }, []);
 
   if (!fn) {
     return <div className="bg-white rounded-xl border border-gray-200 p-5"><div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div></div>;
   }
   if (!fn.ok) return null;
 
-  var stages = fn.stages || [];
-  var colCount = 1 + stages.length + 5;
+  var groups = fn.groups || [];
+  var shown = type ? groups.filter(function(g) { return g.type === type; }) : groups;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
         <h3 className="text-sm font-semibold text-gray-700">Recrutement par programme</h3>
-        {fn.canEdit && <button onClick={function() { setEditing(true); }} className="btn-secondary text-xs py-1.5"><Pencil size={13} /> Objectifs par programme</button>}
+        <select value={type} onChange={function(e) { setType(e.target.value); }} className="input text-xs py-1.5 w-auto">
+          <option value="">Toutes les formations</option>
+          {(fn.types || []).map(function(t) { return <option key={t.value} value={t.value}>{t.label}</option>; })}
+        </select>
       </div>
-      <p className="text-[11px] text-gray-400 mb-4">Cumulatif (instantané) · les colonnes suivent vos étapes de pipeline · taux de transformation = inscrits / admis · taux de réalisation = inscrits / objectif</p>
+      <p className="text-[11px] text-gray-400 mb-4">Cumulatif (instantané) · Qualifiés = contactés ≥1 fois (appel/message) avec filière renseignée · Admis inclut les inscrits · Tx transf. = inscrits / qualifiés · Tx réal. = inscrits / objectif (défini par filière dans Réglages → Organisation).</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-200 text-gray-500">
               <th className="py-2 px-2 text-left font-medium">Programme</th>
-              {stages.map(function(s) { return <th key={s.id} className="py-2 px-2 text-right font-medium whitespace-nowrap">{s.name}</th>; })}
+              <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Prospects globaux</th>
+              <th className="py-2 px-2 text-right font-medium">Qualifiés</th>
+              <th className="py-2 px-2 text-right font-medium">Admis</th>
               <th className="py-2 px-2 text-right font-medium">Inscrits</th>
               <th className="py-2 px-2 text-right font-medium whitespace-nowrap">Tx transf.</th>
               <th className="py-2 px-2 text-right font-medium">Objectif</th>
@@ -752,88 +775,20 @@ function ProgramFunnelSection() {
             </tr>
           </thead>
           <tbody>
-            {(fn.groups || []).map(function(g) {
+            {shown.map(function(g) {
               return (
                 <Fragment key={g.type}>
-                  <tr className="bg-brand-50/60"><td colSpan={colCount} className="py-1.5 px-2 text-left font-semibold text-brand-700 uppercase text-[10px] tracking-wider">{g.label}</td></tr>
+                  <tr className="bg-brand-50/60"><td colSpan={9} className="py-1.5 px-2 text-left font-semibold text-brand-700 uppercase text-[10px] tracking-wider">{g.label}</td></tr>
                   {g.rows.map(function(r) { return <FunnelTableRow key={r.programId} r={r} kind="prog" />; })}
                   <FunnelTableRow r={g.subtotal} kind="sub" />
                 </Fragment>
               );
             })}
-            {fn.total && <FunnelTableRow r={fn.total} kind="total" />}
+            {!type && fn.total && <FunnelTableRow r={fn.total} kind="total" />}
           </tbody>
         </table>
       </div>
-      {(!fn.groups || fn.groups.length === 0) && <p className="text-xs text-gray-400 text-center py-6">Aucun programme actif.</p>}
-      {editing && <ProgramGoalsEditor onClose={function() { setEditing(false); }} onSaved={function() { setEditing(false); refresh(); }} />}
-    </div>
-  );
-}
-
-function ProgramGoalsEditor({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  var [items, setItems] = useState<ProgramGoalEditItem[]>([]);
-  var [loaded, setLoaded] = useState(false);
-  var [err, setErr] = useState("");
-  var [pending, start] = useTransition();
-
-  useEffect(function() {
-    getProgramGoalsForEdit().then(function(x) { setItems(x); setLoaded(true); }).catch(function() { setLoaded(true); });
-  }, []);
-
-  var setTarget = function(pid: string, val: number) {
-    setItems(function(prev) { return prev.map(function(i) { return i.programId === pid ? { ...i, target: val } : i; }); });
-  };
-  var save = function() {
-    setErr("");
-    start(async function() {
-      var r = await saveProgramGoals(items.map(function(i) { return { programId: i.programId, target: Number(i.target) || 0 }; }));
-      if (r.ok) onSaved();
-      else setErr(r.error || "Erreur");
-    });
-  };
-
-  var groups: Record<string, ProgramGoalEditItem[]> = {};
-  items.forEach(function(i) { (groups[i.typeLabel] ||= []).push(i); });
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-scale-in max-h-[85vh] overflow-y-auto" onClick={function(e) { e.stopPropagation(); }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-gray-900">Objectifs d'inscrits par programme</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        </div>
-        {!loaded ? (
-          <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
-        ) : items.length === 0 ? (
-          <p className="text-xs text-gray-400 py-6 text-center">Aucun programme actif.</p>
-        ) : (
-          Object.keys(groups).map(function(label) {
-            return (
-              <div key={label} className="mb-4">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
-                <div className="space-y-2">
-                  {groups[label].map(function(i) {
-                    return (
-                      <div key={i.programId} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-700 flex-1 truncate">{i.name}</span>
-                        <input type="number" min="0" value={i.target}
-                          onChange={function(e) { setTarget(i.programId, e.target.value === "" ? 0 : Number(e.target.value)); }}
-                          className="input text-sm w-24 py-1.5" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })
-        )}
-        {err && <p className="text-xs text-red-500 mt-2">{err}</p>}
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="btn-secondary text-sm">Annuler</button>
-          <button onClick={save} disabled={pending} className="btn-primary text-sm disabled:opacity-50">{pending ? "Enregistrement…" : "Enregistrer"}</button>
-        </div>
-      </div>
+      {groups.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Aucun programme actif. Définissez vos filières et leurs objectifs dans Réglages → Organisation.</p>}
     </div>
   );
 }
