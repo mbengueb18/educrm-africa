@@ -261,11 +261,16 @@ function formatGoalRange(start: string, end: string): string {
   return new Date(start).toLocaleDateString("fr-FR", opt) + " → " + new Date(end).toLocaleDateString("fr-FR", opt);
 }
 
-function GoalMetric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function GoalMetric({ label, value, sub, pct, color }: { label: string; value: string; sub?: string; pct?: number; color?: string }) {
   return (
     <div>
       <div className="text-[11px] text-gray-500">{label}</div>
       <div className="text-xl font-bold text-gray-900 mt-0.5 tabular-nums">{value}</div>
+      {pct !== undefined && (
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1.5">
+          <div className="h-full rounded-full transition-all" style={{ width: Math.min(100, Math.max(0, pct)) + "%", backgroundColor: color || "#2E86C1" }} />
+        </div>
+      )}
       {sub && <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>}
     </div>
   );
@@ -328,10 +333,10 @@ function ObjectivesSection({ goalData, summary }: { goalData: GoalProgress; summ
         <GoalMetric label="Convertis" value={fmtN(summary?.inscrits)} />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
-        <GoalMetric label="Taux de transformation" value={fmtP(summary?.transformationRate)} sub="inscrits / qualifiés" />
+        <GoalMetric label="Taux de transformation" value={fmtP(summary?.transformationRate)} sub="inscrits / qualifiés" pct={summary ? summary.transformationRate : undefined} color="#8E44AD" />
         <GoalMetric label="Objectifs" value={fmtN(summary?.target)} sub="somme par filière" />
         <GoalMetric label="Réalisés" value={fmtN(summary?.inscrits)} />
-        <GoalMetric label="Taux de réalisation" value={fmtP(summary?.realizationRate)} sub="inscrits / objectif" />
+        <GoalMetric label="Taux de réalisation" value={fmtP(summary?.realizationRate)} sub="inscrits / objectif" pct={summary ? summary.realizationRate : undefined} color="#F39C12" />
       </div>
       {editing && <GoalEditor goal={goal} onClose={function() { setEditing(false); }} onSaved={onSaved} />}
     </div>
@@ -740,11 +745,12 @@ function RecruitmentTab() {
       </div>
 
       {total && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           <KpiCard label="Prospects globaux" value={total.globaux} icon={Users} iconColor="text-brand-600" iconBg="bg-brand-50" />
           <KpiCard label="Qualifiés" value={total.qualifies} icon={UserCheck} iconColor="text-violet-600" iconBg="bg-violet-50" />
           <KpiCard label="Admis" value={total.admis} icon={CheckCircle2} iconColor="text-blue-600" iconBg="bg-blue-50" />
           <KpiCard label="Inscrits" value={total.inscrits} icon={GraduationCap} iconColor="text-emerald-600" iconBg="bg-emerald-50" />
+          <KpiCard label="Taux de transformation" value={total.qualifies > 0 ? fmtPct(total.transformationRate) : "—"} icon={TrendingUp} iconColor="text-violet-600" iconBg="bg-violet-50" />
           <KpiCard label="Objectif" value={total.target} icon={Flag} iconColor="text-amber-600" iconBg="bg-amber-50" />
           <KpiCard label="Taux de réalisation" value={total.target > 0 ? fmtPct(total.realizationRate) : "—"} icon={Target} iconColor="text-purple-600" iconBg="bg-purple-50" />
         </div>

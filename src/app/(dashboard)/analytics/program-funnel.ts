@@ -92,18 +92,26 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
 
   const orgId = session.user.organizationId;
 
-  const [allLeads, programs, stages, callLeads, msgLeads] = await Promise.all([
+  const [allLeads, programs, stages, callLeads, msgLeads, emailCampLeads, waCampLeads] = await Promise.all([
     prisma.lead.findMany({ where: { organizationId: orgId }, select: { id: true, programId: true, stageId: true, isConverted: true } }),
     prisma.program.findMany({ where: { organizationId: orgId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, formationType: true, targetEnrollments: true, diploma: true } }),
     prisma.pipelineStage.findMany({ where: { organizationId: orgId }, select: { id: true, name: true } }),
     prisma.call.findMany({ where: { organizationId: orgId, leadId: { not: null } }, select: { leadId: true }, distinct: ["leadId"] }),
-    prisma.message.findMany({ where: { organizationId: orgId, leadId: { not: null }, direction: "OUTBOUND" }, select: { leadId: true }, distinct: ["leadId"] }),
+    // Tous les messages (email, WhatsApp, chatbot, SMS… toutes directions)
+    prisma.message.findMany({ where: { organizationId: orgId, leadId: { not: null } }, select: { leadId: true }, distinct: ["leadId"] }),
+    // Destinataires de campagnes email
+    prisma.emailCampaignRecipient.findMany({ where: { campaign: { organizationId: orgId } }, select: { leadId: true }, distinct: ["leadId"] }),
+    // Destinataires de campagnes WhatsApp
+    prisma.whatsAppCampaignRecipient.findMany({ where: { campaign: { organizationId: orgId } }, select: { leadId: true }, distinct: ["leadId"] }),
   ]);
 
-  // Ensemble des leads contactés au moins une fois (appel OU message sortant)
+  // Ensemble des leads contactés au moins une fois (appel, message tous canaux,
+  // ou destinataire d'une campagne email / WhatsApp)
   const contacted = new Set<string>();
   callLeads.forEach((c) => { if (c.leadId) contacted.add(c.leadId); });
   msgLeads.forEach((m) => { if (m.leadId) contacted.add(m.leadId); });
+  emailCampLeads.forEach((e) => { if (e.leadId) contacted.add(e.leadId); });
+  waCampLeads.forEach((w) => { if (w.leadId) contacted.add(w.leadId); });
 
   // Étape « Admis »
   const admisStage = stages.find((s) => normalize(s.name).includes("admis"));
@@ -113,8 +121,9 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
   const targetTotal = programs.reduce((sum, p) => sum + (p.targetEnrollments || 0), 0);
   const summary: FunnelSummary = {
     leadsTotal: allLeads.length,
-    contacted: allLeads.filter((l) => contacted.has(l.id)).length,
-    qualified: allLeads.filter((l) => l.programId && contacted.has(l.id)).length,
+    contacted: allLeads.filter((l) => contacted.has(l.id) || l.isConverted).length,
+    // Qualifiés = filière renseignée ET (contacté OU déjà converti — un inscrit est forcément qualifié)
+    qualified: allLeads.filter((l) => l.programId && (contacted.has(l.id) || l.isConverted)).length,
     inscrits: allLeads.filter((l) => l.isConverted).length,
     target: targetTotal,
     transformationRate: 0,
@@ -129,7 +138,7 @@ export async function getProgramFunnel(): Promise<ProgramFunnel> {
     if (!l.programId) continue;
     const b = (byProgram[l.programId] ||= { g: 0, q: 0, a: 0, i: 0 });
     b.g++;
-    if (contacted.has(l.id)) b.q++;
+    if (contacted.has(l.id) || l.isConverted) b.q++;
     if (l.isConverted || (admisStageId && l.stageId === admisStageId)) b.a++;
     if (l.isConverted) b.i++;
   }

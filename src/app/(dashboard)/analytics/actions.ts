@@ -73,7 +73,7 @@ export async function getDashboardData(filters?: {
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "COMPLETED" } }),
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "CANCELLED" } }),
     prisma.appointment.count({ where: { ...apptBaseWhere, startAt: { gte: currentStart }, status: "NO_SHOW" } }),
-    prisma.task.count({ where: taskBaseWhere }),
+    prisma.task.count({ where: { ...taskBaseWhere, status: { in: ["TODO", "IN_PROGRESS", "DONE"] } } }),
     prisma.task.count({ where: { ...taskBaseWhere, status: "TODO" } }),
     prisma.task.count({ where: { ...taskBaseWhere, status: "IN_PROGRESS" } }),
     prisma.task.count({ where: { ...taskBaseWhere, status: "DONE" } }),
