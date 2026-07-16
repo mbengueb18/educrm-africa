@@ -1,61 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { blocksToHtml } from "@/lib/email-blocks";
+import { executeAction, evaluateCondition, LEAD_FILTER_INCLUDE } from "@/lib/workflows/engine";
+import { evaluateLeadFilters } from "@/lib/lead-filters-eval";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-
-// ─── Evaluate lead against filters ───
-function evaluateFilters(lead: any, filters: any): boolean {
-  if (!filters || !filters.rules || filters.rules.length === 0) return true;
-
-  const op = filters.operator || "AND";
-  const results = filters.rules.map((rule: any) => {
-    // Nested group
-    if (rule.operator_group) {
-      return evaluateFilters(lead, { operator: rule.operator_group, rules: rule.rules || [] });
-    }
-    // Simple rule
-    return evaluateRule(lead, rule);
-  });
-
-  if (op === "AND") return results.every((r: boolean) => r);
-  return results.some((r: boolean) => r);
-}
-
-function evaluateRule(lead: any, rule: any): boolean {
-  const field = rule.field;
-  const operator = rule.operator || "equals";
-  const value = rule.value;
-
-  // Handle custom fields
-  let leadValue: any = lead[field];
-  if (leadValue === undefined && lead.customFields && typeof lead.customFields === "object") {
-    leadValue = (lead.customFields as any)[field];
-  }
-
-  if (operator === "exists") return leadValue !== null && leadValue !== undefined && leadValue !== "";
-  if (operator === "not_exists") return leadValue === null || leadValue === undefined || leadValue === "";
-  if (operator === "equals") return String(leadValue || "") === String(value || "");
-  if (operator === "not_equals") return String(leadValue || "") !== String(value || "");
-  if (operator === "contains") return String(leadValue || "").toLowerCase().includes(String(value || "").toLowerCase());
-  if (operator === "starts_with") return String(leadValue || "").toLowerCase().startsWith(String(value || "").toLowerCase());
-  if (operator === "greater_than") {
-    if (rule.field?.includes("date") || rule.field?.includes("Date") || rule.field?.includes("At")) {
-      return new Date(leadValue) > new Date(value);
-    }
-    return Number(leadValue) > Number(value);
-  }
-  if (operator === "less_than") {
-    if (rule.field?.includes("date") || rule.field?.includes("Date") || rule.field?.includes("At")) {
-      return new Date(leadValue) < new Date(value);
-    }
-    return Number(leadValue) < Number(value);
-  }
-  return false;
-}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -153,11 +102,12 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
         createdAt: { gte: since },
         ...(config.source ? { source: config.source as any } : {}),
       },
+      include: LEAD_FILTER_INCLUDE,
       take: 200,
     });
-    // Apply advanced filters
+    // Apply advanced filters (même moteur que les audiences/campagnes)
     if (config.filters) {
-      leads = leads.filter((l) => evaluateFilters(l, config.filters));
+      leads = leads.filter((l) => evaluateLeadFilters(l, config.filters));
     }
   } else if (triggerType === "NO_RESPONSE_DAYS") {
     const days = config.days || 7;
@@ -169,14 +119,15 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
         createdAt: { lte: cutoff },
         messages: { none: { direction: "INBOUND" } },
       },
+      include: LEAD_FILTER_INCLUDE,
       take: 50,
     });
-    // Apply advanced filters
+    // Apply advanced filters (même moteur que les audiences/campagnes)
     if (config.filters) {
-      leads = leads.filter((l) => evaluateFilters(l, config.filters));
+      leads = leads.filter((l) => evaluateLeadFilters(l, config.filters));
     }
-  } else if (triggerType === "STAGE_CHANGED") {
-    // Triggered manually via activity event — skip in cron
+  } else if (triggerType === "STAGE_CHANGED" || triggerType === "FORM_SUBMITTED") {
+    // Déclencheurs événementiels (pipeline / soumission de formulaire) — pas dans le cron
     return 0;
   }
 
@@ -282,133 +233,4 @@ async function executeNextStep(exec: any) {
       data: { currentNode: nextNodeId, waitUntil: null, status: "RUNNING" },
     });
   }
-}
-
-// ─── Execute an action node ───
-async function executeAction(node: any, exec: any) {
-  const action = node.data?.action;
-  if (!exec.leadId) return;
-
-  const lead = await prisma.lead.findUnique({
-    where: { id: exec.leadId },
-    include: { organization: { select: { name: true } } },
-  });
-  if (!lead) return;
-
-  if (action === "SEND_EMAIL") {
-    if (!lead.email) return;
-    const subject = replaceVars(node.data?.subject || "", lead);
-
-    let body = node.data?.body || "";
-    let isHtml = node.data?.isHtml === true;
-
-    // If we have visual blocks, regenerate HTML from them
-    if (node.data?.blocks && Array.isArray(node.data.blocks) && node.data.blocks.length > 0) {
-      body = blocksToHtml(node.data.blocks, node.data?.brandColor || "#1B4F72");
-      isHtml = true;
-    }
-
-    body = replaceVars(body, lead);
-
-    if (!isHtml) {
-      const trimmed = body.trim();
-      isHtml = trimmed.startsWith("<") && (trimmed.includes("<html") || trimmed.includes("<!DOCTYPE") || trimmed.includes("<div") || trimmed.includes("<table") || trimmed.includes("<body"));
-    }
-
-    if (!body.trim()) {
-      console.error("[Workflow SEND_EMAIL] Empty body for lead", lead.id);
-      return;
-    }
-
-    await sendEmail({
-      to: lead.email,
-      toName: lead.firstName + " " + lead.lastName,
-      subject,
-      body,
-      leadId: lead.id,
-      organizationId: lead.organizationId,
-      isHtml,
-    });
-  } else if (action === "CREATE_TASK") {
-    await prisma.task.create({
-      data: {
-        title: replaceVars(node.data?.title || "Tâche", lead),
-        description: replaceVars(node.data?.description || "", lead),
-        type: (node.data?.taskType || "TODO") as any,
-        priority: (node.data?.priority || "MEDIUM") as any,
-        status: "TODO",
-        leadId: lead.id,
-        assignedToId: lead.assignedToId || (await getDefaultUser(lead.organizationId)),
-        organizationId: lead.organizationId,
-      },
-    });
-  } else if (action === "CHANGE_STAGE") {
-    if (node.data?.stageId) {
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { stageId: node.data.stageId },
-      });
-      await prisma.activity.create({
-        data: {
-          type: "LEAD_STAGE_CHANGED",
-          description: "Étape changée par workflow",
-          leadId: lead.id,
-          organizationId: lead.organizationId,
-        },
-      });
-    }
-  } else if (action === "INCREASE_SCORE") {
-    const delta = node.data?.delta || 10;
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { score: { increment: delta } },
-    });
-  } else if (action === "ADD_NOTE") {
-    await prisma.activity.create({
-      data: {
-        type: "NOTE_ADDED",
-        description: replaceVars(node.data?.note || "", lead),
-        leadId: lead.id,
-        organizationId: lead.organizationId,
-      },
-    });
-  }
-}
-
-// ─── Evaluate a condition node ───
-async function evaluateCondition(node: any, exec: any): Promise<boolean> {
-  if (!exec.leadId) return false;
-  const lead = await prisma.lead.findUnique({ where: { id: exec.leadId } });
-  if (!lead) return false;
-
-  const field = node.data?.field;
-  const operator = node.data?.operator || "equals";
-  const value = node.data?.value;
-
-  let leadValue: any = (lead as any)[field];
-
-  if (operator === "equals") return String(leadValue) === String(value);
-  if (operator === "not_equals") return String(leadValue) !== String(value);
-  if (operator === "contains") return String(leadValue || "").toLowerCase().includes(String(value).toLowerCase());
-  if (operator === "greater_than") return Number(leadValue) > Number(value);
-  if (operator === "less_than") return Number(leadValue) < Number(value);
-  if (operator === "exists") return leadValue !== null && leadValue !== undefined && leadValue !== "";
-  return false;
-}
-
-function replaceVars(text: string, lead: any): string {
-  return text
-    .replace(/\{\{prenom\}\}/gi, lead.firstName || "")
-    .replace(/\{\{nom\}\}/gi, lead.lastName || "")
-    .replace(/\{\{email\}\}/gi, lead.email || "")
-    .replace(/\{\{ecole\}\}/gi, lead.organization?.name || "");
-}
-
-async function getDefaultUser(orgId: string): Promise<string> {
-  const user = await prisma.user.findFirst({
-    where: { organizationId: orgId, role: { in: ["ADMIN", "COMMERCIAL"] }, isActive: true },
-    select: { id: true },
-  });
-  if (!user) throw new Error("No active user in org");
-  return user.id;
 }

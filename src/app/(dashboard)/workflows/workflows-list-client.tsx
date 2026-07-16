@@ -25,6 +25,7 @@ interface Workflow {
 
 const TRIGGER_LABELS: Record<string, string> = {
   LEAD_CREATED: "Lead créé",
+  FORM_SUBMITTED: "Formulaire soumis",
   NO_RESPONSE_DAYS: "Lead silencieux",
   STAGE_CHANGED: "Étape modifiée",
   EMAIL_OPENED: "Email ouvert",
@@ -32,6 +33,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const TRIGGER_COLORS: Record<string, { bg: string; color: string }> = {
   LEAD_CREATED: { bg: "bg-emerald-100", color: "text-emerald-700" },
+  FORM_SUBMITTED: { bg: "bg-brand-100", color: "text-brand-700" },
   NO_RESPONSE_DAYS: { bg: "bg-amber-100", color: "text-amber-700" },
   STAGE_CHANGED: { bg: "bg-violet-100", color: "text-violet-700" },
   EMAIL_OPENED: { bg: "bg-blue-100", color: "text-blue-700" },

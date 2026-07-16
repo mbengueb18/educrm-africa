@@ -30,7 +30,7 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
   }
 
   // Load helper data
-  const [stages, templates, programs, campuses, fieldProps, users] = await Promise.all([
+  const [stages, templates, whatsappTemplates, forms, programs, campuses, fieldProps, users] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: { organizationId: session.user.organizationId },
       orderBy: { order: "asc" },
@@ -39,6 +39,16 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
     prisma.messageTemplate.findMany({
       where: { organizationId: session.user.organizationId, channel: "EMAIL" },
       select: { id: true, name: true, subject: true, body: true, blocks: true, brandColor: true },
+    }),
+    prisma.whatsAppTemplate.findMany({
+      where: { organizationId: session.user.organizationId, status: "APPROVED" },
+      orderBy: { metaName: "asc" },
+      select: { id: true, metaName: true, language: true, bodyText: true, variableMapping: true },
+    }),
+    prisma.form.findMany({
+      where: { organizationId: session.user.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, status: true },
     }),
     prisma.program.findMany({
       where: { organizationId: session.user.organizationId, isActive: true },
@@ -63,6 +73,8 @@ export default async function WorkflowEditorPage({ params }: PageProps) {
       workflow={workflow as any}
       stages={stages}
       templates={templates as any}
+      whatsappTemplates={whatsappTemplates as any}
+      forms={forms as any}
       programs={programs}
       campuses={campuses}
       fields={fieldProps.fields}

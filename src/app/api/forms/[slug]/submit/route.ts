@@ -4,6 +4,7 @@ import { getLeadRouting } from "@/lib/pipeline-routing";
 import { sendEmail } from "@/lib/email";
 import { isInputField, type FormField, type FormRouting, type FormSettings } from "@/lib/forms";
 import { computeLeadScore } from "@/lib/lead-score";
+import { triggerFormSubmittedWorkflows } from "@/lib/workflows/engine";
 
 export const runtime = "nodejs";
 
@@ -107,6 +108,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       data: { formId: form.id, organizationId: form.organizationId, leadId: lead.id, data: values as any },
     });
     await prisma.form.update({ where: { id: form.id }, data: { submissionsCount: { increment: 1 } } });
+
+    // Déclencher les workflows « soumission de formulaire » (sans bloquer la réponse)
+    triggerFormSubmittedWorkflows(form.organizationId, lead.id, form.id).catch((e) =>
+      console.error("[FORM_SUBMITTED workflow]", e),
+    );
 
     // Notification email (si configurée)
     const notify = (settings.notifyEmail || "").trim();

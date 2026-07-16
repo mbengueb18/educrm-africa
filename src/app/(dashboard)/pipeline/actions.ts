@@ -7,6 +7,8 @@ import { z } from "zod";
 import { getLeadRouting } from "@/lib/pipeline-routing";
 import { getCustomFields } from "@/lib/custom-fields";
 import { computeLeadScore } from "@/lib/lead-score";
+import { evaluateLeadFilters } from "@/lib/lead-filters-eval";
+import { LEAD_FILTER_INCLUDE } from "@/lib/workflows/engine";
 
 // ─── Rôles autorisés à assigner/réassigner un lead ───
 function canAssignLeads(role: string): boolean {
@@ -184,10 +186,13 @@ export async function moveLeadToStage(leadId: string, stageId: string) {
       // Match if no specific stage configured, OR if matches target stage
       if (config.stageId && config.stageId !== stageId) continue;
 
-      // Apply advanced filters
+      // Apply advanced filters (même moteur que les audiences/campagnes)
       if (config.filters && config.filters.rules && config.filters.rules.length > 0) {
-        const fullLead = await prisma.lead.findUnique({ where: { id: leadId } });
-        if (!fullLead || !evaluateFiltersInline(fullLead, config.filters)) continue;
+        const fullLead = await prisma.lead.findUnique({
+          where: { id: leadId },
+          include: LEAD_FILTER_INCLUDE,
+        });
+        if (!fullLead || !evaluateLeadFilters(fullLead, config.filters)) continue;
       }
 
       // Avoid duplicate execution for same lead/workflow currently active

@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { runWorkflowTest } from "@/lib/workflows/engine";
 
 // ─── List workflows ───
 export async function getWorkflows() {
@@ -122,6 +123,65 @@ export async function toggleWorkflow(id: string, enabled: boolean) {
 
   revalidatePath("/workflows");
   return { success: true };
+}
+
+// ─── Recherche de leads pour la modale de test ───
+export async function searchLeadsForWorkflowTest(query: string) {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const q = (query || "").trim();
+  const leads = await prisma.lead.findMany({
+    where: {
+      organizationId: session.user.organizationId,
+      ...(q
+        ? {
+            OR: [
+              { firstName: { contains: q, mode: "insensitive" } },
+              { lastName: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q } },
+              { whatsapp: { contains: q } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true, whatsapp: true },
+  });
+
+  return leads;
+}
+
+// ─── Test synchrone d'un workflow sur un lead (depuis l'éditeur) ───
+// Exécute réellement les actions ; renvoie { ok, error } pour éviter la
+// redaction des erreurs de Server Action en production.
+export async function testWorkflowOnLead(workflowId: string, leadId: string) {
+  const session = await auth();
+  if (!session?.user) return { ok: false as const, error: "Non authentifié" };
+
+  const workflow = await prisma.workflow.findFirst({
+    where: { id: workflowId, organizationId: session.user.organizationId },
+    select: { id: true, graph: true },
+  });
+  if (!workflow) return { ok: false as const, error: "Workflow introuvable" };
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!lead) return { ok: false as const, error: "Lead introuvable" };
+
+  try {
+    const result = await runWorkflowTest(workflow.graph as any, leadId);
+    if (result.status === "NO_TRIGGER") {
+      return { ok: false as const, error: "Le workflow n'a pas de déclencheur." };
+    }
+    return { ok: true as const, steps: result.steps, status: result.status };
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || "Erreur lors du test" };
+  }
 }
 
 // ─── Manual trigger (test a workflow on a specific lead) ───

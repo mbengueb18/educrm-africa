@@ -22,11 +22,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { ArrowLeft, Save, Play, Plus, Zap, GitBranch, Mail, Phone, ListTodo, Tag, Clock, StopCircle, X, Check, Settings2, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Play, Plus, Zap, GitBranch, Mail, Phone, ListTodo, Tag, Clock, StopCircle, X, Check, Settings2, Sparkles, Loader2, MessageCircle, UserPlus, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { updateWorkflow, toggleWorkflow } from "../actions";
+import { updateWorkflow, toggleWorkflow, testWorkflowOnLead, searchLeadsForWorkflowTest } from "../actions";
 import { EmailEditor } from "@/components/messaging/email-editor";
-import { LeadFiltersBuilder, type FilterGroup } from "./lead-filters-builder";
+import { type FilterGroup } from "./lead-filters-builder";
+import { RuleBuilder } from "@/components/audiences/rule-builder";
 
 // ─── Custom node components ───
 function TriggerNode({ data, selected }: any) {
@@ -51,17 +52,21 @@ function TriggerNode({ data, selected }: any) {
 function ActionNode({ data, selected }: any) {
   const ICONS: any = {
     SEND_EMAIL: Mail,
+    SEND_WHATSAPP: MessageCircle,
     CREATE_TASK: ListTodo,
     CHANGE_STAGE: Tag,
     INCREASE_SCORE: Sparkles,
     ADD_NOTE: Mail,
+    ASSIGN_TO: UserPlus,
   };
   const COLORS: any = {
     SEND_EMAIL: "blue",
+    SEND_WHATSAPP: "emerald",
     CREATE_TASK: "amber",
     CHANGE_STAGE: "violet",
     INCREASE_SCORE: "pink",
     ADD_NOTE: "gray",
+    ASSIGN_TO: "indigo",
   };
   const Icon = ICONS[data.action] || Mail;
   const color = COLORS[data.action] || "blue";
@@ -166,13 +171,15 @@ interface WorkflowEditorClientProps {
   workflow: any;
   stages: { id: string; name: string; color: string }[];
   templates: { id: string; name: string; subject: string; body: string }[];
+  whatsappTemplates: { id: string; metaName: string; language: string; bodyText: string; variableMapping: any }[];
+  forms: { id: string; name: string; status: string }[];
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string }[];
   fields: any[];
   users: { id: string; name: string | null }[];
 }
 
-export function WorkflowEditorClient({ workflow, stages, templates, programs, campuses, fields, users }: WorkflowEditorClientProps) {
+export function WorkflowEditorClient({ workflow, stages, templates, whatsappTemplates, forms, programs, campuses, fields, users }: WorkflowEditorClientProps) {
   const router = useRouter();
   const initialGraph = workflow.graph || { nodes: [], edges: [] };
 
@@ -196,6 +203,7 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showTest, setShowTest] = useState(false);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({
@@ -218,6 +226,7 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
     if (type === "action") {
       data.action = action;
       data.label = getDefaultLabel(type, action);
+      if (action === "ASSIGN_TO") data.assignMode = "round_robin";
     }
     if (type === "wait") data.days = 1;
     if (type === "condition") {
@@ -252,7 +261,7 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
       const updated = { ...n, data: { ...n.data, ...newData } };
       // Update label/description for display
       if (n.type === "action") {
-        updated.data.label = getActionLabel(updated.data, templates, stages);
+        updated.data.label = getActionLabel(updated.data, templates, stages, whatsappTemplates);
         updated.data.description = getActionDescription(updated.data, templates, stages);
       } else if (n.type === "condition") {
         updated.data.label = getConditionLabel(updated.data);
@@ -281,6 +290,17 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
       toast.error(e.message || "Erreur");
     }
     setSaving(false);
+  };
+
+  // Persiste le graphe courant (sans toast) — utilisé avant un test manuel
+  const persistGraph = async () => {
+    await updateWorkflow(workflow.id, {
+      name,
+      description,
+      triggerType,
+      triggerConfig,
+      graph: { nodes, edges },
+    });
   };
 
   const handleToggleEnabled = async () => {
@@ -324,8 +344,10 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
         </Link>
       </div>
 
-      {/* Desktop editor */}
-      <div className="hidden lg:flex fixed inset-0 bg-gray-50 flex-col z-30">
+      {/* Desktop editor — z-50 pour passer au-dessus du header global (sticky z-40) et occuper tout l'écran */}
+      {/* Ancre safelist : force Tailwind à générer les classes indigo utilisées dynamiquement par le noeud ASSIGN_TO */}
+      <span className="hidden bg-indigo-500 !bg-indigo-500 border-indigo-300 border-indigo-500 text-indigo-700" aria-hidden />
+      <div className="hidden lg:flex fixed inset-0 bg-gray-50 flex-col z-50">
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 shrink-0">
         <Link href="/workflows" className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
@@ -347,6 +369,9 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
         </div>
         <button onClick={() => setShowSettings(!showSettings)} className="btn-secondary py-2 px-3 text-xs">
           <Settings2 size={14} /> Déclencheur
+        </button>
+        <button onClick={() => setShowTest(true)} className="btn-secondary py-2 px-3 text-xs">
+          <Play size={14} /> Tester
         </button>
         <button
           onClick={handleToggleEnabled}
@@ -371,6 +396,8 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
 
           <PaletteSection title="Actions">
             <PaletteItem icon={Mail} label="Envoyer email" color="blue" onClick={() => addNode("action", "SEND_EMAIL")} />
+            <PaletteItem icon={MessageCircle} label="Envoyer WhatsApp" color="emerald" onClick={() => addNode("action", "SEND_WHATSAPP")} />
+            <PaletteItem icon={UserPlus} label="Assigner conseiller" color="indigo" onClick={() => addNode("action", "ASSIGN_TO")} />
             <PaletteItem icon={ListTodo} label="Créer tâche" color="amber" onClick={() => addNode("action", "CREATE_TASK")} />
             <PaletteItem icon={Tag} label="Changer étape" color="violet" onClick={() => addNode("action", "CHANGE_STAGE")} />
             <PaletteItem icon={Sparkles} label="Augmenter score" color="pink" onClick={() => addNode("action", "INCREASE_SCORE")} />
@@ -428,6 +455,8 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
             node={selectedNode}
             stages={stages}
             templates={templates}
+            whatsappTemplates={whatsappTemplates}
+            users={users}
             onUpdate={updateSelectedNodeData}
             onDelete={deleteSelected}
             onClose={() => setSelectedNode(null)}
@@ -444,8 +473,19 @@ export function WorkflowEditorClient({ workflow, stages, templates, programs, ca
             campuses={campuses}
             fields={fields}
             users={users}
+            forms={forms}
             onChange={(type: string, config: any) => { setTriggerType(type); setTriggerConfig(config); }}
             onClose={() => setShowSettings(false)}
+          />
+        )}
+
+        {/* Test modal */}
+        {showTest && (
+          <TestWorkflowModal
+            workflowId={workflow.id}
+            nodeCount={nodes.length}
+            onBeforeTest={persistGraph}
+            onClose={() => setShowTest(false)}
           />
         )}
       </div>
@@ -480,7 +520,7 @@ function PaletteItem({ icon: Icon, label, color, onClick }: any) {
 }
 
 // ─── Node config panel (right) ───
-function NodeConfigPanel({ node, stages, templates, onUpdate, onDelete, onClose }: any) {
+function NodeConfigPanel({ node, stages, templates, whatsappTemplates, users, onUpdate, onDelete, onClose }: any) {
   return (
     <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto shrink-0">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -498,6 +538,9 @@ function NodeConfigPanel({ node, stages, templates, onUpdate, onDelete, onClose 
         {node.type === "action" && node.data.action === "SEND_EMAIL" && (
           <SendEmailConfig data={node.data} templates={templates} onUpdate={onUpdate} />
         )}
+        {node.type === "action" && node.data.action === "SEND_WHATSAPP" && (
+          <SendWhatsAppConfig data={node.data} whatsappTemplates={whatsappTemplates} onUpdate={onUpdate} />
+        )}
         {node.type === "action" && node.data.action === "CREATE_TASK" && (
           <CreateTaskConfig data={node.data} onUpdate={onUpdate} />
         )}
@@ -509,6 +552,9 @@ function NodeConfigPanel({ node, stages, templates, onUpdate, onDelete, onClose 
         )}
         {node.type === "action" && node.data.action === "ADD_NOTE" && (
           <AddNoteConfig data={node.data} onUpdate={onUpdate} />
+        )}
+        {node.type === "action" && node.data.action === "ASSIGN_TO" && (
+          <AssignToConfig data={node.data} users={users} onUpdate={onUpdate} />
         )}
         {node.type === "condition" && (
           <ConditionConfig data={node.data} onUpdate={onUpdate} />
@@ -641,6 +687,192 @@ function SendEmailConfig({ data, templates, onUpdate }: any) {
         />
       )}
     </>
+  );
+}
+
+// ─── WhatsApp action config ───
+function SendWhatsAppConfig({ data, whatsappTemplates, onUpdate }: any) {
+  const list = whatsappTemplates || [];
+  const selected = list.find((t: any) => t.id === data.whatsappTemplateId);
+  const varCount = selected?.variableMapping ? Object.keys(selected.variableMapping).length : 0;
+
+  if (list.length === 0) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <p className="text-xs text-amber-800">
+          Aucun template WhatsApp approuvé. Créez et faites approuver un template dans{" "}
+          <span className="font-semibold">Paramètres → Templates WhatsApp</span> (plan Performance).
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Template WhatsApp</label>
+        <select
+          value={data.whatsappTemplateId || ""}
+          onChange={(e) => onUpdate({ whatsappTemplateId: e.target.value || null })}
+          className="input text-xs py-1.5"
+        >
+          <option value="">— Choisir un template —</option>
+          {list.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.metaName} ({t.language})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {selected && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Aperçu du message</p>
+          <p className="text-xs text-gray-700 whitespace-pre-wrap">{selected.bodyText}</p>
+          {varCount > 0 && (
+            <p className="text-[11px] text-gray-500 mt-2">
+              {varCount} variable{varCount > 1 ? "s" : ""} remplie{varCount > 1 ? "s" : ""} automatiquement depuis la fiche du lead.
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="text-[11px] text-gray-400">
+        Envoyé au numéro WhatsApp du lead (ou son téléphone à défaut). Nécessite l'intégration WhatsApp active.
+      </p>
+    </>
+  );
+}
+
+// ─── Test modal (exécute le workflow sur un lead réel) ───
+function TestWorkflowModal({ workflowId, nodeCount, onBeforeTest, onClose }: any) {
+  const [query, setQuery] = useState("");
+  const [leads, setLeads] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [running, setRunning] = useState(false);
+  const [steps, setSteps] = useState<any[] | null>(null);
+
+  // Recherche débouncée
+  useEffect(() => {
+    if (selectedLead) return;
+    let active = true;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchLeadsForWorkflowTest(query);
+        if (active) setLeads(res as any[]);
+      } finally {
+        if (active) setSearching(false);
+      }
+    }, 350);
+    return () => { active = false; clearTimeout(t); };
+  }, [query, selectedLead]);
+
+  const leadName = (l: any) => ((l.firstName || "") + " " + (l.lastName || "")).trim() || l.email || l.phone || "Lead";
+
+  const runTest = async () => {
+    if (!selectedLead) return;
+    setRunning(true);
+    setSteps(null);
+    try {
+      await onBeforeTest(); // sauvegarde le graphe courant avant de tester
+      const res = await testWorkflowOnLead(workflowId, selectedLead.id);
+      if (!res.ok) {
+        toast.error(res.error || "Échec du test");
+      } else {
+        setSteps(res.steps || []);
+        toast.success("Test exécuté");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Erreur");
+    }
+    setRunning(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <Play size={16} className="text-emerald-600" /> Tester le workflow
+            </h2>
+            <p className="text-xs text-gray-500">Exécute réellement les actions sur le lead choisi.</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto">
+          {nodeCount < 2 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              Ce workflow n'a pas encore d'action connectée : le test s'arrêtera au déclencheur.
+            </div>
+          )}
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            ⚠️ Le test <b>envoie réellement</b> les emails / WhatsApp et crée les tâches ou change l'étape du lead. Les nœuds « Attendre » sont ignorés.
+          </div>
+
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Lead de test</label>
+            {selectedLead ? (
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{leadName(selectedLead)}</p>
+                  <p className="text-[11px] text-gray-500">{selectedLead.email || selectedLead.whatsapp || selectedLead.phone || "—"}</p>
+                </div>
+                <button onClick={() => { setSelectedLead(null); setSteps(null); }} className="text-xs text-gray-500 hover:text-gray-700">Changer</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Rechercher un lead (nom, email, téléphone)…"
+                  className="input text-xs py-2"
+                  autoFocus
+                />
+                <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
+                  {searching && <p className="text-xs text-gray-400 px-3 py-2">Recherche…</p>}
+                  {!searching && leads.length === 0 && <p className="text-xs text-gray-400 px-3 py-2">Aucun lead trouvé.</p>}
+                  {leads.map((l) => (
+                    <button key={l.id} onClick={() => setSelectedLead(l)} className="w-full text-left px-3 py-2 hover:bg-gray-50">
+                      <p className="text-sm text-gray-900">{leadName(l)}</p>
+                      <p className="text-[11px] text-gray-500">{l.email || l.whatsapp || l.phone || "—"}</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {steps && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Déroulé</p>
+              <ol className="space-y-1">
+                {steps.length === 0 && <li className="text-xs text-gray-400">Aucune étape exécutée.</li>}
+                {steps.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <span className="mt-0.5 w-4 h-4 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-[9px] shrink-0">{i + 1}</span>
+                    <span className="text-gray-700"><b>{s.label}</b> — {s.detail}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary py-2 px-4 text-sm">Fermer</button>
+          <button onClick={runTest} disabled={!selectedLead || running} className="btn-primary py-2 px-4 text-sm">
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            Lancer le test
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -786,6 +1018,54 @@ function AddNoteConfig({ data, onUpdate }: any) {
   );
 }
 
+function AssignToConfig({ data, users, onUpdate }: any) {
+  const mode = data.assignMode || "round_robin";
+  return (
+    <>
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Mode d'assignation</label>
+        <select
+          value={mode}
+          onChange={(e) => onUpdate({ assignMode: e.target.value })}
+          className="input text-xs py-1.5"
+        >
+          <option value="round_robin">Répartition automatique (moins chargé)</option>
+          <option value="specific">Conseiller précis</option>
+        </select>
+      </div>
+
+      {mode === "specific" ? (
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Conseiller</label>
+          <select
+            value={data.userId || ""}
+            onChange={(e) => onUpdate({ userId: e.target.value || null })}
+            className="input text-xs py-1.5"
+          >
+            <option value="">— Choisir —</option>
+            {(users || []).map((u: any) => (
+              <option key={u.id} value={u.id}>{u.name || "Sans nom"}</option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={!!data.sameCampusAsLead}
+            onChange={(e) => onUpdate({ sameCampusAsLead: e.target.checked })}
+          />
+          Limiter aux conseillers du campus du lead
+        </label>
+      )}
+
+      <p className="text-[11px] text-gray-400">
+        Répartit parmi les conseillers actifs (Admin / Commercial). En mode automatique, le lead va au conseiller ayant le moins de leads en cours.
+      </p>
+    </>
+  );
+}
+
 function ConditionConfig({ data, onUpdate }: any) {
   return (
     <>
@@ -840,8 +1120,10 @@ function WaitConfig({ data, onUpdate }: any) {
 }
 
 // ─── Trigger settings panel ───
-function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages, programs, campuses, fields, users }: any) {
+function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, stages, forms }: any) {
   const filters: FilterGroup = triggerConfig.filters || { operator: "AND", rules: [] };
+  const [showFilters, setShowFilters] = useState(false);
+  const ruleCount = countRules(filters);
 
   const updateFilters = (newFilters: FilterGroup) => {
     onChange(triggerType, { ...triggerConfig, filters: newFilters });
@@ -861,10 +1143,28 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
           <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Quand le workflow se déclenche-t-il ?</label>
           <select value={triggerType} onChange={(e) => onChange(e.target.value, {})} className="input text-xs py-1.5">
             <option value="LEAD_CREATED">Quand un lead est créé</option>
+            <option value="FORM_SUBMITTED">Quand un formulaire est soumis</option>
             <option value="NO_RESPONSE_DAYS">Quand un lead n'a pas répondu depuis X jours</option>
             <option value="STAGE_CHANGED">Quand le lead change d'étape</option>
           </select>
         </div>
+
+        {triggerType === "FORM_SUBMITTED" && (
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Formulaire</label>
+            <select
+              value={triggerConfig.formId || ""}
+              onChange={(e) => onChange(triggerType, { ...triggerConfig, formId: e.target.value || undefined })}
+              className="input text-xs py-1.5"
+            >
+              <option value="">Tous les formulaires</option>
+              {(forms || []).map((f: any) => (
+                <option key={f.id} value={f.id}>{f.name}{f.status !== "PUBLISHED" ? " (brouillon)" : ""}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">Le workflow se déclenchera à chaque soumission de ce formulaire</p>
+          </div>
+        )}
 
         {triggerType === "NO_RESPONSE_DAYS" && (
           <div>
@@ -894,11 +1194,11 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
           </div>
         )}
 
-        {/* Filters builder */}
+        {/* Filters builder — mêmes règles que les campagnes emailing / audiences */}
         <div className="pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider">Filtres avancés (optionnel)</label>
-            {filters.rules.length > 0 && (
+            {ruleCount > 0 && (
               <button
                 onClick={() => updateFilters({ operator: "AND", rules: [] })}
                 className="text-[10px] text-red-500 hover:text-red-700"
@@ -907,36 +1207,59 @@ function TriggerSettingsPanel({ triggerType, triggerConfig, onChange, onClose, s
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mb-2">Le workflow ne se déclenchera que si le lead correspond aux conditions ci-dessous</p>
+          <p className="text-[10px] text-gray-400 mb-2">Le workflow ne se déclenchera que si le lead correspond aux conditions</p>
 
-          {filters.rules.length === 0 ? (
-            <button
-              onClick={() => updateFilters({ operator: "AND", rules: [{ field: "source", operator: "equals", value: "" }] })}
-              className="w-full text-[11px] text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-lg border border-dashed border-brand-300 transition-colors"
-            >
-              + Ajouter un filtre
-            </button>
-          ) : (
-            <LeadFiltersBuilder
-              filters={filters}
-              onChange={updateFilters}
-              programs={programs}
-              campuses={campuses}
-              stages={stages}
-              fields={fields}
-              users={users}
-            />
-          )}
+          <button
+            onClick={() => setShowFilters(true)}
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-lg border border-dashed border-brand-300 transition-colors"
+          >
+            <Filter size={12} />
+            {ruleCount > 0 ? `Modifier les filtres (${ruleCount})` : "Ajouter des filtres"}
+          </button>
         </div>
       </div>
+
+      {/* Modale de règles (réutilise le builder des audiences/campagnes) */}
+      {showFilters && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowFilters(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2"><Filter size={16} className="text-brand-600" /> Filtres du déclencheur</h2>
+                <p className="text-xs text-gray-500">Le workflow ne démarrera que pour les leads correspondant à ces règles.</p>
+              </div>
+              <button onClick={() => setShowFilters(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              <RuleBuilder
+                initialRules={filters as any}
+                onSave={(rules: any) => { updateFilters(rules); setShowFilters(false); }}
+                onCancel={() => setShowFilters(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Compte le nombre de règles simples dans un groupe (récursif)
+function countRules(group: any): number {
+  if (!group || !Array.isArray(group.rules)) return 0;
+  return group.rules.reduce((acc: number, r: any) => {
+    if (r && Array.isArray(r.rules)) return acc + countRules(r);
+    if (r && r.operator_group) return acc + countRules({ rules: r.rules });
+    return acc + 1;
+  }, 0);
 }
 
 // ─── Helpers ───
 function getTriggerLabel(type: string): string {
   const labels: any = {
     LEAD_CREATED: "Quand un lead est créé",
+    FORM_SUBMITTED: "Quand un formulaire est soumis",
     NO_RESPONSE_DAYS: "Lead silencieux X jours",
     STAGE_CHANGED: "Quand l'étape change",
     EMAIL_OPENED: "Quand un email est ouvert",
@@ -952,18 +1275,24 @@ function getDefaultLabel(type: string, action?: string): string {
   if (type === "action") {
     const labels: any = {
       SEND_EMAIL: "Envoyer un email",
+      SEND_WHATSAPP: "Envoyer un WhatsApp",
       CREATE_TASK: "Créer une tâche",
       CHANGE_STAGE: "Changer l'étape",
       INCREASE_SCORE: "Augmenter le score",
       ADD_NOTE: "Ajouter une note",
+      ASSIGN_TO: "Assigner un conseiller",
     };
     return labels[action || ""] || "Action";
   }
   return "Noeud";
 }
 
-function getActionLabel(data: any, templates: any[], stages: any[]): string {
+function getActionLabel(data: any, templates: any[], stages: any[], whatsappTemplates: any[] = []): string {
   if (data.action === "SEND_EMAIL") return "📧 " + (data.subject || "Envoyer email");
+  if (data.action === "SEND_WHATSAPP") {
+    const t = whatsappTemplates.find((t) => t.id === data.whatsappTemplateId);
+    return "💬 " + (t ? t.metaName : "Envoyer WhatsApp");
+  }
   if (data.action === "CREATE_TASK") return "📝 " + (data.title || "Créer tâche");
   if (data.action === "CHANGE_STAGE") {
     const s = stages.find((s) => s.id === data.stageId);
@@ -971,6 +1300,7 @@ function getActionLabel(data: any, templates: any[], stages: any[]): string {
   }
   if (data.action === "INCREASE_SCORE") return "⭐ +" + (data.delta || 10) + " points";
   if (data.action === "ADD_NOTE") return "📝 Ajouter note";
+  if (data.action === "ASSIGN_TO") return "👤 " + (data.assignMode === "specific" ? "Assigner (conseiller précis)" : "Assigner (auto)");
   return data.label || "Action";
 }
 
