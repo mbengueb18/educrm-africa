@@ -73,11 +73,27 @@ export async function executeAction(node: any, exec: { leadId?: string | null })
       isHtml,
     });
   } else if (action === "CREATE_TASK") {
-    // Échéance relative : « dans N jours »
+    // Échéance relative : « N jours après » + heure optionnelle (HH:MM)
     let dueDate: Date | null = null;
-    const offset = Number(node.data?.dueOffsetDays);
-    if (Number.isFinite(offset) && offset >= 0 && node.data?.dueOffsetDays !== null && node.data?.dueOffsetDays !== "") {
-      dueDate = new Date(Date.now() + offset * 86400000);
+    const rawOffset = node.data?.dueOffsetDays;
+    const hasOffset = rawOffset !== null && rawOffset !== undefined && rawOffset !== "" && Number.isFinite(Number(rawOffset));
+    const dueTime = typeof node.data?.dueTime === "string" ? node.data.dueTime : "";
+    if (hasOffset || dueTime) {
+      dueDate = new Date(Date.now() + (hasOffset ? Number(rawOffset) : 0) * 86400000);
+      const m = /^(\d{1,2}):(\d{2})$/.exec(dueTime);
+      if (m) dueDate.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    }
+
+    // Rappel : N minutes avant l'échéance (aligné sur le popup fiche lead)
+    let reminderAt: Date | undefined = undefined;
+    if (dueDate) {
+      const remMin = Number(node.data?.reminderMinutes);
+      if (Number.isFinite(remMin) && remMin > 0) {
+        reminderAt = new Date(dueDate.getTime() - remMin * 60000);
+      } else if (node.data?.reminderAtDue) {
+        // rétro-compat : ancien réglage « rappel à l'échéance »
+        reminderAt = dueDate;
+      }
     }
 
     // Assignation : conseiller précis (si valide/actif) sinon conseiller du lead sinon défaut
@@ -101,7 +117,7 @@ export async function executeAction(node: any, exec: { leadId?: string | null })
         leadId: lead.id,
         assignedToId,
         dueDate: dueDate || undefined,
-        reminderAt: dueDate && node.data?.reminderAtDue ? dueDate : undefined,
+        reminderAt,
         organizationId: lead.organizationId,
       },
     });

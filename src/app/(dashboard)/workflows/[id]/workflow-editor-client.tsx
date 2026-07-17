@@ -932,14 +932,40 @@ function EmailEditorModal({ subject, blocks, brandColor, onSave, onClose }: any)
 }
 
 function CreateTaskConfig({ data, users, onUpdate }: any) {
+  // Presets de titre uniformisés avec le popup de création de tâche (fiche lead)
+  const quickTitles = [
+    { label: "Appeler", value: "Appeler {{prenom}} {{nom}}", type: "CALL" },
+    { label: "Rappeler", value: "Rappeler {{prenom}} {{nom}}", type: "CALL" },
+    { label: "Relancer", value: "Relancer {{prenom}} {{nom}}", type: "FOLLOW_UP" },
+    { label: "Envoyer doc", value: "Envoyer documents à {{prenom}} {{nom}}", type: "DOCUMENT" },
+    { label: "RDV", value: "Rendez-vous avec {{prenom}} {{nom}}", type: "MEETING" },
+  ];
+  const hasDue = (data.dueOffsetDays != null && data.dueOffsetDays !== "") || !!data.dueTime;
+
   return (
     <>
+      <div className="flex flex-wrap gap-1.5">
+        {quickTitles.map((qt) => (
+          <button
+            key={qt.label}
+            type="button"
+            onClick={() => onUpdate({ title: qt.value, taskType: qt.type })}
+            className={cn(
+              "text-[10px] px-2 py-1 rounded-full border transition-colors whitespace-nowrap",
+              data.title === qt.value ? "bg-amber-200 text-amber-800 border-amber-300" : "bg-white text-gray-600 border-gray-200 hover:border-amber-300",
+            )}
+          >
+            {qt.label}
+          </button>
+        ))}
+      </div>
+
       <div>
         <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Titre</label>
         <input
           value={data.title || ""}
           onChange={(e) => onUpdate({ title: e.target.value })}
-          placeholder="Appeler {{prenom}}"
+          placeholder="Appeler {{prenom}} {{nom}}"
           className="input text-xs py-1.5"
         />
       </div>
@@ -974,46 +1000,60 @@ function CreateTaskConfig({ data, users, onUpdate }: any) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Échéance</label>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min="0"
-              value={data.dueOffsetDays ?? ""}
-              onChange={(e) => onUpdate({ dueOffsetDays: e.target.value === "" ? null : Math.max(0, parseInt(e.target.value) || 0) })}
-              placeholder="—"
-              className="input text-xs py-1.5 w-16"
-            />
-            <span className="text-[11px] text-gray-500">jour(s) après</span>
-          </div>
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Assigné à</label>
-          <select
-            value={data.assigneeUserId || ""}
-            onChange={(e) => onUpdate({ assigneeUserId: e.target.value || null })}
-            className="input text-xs py-1.5"
-          >
-            <option value="">Conseiller du lead</option>
-            {(users || []).map((u: any) => (
-              <option key={u.id} value={u.id}>{u.name || "Sans nom"}</option>
-            ))}
-          </select>
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Échéance</label>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="number"
+            min="0"
+            value={data.dueOffsetDays ?? ""}
+            onChange={(e) => onUpdate({ dueOffsetDays: e.target.value === "" ? null : Math.max(0, parseInt(e.target.value) || 0) })}
+            placeholder="—"
+            className="input text-xs py-1.5 w-14"
+          />
+          <span className="text-[11px] text-gray-500 whitespace-nowrap">j après, à</span>
+          <input
+            type="time"
+            value={data.dueTime || ""}
+            onChange={(e) => onUpdate({ dueTime: e.target.value || null })}
+            className="input text-xs py-1.5 flex-1 min-w-0"
+          />
         </div>
       </div>
 
-      {data.dueOffsetDays != null && data.dueOffsetDays !== "" && (
-        <label className="flex items-center gap-2 text-xs text-gray-600">
-          <input
-            type="checkbox"
-            checked={!!data.reminderAtDue}
-            onChange={(e) => onUpdate({ reminderAtDue: e.target.checked })}
-          />
-          Créer un rappel à l'échéance
-        </label>
-      )}
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Assigné à</label>
+        <select
+          value={data.assigneeUserId || ""}
+          onChange={(e) => onUpdate({ assigneeUserId: e.target.value || null })}
+          className="input text-xs py-1.5"
+        >
+          <option value="">Conseiller du lead</option>
+          {(users || []).map((u: any) => (
+            <option key={u.id} value={u.id}>{u.name || "Sans nom"}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Rappel</label>
+        <select
+          value={data.reminderMinutes ?? ""}
+          onChange={(e) => onUpdate({ reminderMinutes: e.target.value === "" ? null : parseInt(e.target.value) })}
+          className="input text-xs py-1.5"
+          disabled={!hasDue}
+        >
+          <option value="">Pas de rappel</option>
+          <option value="5">5 min avant</option>
+          <option value="15">15 min avant</option>
+          <option value="30">30 min avant</option>
+          <option value="60">1h avant</option>
+          <option value="120">2h avant</option>
+          <option value="1440">1 jour avant</option>
+          <option value="2880">2 jours avant</option>
+        </select>
+        {!hasDue && <p className="text-[10px] text-gray-400 mt-1">Définissez une échéance pour activer le rappel.</p>}
+      </div>
 
       <p className="text-[11px] text-gray-400">
         Échéance vide = tâche sans date. « Conseiller du lead » = le commercial assigné, sinon un membre actif par défaut.
