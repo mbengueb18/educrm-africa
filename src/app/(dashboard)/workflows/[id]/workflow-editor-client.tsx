@@ -542,7 +542,7 @@ function NodeConfigPanel({ node, stages, templates, whatsappTemplates, users, on
           <SendWhatsAppConfig data={node.data} whatsappTemplates={whatsappTemplates} onUpdate={onUpdate} />
         )}
         {node.type === "action" && node.data.action === "CREATE_TASK" && (
-          <CreateTaskConfig data={node.data} onUpdate={onUpdate} />
+          <CreateTaskConfig data={node.data} users={users} onUpdate={onUpdate} />
         )}
         {node.type === "action" && node.data.action === "CHANGE_STAGE" && (
           <ChangeStageConfig data={node.data} stages={stages} onUpdate={onUpdate} />
@@ -931,7 +931,7 @@ function EmailEditorModal({ subject, blocks, brandColor, onSave, onClose }: any)
   );
 }
 
-function CreateTaskConfig({ data, onUpdate }: any) {
+function CreateTaskConfig({ data, users, onUpdate }: any) {
   return (
     <>
       <div>
@@ -973,6 +973,51 @@ function CreateTaskConfig({ data, onUpdate }: any) {
           </select>
         </div>
       </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Échéance</label>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min="0"
+              value={data.dueOffsetDays ?? ""}
+              onChange={(e) => onUpdate({ dueOffsetDays: e.target.value === "" ? null : Math.max(0, parseInt(e.target.value) || 0) })}
+              placeholder="—"
+              className="input text-xs py-1.5 w-16"
+            />
+            <span className="text-[11px] text-gray-500">jour(s) après</span>
+          </div>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Assigné à</label>
+          <select
+            value={data.assigneeUserId || ""}
+            onChange={(e) => onUpdate({ assigneeUserId: e.target.value || null })}
+            className="input text-xs py-1.5"
+          >
+            <option value="">Conseiller du lead</option>
+            {(users || []).map((u: any) => (
+              <option key={u.id} value={u.id}>{u.name || "Sans nom"}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {data.dueOffsetDays != null && data.dueOffsetDays !== "" && (
+        <label className="flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={!!data.reminderAtDue}
+            onChange={(e) => onUpdate({ reminderAtDue: e.target.checked })}
+          />
+          Créer un rappel à l'échéance
+        </label>
+      )}
+
+      <p className="text-[11px] text-gray-400">
+        Échéance vide = tâche sans date. « Conseiller du lead » = le commercial assigné, sinon un membre actif par défaut.
+      </p>
     </>
   );
 }

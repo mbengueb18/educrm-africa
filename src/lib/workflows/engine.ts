@@ -73,6 +73,24 @@ export async function executeAction(node: any, exec: { leadId?: string | null })
       isHtml,
     });
   } else if (action === "CREATE_TASK") {
+    // Échéance relative : « dans N jours »
+    let dueDate: Date | null = null;
+    const offset = Number(node.data?.dueOffsetDays);
+    if (Number.isFinite(offset) && offset >= 0 && node.data?.dueOffsetDays !== null && node.data?.dueOffsetDays !== "") {
+      dueDate = new Date(Date.now() + offset * 86400000);
+    }
+
+    // Assignation : conseiller précis (si valide/actif) sinon conseiller du lead sinon défaut
+    let assignedToId: string | null = null;
+    if (node.data?.assigneeUserId) {
+      const u = await prisma.user.findFirst({
+        where: { id: node.data.assigneeUserId, organizationId: lead.organizationId, isActive: true },
+        select: { id: true },
+      });
+      assignedToId = u?.id || null;
+    }
+    if (!assignedToId) assignedToId = lead.assignedToId || (await getDefaultUser(lead.organizationId));
+
     await prisma.task.create({
       data: {
         title: replaceVars(node.data?.title || "Tâche", lead),
@@ -81,7 +99,9 @@ export async function executeAction(node: any, exec: { leadId?: string | null })
         priority: (node.data?.priority || "MEDIUM") as any,
         status: "TODO",
         leadId: lead.id,
-        assignedToId: lead.assignedToId || (await getDefaultUser(lead.organizationId)),
+        assignedToId,
+        dueDate: dueDate || undefined,
+        reminderAt: dueDate && node.data?.reminderAtDue ? dueDate : undefined,
         organizationId: lead.organizationId,
       },
     });
