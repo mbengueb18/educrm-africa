@@ -104,3 +104,24 @@
     scrollbar-width: none;
   }
 }
+
+/* ─── Contenu riche (éditeur email + aperçus) ───
+   Restaure les marqueurs de liste que le preflight Tailwind supprime
+   (ul, ol { list-style: none }), sinon puces/numéros invisibles. */
+.rich-content ul {
+  list-style: disc;
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.rich-content ol {
+  list-style: decimal;
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.rich-content li {
+  display: list-item;
+}
+.rich-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}

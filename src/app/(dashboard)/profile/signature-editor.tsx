@@ -19,6 +19,23 @@ const ROLE_LABELS: Record<string, string> = {
   COMMERCIAL: "Conseiller admission",
 };
 
+// Applique une largeur aux images de la signature (0 = taille originale).
+// Épargne un éventuel logo à hauteur fixe (ex: height:44px) pour ne pas le déformer.
+function setImagesWidthInHtml(html: string, width: number): string {
+  return html.replace(/(<img\b[^>]*?)style="([^"]*)"/gi, function (_m, pre, style) {
+    if (/height:\s*\d+px/i.test(style)) return _m; // logo à hauteur fixe → inchangé
+    var s = style
+      .replace(/width:\s*\d+px\s*;?/gi, "")
+      .replace(/;;+/g, ";")
+      .replace(/^;+|;+$/g, "")
+      .trim();
+    if (width > 0) s = "width:" + width + "px;" + s;
+    if (!/max-width/i.test(s)) s = (s ? s + ";" : "") + "max-width:100%";
+    if (!/height/i.test(s)) s = s + ";height:auto";
+    return pre + 'style="' + s + '"';
+  });
+}
+
 function buildTemplate(d: Data): string {
   const role = ROLE_LABELS[d.profile.role] || "";
   let html = "";
@@ -38,7 +55,7 @@ export function SignatureEditor() {
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [imgWidth, setImgWidth] = useState(300);
+  const [imgWidth, setImgWidth] = useState(0); // 0 = taille originale (native)
   const [resetKey, setResetKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +81,8 @@ export function SignatureEditor() {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const d = await res.json();
       if (!res.ok || !d.success) throw new Error(d.error || "Upload échoué");
-      setHtml((prev) => prev + '<br><img src="' + d.url + '" style="width:' + imgWidth + 'px;max-width:100%;height:auto;margin-top:6px" />');
+      const sizeStyle = imgWidth > 0 ? "width:" + imgWidth + "px;max-width:100%;height:auto" : "max-width:100%;height:auto";
+      setHtml((prev) => prev + '<br><img src="' + d.url + '" style="' + sizeStyle + ';margin-top:6px" />');
       setResetKey((k) => k + 1);
       toast.success("Image ajoutée à la signature");
     } catch (e: any) {
@@ -72,6 +90,13 @@ export function SignatureEditor() {
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // Change la taille (menu) — applique à l'image déjà présente ET aux futures insertions
+  const applyImageSize = (width: number) => {
+    setImgWidth(width);
+    setHtml((prev) => setImagesWidthInHtml(prev, width));
+    setResetKey((k) => k + 1);
   };
 
   const save = () => {
@@ -107,7 +132,8 @@ export function SignatureEditor() {
         </label>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={generate} className="btn-secondary py-1.5 px-3 text-xs"><Sparkles size={13} /> Générer</button>
-          <select value={imgWidth} onChange={(e) => setImgWidth(Number(e.target.value))} className="input text-xs py-1 w-28" title="Taille de l'image à insérer">
+          <select value={imgWidth} onChange={(e) => applyImageSize(Number(e.target.value))} className="input text-xs py-1 w-32" title="Taille de l'image de la signature">
+            <option value={0}>Originale</option>
             <option value={160}>Petite</option>
             <option value={300}>Moyenne</option>
             <option value={480}>Grande</option>
@@ -128,7 +154,7 @@ export function SignatureEditor() {
           onContentChange={(h: string) => setHtml(h)}
         />
       </div>
-      <p className="text-[11px] text-gray-400 mt-2">« Générer » insère un modèle (avec le logo de l'école si disponible). « Image / logo » ajoute une image que vous pouvez ensuite déplacer.</p>
+      <p className="text-[11px] text-gray-400 mt-2">« Générer » insère un modèle (avec le logo de l'école si disponible). « Image / logo » ajoute une image. Le menu de taille redimensionne l'image de la signature (« Originale » = taille native).</p>
 
       <div className="mt-4">
         <p className="text-xs font-medium text-gray-500 mb-2">Aperçu</p>

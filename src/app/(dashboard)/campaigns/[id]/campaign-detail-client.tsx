@@ -62,6 +62,7 @@ interface RecipientStats {
 
 interface Props {
   campaign: Campaign;
+  showBranding?: boolean;
 }
 
 var STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Send }> = {
@@ -87,7 +88,7 @@ var TABS = [
   { key: "recipients", label: "Destinataires", icon: Users },
 ];
 
-export function CampaignDetailClient({ campaign }: Props) {
+export function CampaignDetailClient({ campaign, showBranding = true }: Props) {
   var [activeTab, setActiveTab] = useState("overview");
   var statusStyle = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.DRAFT;
   var StatusIcon = statusStyle.icon;
@@ -149,7 +150,7 @@ export function CampaignDetailClient({ campaign }: Props) {
 
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab campaign={campaign} stats={s} openRate={openRate} clickRate={clickRate} deliveryRate={deliveryRate} bounceRate={bounceRate} />}
-      {activeTab === "content" && <ContentTab campaign={campaign} />}
+      {activeTab === "content" && <ContentTab campaign={campaign} showBranding={showBranding} />}
       {activeTab === "recipients" && <RecipientsTab campaignId={campaign.id} initialRecipients={campaign.recipients} stats={s} />}
     </div>
   );
@@ -208,7 +209,7 @@ function OverviewTab({ campaign, stats, openRate, clickRate, deliveryRate, bounc
 }
 
 // ─── Content Tab ───
-function ContentTab({ campaign }: { campaign: Campaign }) {
+function ContentTab({ campaign, showBranding }: { campaign: Campaign; showBranding?: boolean }) {
   var bodyHtml = "";
   // Try to parse as blocks (new editor format)
   try {
@@ -219,13 +220,20 @@ function ContentTab({ campaign }: { campaign: Campaign }) {
         parsed.map(function(block: any) {
           switch (block.type) {
             case "text":
+            case "footer":
+              if ((block.styles?._html === "1") || (block.content || "").includes("<")) {
+                return '<div style="font-size:' + (block.styles?.fontSize || (block.type === "footer" ? "12px" : "15px")) + ";color:" + (block.styles?.color || (block.type === "footer" ? "#9ca3af" : "#555")) + ";text-align:" + (block.styles?.textAlign || (block.type === "footer" ? "center" : "left")) + ';line-height:1.6;">' + block.content + "</div>";
+              }
               return block.content.split("\n").map(function(line: string) {
                 return '<p style="margin:0 0 8px;font-size:' + (block.styles?.fontSize || "15px") + ";color:" + (block.styles?.color || "#555") + ';">' + (line || "&nbsp;") + "</p>";
               }).join("");
             case "heading":
+              if ((block.styles?._html === "1") || (block.content || "").includes("<")) {
+                return '<div style="font-size:' + (block.styles?.fontSize || "22px") + ";color:" + (block.styles?.color || "#1B4F72") + ";text-align:" + (block.styles?.textAlign || "left") + ';font-weight:700;">' + block.content + "</div>";
+              }
               return '<h2 style="margin:0 0 12px;font-size:' + (block.styles?.fontSize || "22px") + ";color:" + (block.styles?.color || "#1B4F72") + ';font-weight:700;">' + block.content + "</h2>";
             case "button":
-              return '<div style="text-align:' + (block.styles?.textAlign || "center") + ';padding:12px 0;"><span style="display:inline-block;padding:12px 28px;background:' + (block.styles?.bgColor || "#1B4F72") + ";color:" + (block.styles?.color || "white") + ";border-radius:" + (block.styles?.borderRadius || "8px") + ';font-weight:600;font-size:14px;">' + block.content + "</span></div>";
+              return '<div style="text-align:' + (block.styles?.textAlign || "center") + ';padding:12px 0;"><span style="display:inline-block;padding:12px 28px;background:' + (block.styles?.bgColorBtn || block.styles?.bgColor || "#1B4F72") + ";color:" + (block.styles?.color || "white") + ";border-radius:" + (block.styles?.borderRadius || "8px") + ';font-weight:600;font-size:14px;">' + block.content + "</span></div>";
             case "image":
               return block.content ? '<div style="text-align:center;padding:8px 0;"><img src="' + block.content + '" style="max-width:100%;border-radius:8px;" /></div>' : "";
             case "divider":
@@ -258,10 +266,12 @@ function ContentTab({ campaign }: { campaign: Campaign }) {
           <div style={{ backgroundColor: "#1B4F72", padding: "20px 28px" }}>
             <p style={{ color: "white", fontSize: "16px", fontWeight: 600, margin: 0 }}>{campaign.subject}</p>
           </div>
-          <div className="p-8" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-          <div className="px-8 py-4 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-400 text-center">Envoye via TalibCRM</p>
-          </div>
+          <div className="rich-content p-8" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          {showBranding && (
+            <div className="px-8 py-4 bg-gray-50 border-t border-gray-200">
+              <p className="text-xs text-gray-400 text-center">Envoyé via TalibCRM</p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
 import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
+import { orgShowsBranding } from "@/lib/plans/checks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -98,6 +99,9 @@ export async function GET(request: NextRequest) {
       var campaignFromName = [senderUser?.name, org?.name].filter(Boolean).join(" — ") || "TalibCRM";
       var campaignFromEmail = process.env.EMAIL_FROM_CAMPAIGN || "admission@talibcrm.com";
 
+      // Branding « Envoyé via TalibCRM » : plan gratuit uniquement (calculé 1x/campagne)
+      var campaignBranding = await orgShowsBranding(campaign.organizationId);
+
       var attachments = (campaign.attachments as any[]) || [];
 
       // Envoie le lot
@@ -120,7 +124,7 @@ export async function GET(request: NextRequest) {
         try {
           var parsedBlocks = JSON.parse(campaign.body);
           if (Array.isArray(parsedBlocks)) {
-            htmlBody = blocksToEmailHtml(parsedBlocks, lead);
+            htmlBody = blocksToEmailHtml(parsedBlocks, lead, campaignBranding);
           } else {
             htmlBody = replaceVars(campaign.body, lead);
           }

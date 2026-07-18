@@ -3,9 +3,10 @@
 import { useState, useTransition, useEffect } from "react";
 import { sendEmailToLead, getEmailTemplates, getOrgName } from "@/app/(dashboard)/inbox/actions";
 import { toast } from "sonner";
-import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles, FolderOpen, Search, Check, Eye } from "lucide-react";
+import { Send, Loader2, X, ChevronDown, Paperclip, FileText, Type, Layers, Sparkles, FolderOpen, Search, Check, Eye, Monitor, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmailEditor, blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
+import { injectSignature } from "@/lib/email-slots";
 import { getLibraryDocuments } from "@/app/(dashboard)/documents/actions";
 import { getMyEmailSignature } from "@/app/(dashboard)/profile/actions";
 
@@ -78,6 +79,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
   const [sigHtml, setSigHtml] = useState("");
   const [sigEnabled, setSigEnabled] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
 
   // Charge la signature de l'utilisateur (pour l'aperçu)
   useEffect(function() {
@@ -99,7 +101,7 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
     var sig = (addSignature && sigEnabled && sigHtml.trim())
       ? '<div style="color:#555555;font-size:13px;line-height:1.5;margin-top:18px">' + sigHtml + "</div>"
       : "";
-    return contentHtml + sig;
+    return injectSignature(contentHtml, sig);
   };
   // Bibliothèque de documents (pièce jointe sans ré-upload)
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -207,7 +209,9 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
     setSubject(fillVars(template.subject || ""));
     if (template.blocks && template.blocks.length > 0) {
       setBlocks(template.blocks);
-      setHtml(fillVars(template.body));
+      // Régénère le HTML depuis les blocs (rendu à jour : icônes PNG, position signature…)
+      // plutôt que d'utiliser le HTML stocké, potentiellement obsolète.
+      setHtml(fillVars(blocksToHtml(template.blocks as any, template.brandColor || "#1B4F72")));
       setBrandColor(template.brandColor || "#1B4F72");
       setMode("visual");
     } else {
@@ -496,15 +500,23 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={function() { setPreviewOpen(false); }} />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
             <div className="pointer-events-auto w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 shrink-0">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-gray-900 flex items-center gap-2"><Eye size={15} className="text-brand-600" /> Aperçu de l'email</p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">{subject || "(sans objet)"}</p>
                 </div>
-                <button onClick={function() { setPreviewOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                    <button onClick={function() { setPreviewDevice("desktop"); }} title="Ordinateur"
+                      className={cn("flex items-center px-2 py-1 rounded text-xs", previewDevice === "desktop" ? "bg-white text-brand-600 shadow-sm" : "text-gray-500")}><Monitor size={13} /></button>
+                    <button onClick={function() { setPreviewDevice("mobile"); }} title="Mobile"
+                      className={cn("flex items-center px-2 py-1 rounded text-xs", previewDevice === "mobile" ? "bg-white text-brand-600 shadow-sm" : "text-gray-500")}><Smartphone size={13} /></button>
+                  </div>
+                  <button onClick={function() { setPreviewOpen(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+                </div>
               </div>
               <div className="overflow-y-auto p-5" style={{ background: "#f4f6f8" }}>
-                <div style={{ maxWidth: 600, margin: "0 auto", background: "#ffffff", border: "1px solid #e6eaee", borderRadius: 12, padding: "24px 28px", color: "#2C3E50", fontSize: 14, lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "break-word" }}
+                <div className="rich-content transition-all" style={{ maxWidth: previewDevice === "mobile" ? 380 : 600, margin: "0 auto", background: "#ffffff", border: "1px solid #e6eaee", borderRadius: 12, padding: "24px 28px", color: "#2C3E50", fontSize: 14, lineHeight: 1.6, wordBreak: "break-word", overflowWrap: "break-word" }}
                   dangerouslySetInnerHTML={{ __html: buildPreview() }} />
               </div>
               <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2 shrink-0">

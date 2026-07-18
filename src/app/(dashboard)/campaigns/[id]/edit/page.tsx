@@ -17,7 +17,7 @@ export default async function CampaignEditPage({ params }: { params: Promise<{ i
   });
   if (!campaign) redirect("/campaigns");
 
-  var [stages, programs, audiences, users, customFields] = await Promise.all([
+  var [stages, programs, audiences, users, customFields, org, emailTemplates] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: { organizationId: session.user.organizationId },
       orderBy: { order: "asc" },
@@ -38,7 +38,25 @@ export default async function CampaignEditPage({ params }: { params: Promise<{ i
       orderBy: { name: "asc" },
     }),
     getCustomFields(),
+    prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { name: true, settings: true },
+    }),
+    prisma.messageTemplate.findMany({
+      where: { organizationId: session.user.organizationId, channel: "EMAIL" as any },
+      select: { id: true, name: true, subject: true, blocks: true, body: true, brandColor: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  var s = (org?.settings as Record<string, any>) || {};
+  var orgInfo = {
+    name: org?.name || "",
+    address: s.address || undefined,
+    phone: s.contactPhone || undefined,
+    email: s.contactEmail || undefined,
+    website: s.website || undefined,
+  };
 
   return (
     <CampaignEditorClient
@@ -48,6 +66,8 @@ export default async function CampaignEditPage({ params }: { params: Promise<{ i
       audiences={audiences}
       users={users}
       customFields={customFields}
+      orgInfo={orgInfo}
+      emailTemplates={emailTemplates as any}
     />
   );
 }

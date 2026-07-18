@@ -20,12 +20,17 @@ interface RichTextBlockProps {
 
 var FONT_FAMILIES = [
   { value: "Arial, Helvetica, sans-serif", label: "Arial" },
-  { value: "Georgia, serif", label: "Georgia" },
+  { value: "Helvetica, Arial, sans-serif", label: "Helvetica" },
   { value: "Verdana, Geneva, sans-serif", label: "Verdana" },
-  { value: "Trebuchet MS, sans-serif", label: "Trebuchet" },
-  { value: "Times New Roman, serif", label: "Times" },
-  { value: "Courier New, monospace", label: "Courier" },
   { value: "Tahoma, sans-serif", label: "Tahoma" },
+  { value: "Trebuchet MS, sans-serif", label: "Trebuchet" },
+  { value: "Lucida Sans Unicode, Lucida Grande, sans-serif", label: "Lucida" },
+  { value: "Century Gothic, sans-serif", label: "Century" },
+  { value: "Georgia, serif", label: "Georgia" },
+  { value: "Times New Roman, serif", label: "Times" },
+  { value: "Palatino Linotype, Book Antiqua, serif", label: "Palatino" },
+  { value: "Garamond, serif", label: "Garamond" },
+  { value: "Courier New, monospace", label: "Courier" },
 ];
 
 var FONT_SIZES = [
@@ -311,7 +316,7 @@ export function RichTextBlock({ initialContent, placeholder, style, className, o
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
-          className={cn("w-full outline-none leading-relaxed px-5 py-3 min-h-[60px]", className)}
+          className={cn("rich-content w-full outline-none leading-relaxed px-5 py-3 min-h-[60px]", className)}
           style={style}
           onInput={handleInput}
           onBlur={handleBlur}

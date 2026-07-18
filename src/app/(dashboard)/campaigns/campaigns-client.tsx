@@ -457,7 +457,7 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
   var [subject, setSubject] = useState("");
   var [body, setBody] = useState("");
   var [rules, setRules] = useState<SegmentRule[]>([]);
-  var [previewData, setPreviewData] = useState<{ count: number; leads: any[] } | null>(null);
+  var [previewData, setPreviewData] = useState<{ count: number; leads: any[]; withoutEmail?: number; totalMatching?: number } | null>(null);
   var [emailBlocks, setEmailBlocks] = useState<EmailBlock[]>([]);
   var [isPending, startTransition] = useTransition();
 
@@ -594,8 +594,13 @@ function CreateCampaignModal({ stages, programs, onClose, onCreated }: {
                   <div className="bg-brand-50 rounded-xl p-4 mt-3 animate-scale-in">
                     <div className="flex items-center gap-2 mb-2">
                       <Users size={16} className="text-brand-600" />
-                      <span className="text-sm font-semibold text-brand-800">{previewData.count} lead{previewData.count > 1 ? "s" : ""} dans ce segment</span>
+                      <span className="text-sm font-semibold text-brand-800">{previewData.count} destinataire{previewData.count > 1 ? "s" : ""}</span>
                     </div>
+                    {(previewData.withoutEmail ?? 0) > 0 && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mb-2">
+                        {previewData.withoutEmail} prospect{(previewData.withoutEmail ?? 0) > 1 ? "s" : ""} sans email {(previewData.withoutEmail ?? 0) > 1 ? "sont exclus" : "est exclu"} de l'envoi (sur {previewData.totalMatching} correspondant{(previewData.totalMatching ?? 0) > 1 ? "s" : ""} aux filtres).
+                      </p>
+                    )}
                     {previewData.count > 0 && (
                       <div className="flex flex-wrap gap-1.5 max-h-[80px] overflow-y-auto">
                         {previewData.leads.slice(0, 20).map(function(l: any) {

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/email";
 import { blocksToEmailHtml, replaceVars, promoteToContacted } from "@/lib/campaign-html";
 import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
+import { orgShowsBranding } from "@/lib/plans/checks";
 
 // Nombre de destinataires par page dans le détail d'une campagne (pagination serveur).
 var RECIPIENTS_PAGE_SIZE = 50;
@@ -272,15 +273,74 @@ export async function previewSegment(rules: any, audienceId?: string | null) {
   if (!session?.user) throw new Error("Non authentifié");
   var queryResult = await getCampaignLeadsQuery(session.user.organizationId, audienceId || null, rules);
   var where = { ...queryResult.where, email: { not: null } };
-  var [count, leads] = await Promise.all([
+  var [count, totalMatching, leads] = await Promise.all([
     prisma.lead.count({ where: where }),
+    // Total des leads correspondant aux règles, email ou non (pour la note d'exclusion)
+    prisma.lead.count({ where: queryResult.where }),
     prisma.lead.findMany({
       where: where,
       select: { id: true, firstName: true, lastName: true, email: true, city: true, source: true, score: true },
       take: 500,
     }),
   ]);
-  return { count: count, leads: leads };
+  // Leads correspondants mais sans email → exclus de l'envoi
+  var withoutEmail = Math.max(0, totalMatching - count);
+  return { count: count, leads: leads, withoutEmail: withoutEmail, totalMatching: totalMatching };
+}
+
+// ─── Envoi d'un email de TEST de la campagne (rendu identique à l'envoi réel) ───
+// Retourne { ok, error } (jamais de throw) pour éviter la redaction Next.js en prod.
+export async function sendTestCampaignEmail(campaignId: string, to?: string): Promise<{ ok: boolean; error?: string }> {
+  var session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+
+  var recipient = (to || session.user.email || "").trim();
+  if (!recipient || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) {
+    return { ok: false, error: "Adresse email destinataire invalide" };
+  }
+
+  var campaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+  });
+  if (!campaign) return { ok: false, error: "Campagne introuvable" };
+  if (!campaign.subject?.trim()) return { ok: false, error: "Ajoutez un objet avant d'envoyer un test" };
+
+  // Lead d'exemple pour remplir les variables ({{prenom}}, {{nom}}, {{email}})
+  var sampleLead = {
+    firstName: session.user.name?.split(" ")[0] || "Awa",
+    lastName: "Diallo",
+    email: recipient,
+  };
+
+  // Rendu via le renderer d'envoi réel (variables, réseaux sociaux, branding…)
+  var htmlBody = "";
+  try {
+    var parsedBlocks = JSON.parse(campaign.body);
+    if (Array.isArray(parsedBlocks)) {
+      var branding = await orgShowsBranding(campaign.organizationId);
+      htmlBody = blocksToEmailHtml(parsedBlocks, sampleLead, branding);
+    } else {
+      htmlBody = replaceVars(campaign.body, sampleLead);
+    }
+  } catch {
+    htmlBody = replaceVars(campaign.body, sampleLead);
+  }
+
+  try {
+    var result = await sendEmail({
+      to: recipient,
+      subject: "[TEST] " + replaceVars(campaign.subject, sampleLead),
+      body: htmlBody,
+      organizationId: campaign.organizationId,
+      sentById: campaign.createdById || session.user.id,
+      isHtml: true,
+      includeSignature: (campaign as any).includeSignature !== false,
+    });
+    if (!result.success) return { ok: false, error: result.error || "Échec de l'envoi" };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Erreur serveur" };
+  }
 }
 
 // ─── Send campaign (prépare l'envoi par lots, ne bloque pas) ───

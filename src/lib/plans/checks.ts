@@ -48,6 +48,18 @@ async function getOrgPlanInfo(orgId: string) {
   };
 }
 
+// Plan effectif d'une org (tient compte de la rétrogradation planLockedUntil).
+export async function getEffectivePlan(orgId: string): Promise<Plan> {
+  const info = await getOrgPlanInfo(orgId);
+  return info.plan;
+}
+
+// Le branding « Envoyé via TalibCRM » est affiché uniquement sur le plan gratuit.
+export async function orgShowsBranding(orgId: string): Promise<boolean> {
+  const plan = await getEffectivePlan(orgId);
+  return plan === "ESSENTIEL";
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CHECKS QUANTITATIFS (limites avec quota)
 // ═══════════════════════════════════════════════════════════════════════════

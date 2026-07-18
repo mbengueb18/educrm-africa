@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { getAttachmentBuffer } from "@/lib/supabase-storage";
 import { sendViaGmail, getGmailIntegration } from "@/lib/gmail-send";
 import { isOrgEmailVerified, EMAIL_VERIFICATION_REQUIRED_MESSAGE } from "@/lib/plans/checks";
+import { injectSignature, absolutizeEmailAssets } from "@/lib/email-slots";
 
 interface AttachmentInput {
   path: string;          // Supabase Storage path
@@ -79,6 +80,13 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
     body = body.replace(/\{\{ecole\}\}/gi, orgNameVar).replace(/\{\{organisation\}\}/gi, orgNameVar);
   }
 
+  // Rend absolues les URLs d'assets servis par l'app (icônes sociales PNG, etc.)
+  // — obligatoire pour l'affichage des images dans les clients email.
+  if (params.isHtml) {
+    const appBase = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+    body = absolutizeEmailAssets(body, appBase);
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
 
   // ─── Expéditeur pour l'envoi Resend (repli quand pas d'envoi via Gmail) ───
@@ -151,7 +159,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         select: { name: true },
       });
 
-      var gHtml = params.isHtml ? (body + signatureHtml) : formatEmailHtml(body, subject, sender?.name || "TalibCRM", signatureHtml);
+      var gHtml = params.isHtml ? injectSignature(body, signatureHtml) : formatEmailHtml(body, subject, sender?.name || "TalibCRM", signatureHtml);
       var gText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
       var gmailResult = await sendViaGmail({
@@ -289,7 +297,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       }
     }
 
-    const finalHtml = params.isHtml ? (body + signatureHtml) : formatEmailHtml(body, subject, senderName, signatureHtml);
+    const finalHtml = params.isHtml ? injectSignature(body, signatureHtml) : formatEmailHtml(body, subject, senderName, signatureHtml);
     const finalText = (params.isHtml ? stripHtmlForText(body) : body) + (signatureText ? "\n\n" + signatureText : "");
 
     const { data, error } = await resend.emails.send({

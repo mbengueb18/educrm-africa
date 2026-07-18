@@ -3,6 +3,47 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { sendEmail } from "@/lib/email";
+
+// Envoi d'un email de test du template en cours d'édition.
+// Retourne { ok, error } (jamais de throw) pour éviter la redaction Next.js en prod.
+export async function sendTestEmailTemplate(data: {
+  subject: string;
+  html: string;
+  to?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+
+  const to = (data.to || session.user.email || "").trim();
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { ok: false, error: "Adresse email destinataire invalide" };
+  }
+  if (!data.subject?.trim()) return { ok: false, error: "Objet requis" };
+
+  // Remplit les variables de fusion avec des valeurs d'exemple (pas de lead réel).
+  const fill = (s: string) =>
+    (s || "")
+      .replace(/\{\{\s*(prenom|firstName)\s*\}\}/gi, session.user.name?.split(" ")[0] || "Awa")
+      .replace(/\{\{\s*(nom|lastName)\s*\}\}/gi, "Diallo")
+      .replace(/\{\{\s*email\s*\}\}/gi, to);
+
+  try {
+    const result = await sendEmail({
+      to,
+      subject: "[TEST] " + fill(data.subject),
+      body: fill(data.html),
+      organizationId: session.user.organizationId,
+      sentById: session.user.id,
+      isHtml: true,
+      includeSignature: false,
+    });
+    if (!result.success) return { ok: false, error: result.error || "Échec de l'envoi" };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Erreur serveur" };
+  }
+}
 
 export async function createEmailTemplate(data: {
   name: string;
@@ -96,6 +137,27 @@ export async function duplicateEmailTemplate(id: string) {
 
   revalidatePath("/settings/email-templates");
   return { success: true, template: copy };
+}
+
+// Infos de l'organisation pour préremplir le footer d'un nouveau template.
+export async function getOrgEmailDefaults(): Promise<{
+  name: string; address?: string; phone?: string; email?: string; website?: string;
+}> {
+  const session = await auth();
+  if (!session?.user) return { name: "" };
+
+  const org = await prisma.organization.findUnique({
+    where: { id: session.user.organizationId },
+    select: { name: true, settings: true },
+  });
+  const s = (org?.settings as Record<string, any>) || {};
+  return {
+    name: org?.name || "",
+    address: s.address || undefined,
+    phone: s.contactPhone || undefined,
+    email: s.contactEmail || undefined,
+    website: s.website || undefined,
+  };
 }
 
 export async function getEmailTemplate(id: string) {

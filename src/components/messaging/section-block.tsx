@@ -136,7 +136,7 @@ export function SectionBlock({ columns, bgColor, padding, onColumnsChange }: Sec
                   <div
                     contentEditable
                     suppressContentEditableWarning
-                    className="w-full outline-none p-4 text-sm leading-relaxed min-h-[80px] flex items-center justify-center"
+                    className="rich-content w-full outline-none p-4 text-sm leading-relaxed min-h-[80px] flex items-center justify-center"
                     dangerouslySetInnerHTML={{ __html: col.content }}
                     onBlur={function(e) {
                       updateColumn(col.id, e.currentTarget.innerHTML, "text");
