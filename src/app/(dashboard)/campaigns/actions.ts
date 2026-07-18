@@ -165,13 +165,50 @@ export async function getCampaigns() {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  return prisma.emailCampaign.findMany({
+  var campaigns = await prisma.emailCampaign.findMany({
     where: { organizationId: session.user.organizationId },
     orderBy: { createdAt: "desc" },
     include: {
       createdBy: { select: { name: true } },
       _count: { select: { recipients: true } },
     },
+  });
+
+  var ids = campaigns.map(function(c) { return c.id; });
+  if (ids.length === 0) return campaigns;
+
+  // Stats recalculées depuis les HORODATAGES des destinataires (posés une seule fois,
+  // jamais effacés) — source fiable identique au détail. Évite la dérive des compteurs
+  // cumulés stockés sur la campagne (ex: deliveredCount > sentCount via webhooks doublés).
+  var [byTs, byFailed] = await Promise.all([
+    prisma.emailCampaignRecipient.groupBy({
+      by: ["campaignId"],
+      where: { campaignId: { in: ids } },
+      _count: { sentAt: true, deliveredAt: true, openedAt: true, clickedAt: true, bouncedAt: true },
+    }),
+    prisma.emailCampaignRecipient.groupBy({
+      by: ["campaignId"],
+      where: { campaignId: { in: ids }, status: "FAILED" },
+      _count: { _all: true },
+    }),
+  ]);
+
+  var tsMap: Record<string, any> = {};
+  byTs.forEach(function(g) { tsMap[g.campaignId] = g._count; });
+  var failedMap: Record<string, number> = {};
+  byFailed.forEach(function(g) { failedMap[g.campaignId] = g._count._all; });
+
+  return campaigns.map(function(c) {
+    var t = tsMap[c.id] || {};
+    return {
+      ...c,
+      sentCount: t.sentAt || 0,
+      deliveredCount: t.deliveredAt || 0,
+      openedCount: t.openedAt || 0,
+      clickedCount: t.clickedAt || 0,
+      bouncedCount: t.bouncedAt || 0,
+      failedCount: failedMap[c.id] || 0,
+    };
   });
 }
 

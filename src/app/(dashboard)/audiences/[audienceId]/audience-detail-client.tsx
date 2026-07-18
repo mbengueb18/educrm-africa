@@ -861,7 +861,7 @@ function ChannelChooserModal({
                   </div>
 
                   <p className="text-sm font-bold text-gray-900 mb-1">Email</p>
-                  <p className="text-xs text-gray-500 mb-3">Envoi via Brevo SMTP</p>
+                  <p className="text-xs text-gray-500 mb-3">Campagne par email</p>
 
                   {stats.withEmail > 0 ? (
                     <div className="space-y-1">
@@ -896,7 +896,7 @@ function ChannelChooserModal({
                   </div>
 
                   <p className="text-sm font-bold text-gray-900 mb-1">WhatsApp</p>
-                  <p className="text-xs text-gray-500 mb-3">Via Meta Cloud API</p>
+                  <p className="text-xs text-gray-500 mb-3">Message WhatsApp</p>
 
                   {stats.withWhatsApp > 0 ? (
                     <div className="space-y-1">
@@ -921,7 +921,7 @@ function ChannelChooserModal({
 
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-[11px] text-blue-800">
-                  💡 <strong>Bon à savoir</strong> : WhatsApp a un taux d'ouverture &gt; 90% (vs 20% en email), mais nécessite un template Meta-approuvé. Email permet plus de créativité visuelle.
+                  💡 <strong>Bon à savoir</strong> : WhatsApp a un taux d'ouverture &gt; 90% (vs 20% en email), mais nécessite un template approuvé. Email permet plus de créativité visuelle.
                 </p>
               </div>
             </>

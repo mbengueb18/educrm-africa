@@ -400,8 +400,7 @@ function CampaignReport({ campaign, onClose }: { campaign: Campaign; onClose: ()
           {/* Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
             <p className="text-xs text-blue-700">
-              Les statistiques d'ouverture et de clic sont mises a jour automatiquement via les webhooks Brevo.
-              Configurez le webhook dans Brevo &gt; Parametres &gt; Webhooks avec l'URL de votre application.
+              Les statistiques d'ouverture et de clic sont mises à jour automatiquement.
             </p>
           </div>
         </div>
