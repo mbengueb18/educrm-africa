@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { getPipelineData, getPipelineStats, getOrgPipelines } from "./actions";
+import { listLeadViews } from "./view-actions";
 import { PipelineClient } from "./pipeline-client";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -39,8 +40,14 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     getCustomFields(),
   ]);
 
+  // Vues enregistrées du conseiller pour le pipeline courant (chargées côté serveur
+  // pour éviter un aller-retour client au montage).
+  const viewsRes = await listLeadViews(pipelineData.currentPipelineId || null);
+  const initialViews = viewsRes.ok ? viewsRes.views : [];
+
   return (
     <PipelineClient
+      initialViews={initialViews}
       stages={pipelineData.stages}
       leads={pipelineData.leads}
       users={pipelineData.users}

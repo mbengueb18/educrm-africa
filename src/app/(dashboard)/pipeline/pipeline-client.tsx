@@ -3,7 +3,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { KanbanBoard } from "@/components/pipeline/kanban-board";
-import { LeadListView } from "@/components/pipeline/lead-list-view";
+import { LeadListView, DEFAULT_LIST_VIEW_STATE, DEFAULT_COLUMNS, type ListViewState } from "@/components/pipeline/lead-list-view";
+import { ProspectViewsBar } from "@/components/pipeline/prospect-views-bar";
+import {
+  createLeadView, updateLeadView, deleteLeadView, togglePinLeadView,
+  type LeadViewDTO, type LeadViewFilters,
+} from "@/app/(dashboard)/pipeline/view-actions";
 import { NewLeadModal } from "@/components/pipeline/new-lead-modal";
 import { LeadSlideOver } from "@/components/pipeline/lead-slide-over";
 import { ImportCSVModal } from "@/components/pipeline/import-csv-modal";
@@ -36,8 +41,9 @@ interface PipelineClientProps {
   campuses: { id: string; name: string; city: string }[];
   crmFields?: any[];
   customFields?: any[];
-  pipelines: any[];                   
-  currentPipelineId?: string;         
+  pipelines: any[];
+  currentPipelineId?: string;
+  initialViews?: LeadViewDTO[];
 }
 
 export function PipelineClient({
@@ -53,6 +59,7 @@ export function PipelineClient({
   customFields,
   pipelines,
   currentPipelineId,
+  initialViews,
 }: PipelineClientProps) {
   var [modalOpen, setModalOpen] = useState(false);
   var [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -70,6 +77,140 @@ export function PipelineClient({
   var [recalculating, setRecalculating] = useState(false);
   var [advancedFilter, setAdvancedFilter] = useState<FilterGroup>({ operator: "AND", rules: [] });
   var [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+
+  // ─── Vues enregistrées (par conseiller) ───
+  var [listState, setListState] = useState<ListViewState>(DEFAULT_LIST_VIEW_STATE);
+  var [views, setViews] = useState<LeadViewDTO[]>(initialViews || []);
+  var [activeViewId, setActiveViewId] = useState<string | null>(null);
+  var lastViewKey = "talibcrm:lastLeadViewId:" + (currentPipelineId || "all");
+
+  var onViewChange = useCallback(function(patch: Partial<ListViewState>) {
+    setListState(function(prev) { return { ...prev, ...patch }; });
+  }, []);
+
+  // Instantané des filtres courants (liste + pipeline) sous forme sérialisable.
+  var buildCurrentFilters = function(): LeadViewFilters {
+    return {
+      search: listState.search,
+      stage: listState.filterStage,
+      source: listState.filterSource,
+      assigned: listState.filterAssigned,
+      program: listState.filterProgram,
+      campus: listState.filterCampus,
+      mine: filterMine,
+      toQualify: filterToQualify,
+      advanced: advancedFilter,
+    };
+  };
+
+  var viewSignature = function(f: LeadViewFilters, columns: string[], sortKey?: string | null, sortDir?: string | null) {
+    return JSON.stringify({
+      search: f.search || "",
+      stage: f.stage || "",
+      source: f.source || "",
+      assigned: f.assigned || "",
+      program: f.program || "",
+      campus: f.campus || "",
+      mine: !!f.mine,
+      toQualify: !!f.toQualify,
+      advanced: f.advanced || { operator: "AND", rules: [] },
+      columns: columns || [],
+      sortKey: sortKey || "createdAt",
+      sortDir: sortDir || "desc",
+    });
+  };
+
+  var activeView = views.find(function(v) { return v.id === activeViewId; }) || null;
+  var currentSignature = viewSignature(buildCurrentFilters(), listState.visibleColumns, listState.sortKey, listState.sortDir);
+  var isViewDirty = activeView ? currentSignature !== viewSignature(activeView.filters, activeView.columns, activeView.sortKey, activeView.sortDir) : false;
+
+  var applyViewState = function(v: LeadViewDTO) {
+    var f = v.filters || {};
+    setListState({
+      search: f.search || "",
+      sortKey: v.sortKey || "createdAt",
+      sortDir: (v.sortDir as "asc" | "desc") || "desc",
+      filterStage: f.stage || "",
+      filterSource: f.source || "",
+      filterAssigned: f.assigned || "",
+      filterProgram: f.program || "",
+      filterCampus: f.campus || "",
+      visibleColumns: v.columns && v.columns.length ? v.columns : DEFAULT_COLUMNS,
+    });
+    setFilterMine(!!f.mine);
+    setFilterToQualify(!!f.toQualify);
+    setAdvancedFilter((f.advanced as FilterGroup) || { operator: "AND", rules: [] });
+    // On n'ouvre pas automatiquement le panneau de filtres : l'utilisateur l'ouvrira au besoin.
+  };
+
+  var handleSelectView = function(id: string | null) {
+    if (id === null) {
+      setActiveViewId(null);
+      setListState(DEFAULT_LIST_VIEW_STATE);
+      setFilterMine(false);
+      setFilterToQualify(false);
+      setAdvancedFilter({ operator: "AND", rules: [] });
+      try { localStorage.removeItem(lastViewKey); } catch {}
+      return;
+    }
+    var v = views.find(function(x) { return x.id === id; });
+    if (!v) return;
+    applyViewState(v);
+    setActiveViewId(id);
+    try { localStorage.setItem(lastViewKey, id); } catch {}
+  };
+
+  var handleCreateView = async function(payload: { name: string; columns: string[]; isPinned: boolean }) {
+    const res = await createLeadView({
+      name: payload.name,
+      pipelineId: currentPipelineId || null,
+      filters: buildCurrentFilters(),
+      columns: payload.columns,
+      sortKey: listState.sortKey,
+      sortDir: listState.sortDir,
+      isPinned: payload.isPinned,
+    });
+    if (!res.ok) { toast.error(res.error); return; }
+    setViews(function(prev) { return [res.view].concat(prev); });
+    setActiveViewId(res.view.id);
+    setListState(function(prev) { return { ...prev, visibleColumns: payload.columns.length ? payload.columns : DEFAULT_COLUMNS }; });
+    try { localStorage.setItem(lastViewKey, res.view.id); } catch {}
+    toast.success("Vue « " + res.view.name + " » créée");
+  };
+
+  var handleSaveActive = async function() {
+    if (!activeView) return;
+    const res = await updateLeadView(activeView.id, {
+      name: activeView.name,
+      filters: buildCurrentFilters(),
+      columns: listState.visibleColumns,
+      sortKey: listState.sortKey,
+      sortDir: listState.sortDir,
+    });
+    if (!res.ok) { toast.error(res.error); return; }
+    setViews(function(prev) { return prev.map(function(v) { return v.id === res.view.id ? res.view : v; }); });
+    toast.success("Vue enregistrée");
+  };
+
+  var handleRenameView = async function(id: string, name: string) {
+    const res = await updateLeadView(id, { name });
+    if (!res.ok) { toast.error(res.error); return; }
+    setViews(function(prev) { return prev.map(function(v) { return v.id === id ? res.view : v; }); });
+  };
+
+  var handleTogglePin = async function(id: string, pinned: boolean) {
+    const res = await togglePinLeadView(id, pinned);
+    if (!res.ok) { toast.error(res.error); return; }
+    setViews(function(prev) { return prev.map(function(v) { return v.id === id ? res.view : v; }); });
+  };
+
+  var handleDeleteView = async function(id: string) {
+    const res = await deleteLeadView(id);
+    if (!res.ok) { toast.error(res.error); return; }
+    setViews(function(prev) { return prev.filter(function(v) { return v.id !== id; }); });
+    if (activeViewId === id) handleSelectView(null);
+    toast.success("Vue supprimée");
+  };
 
   var handleDetectDuplicates = async function() {
   setShowMoreMenu(false);
@@ -144,6 +285,21 @@ export function PipelineClient({
     try {
       localStorage.setItem("talibcrm:lastPipelineId", currentPipelineId);
     } catch {}
+  }, [currentPipelineId]);
+
+  // Vues chargées côté serveur (prop initialViews) : synchro + application instantanée
+  // de la dernière vue ouverte (localStorage), sans aller-retour réseau.
+  useEffect(function() {
+    var list = initialViews || [];
+    setViews(list);
+    try {
+      var savedId = localStorage.getItem(lastViewKey);
+      if (savedId) {
+        var v = list.find(function(x) { return x.id === savedId; });
+        if (v) { applyViewState(v); setActiveViewId(v.id); }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPipelineId]);
 
   // Au montage, si l'URL n'a pas de pipeline et qu'on a un pipeline mémorisé
@@ -399,6 +555,20 @@ export function PipelineClient({
         </div>
       </div>
 
+      {/* Barre de vues enregistrées (par conseiller) */}
+      <ProspectViewsBar
+        views={views}
+        activeViewId={activeViewId}
+        isDirty={isViewDirty}
+        currentColumns={listState.visibleColumns}
+        onSelectView={handleSelectView}
+        onCreateView={handleCreateView}
+        onSaveActive={handleSaveActive}
+        onRenameView={handleRenameView}
+        onTogglePin={handleTogglePin}
+        onDeleteView={handleDeleteView}
+      />
+
       {/* Personal stats */}
       {filterMine && (
         <div className="bg-gradient-to-r from-brand-50 to-emerald-50 rounded-xl border border-brand-200 p-4 mb-4 animate-scale-in">
@@ -518,6 +688,8 @@ export function PipelineClient({
           onOpenLead={function(id) { setSelectedLeadId(id); }}
           onAddLead={function() { setModalOpen(true); }}
           currentUserRole={currentUserRole}
+          viewState={listState}
+          onViewChange={onViewChange}
         />
       )}
 

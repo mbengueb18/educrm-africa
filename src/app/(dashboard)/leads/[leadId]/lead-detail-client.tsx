@@ -12,10 +12,13 @@ import {
   ExternalLink, ChevronRight, ChevronDown, Plus, Loader2, Check, Trash2, X,
   AlertCircle, CheckCircle2, Video, Sparkles, Zap, Copy,
   TrendingUp, ThumbsUp, AlertTriangle, RefreshCw, Globe2, MousePointer2, MessageSquare, Bot, Send, ArrowRight,
+  StickyNote, Pencil, XCircle,
 } from "lucide-react";
 import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
+import { updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
+import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { startCallTracking } from "@/lib/call-tracking";
@@ -45,6 +48,7 @@ interface LeadDetailClientProps {
 
 const TABS = [
   { id: "overview", label: "Aperçu", icon: UserIcon },
+  { id: "notes", label: "Notes", icon: StickyNote },
   { id: "ai", label: "Assistant IA", icon: Sparkles },
   { id: "journey", label: "Parcours web", icon: Globe2 },
   { id: "email", label: "Email", icon: Mail },
@@ -184,6 +188,7 @@ export function LeadDetailClient({
 
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab lead={lead} />}
+      {activeTab === "notes" && <NotesTab lead={lead} />}
       {activeTab === "ai" && <AIAssistantTab lead={lead} />}
       {activeTab === "journey" && <JourneyTab lead={lead} />}
       {activeTab === "email" && <EmailTab lead={lead} onSent={() => router.refresh()} />}
@@ -261,6 +266,30 @@ function StageSelector({ leadId, currentStage, stages }: {
 }
 
 function OverviewTab({ lead }: { lead: any }) {
+  const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
+  useEffect(() => {
+    getCustomFields().then(setCustomFieldsConfig).catch(() => {});
+  }, []);
+
+  // Informations complémentaires : champs custom (hors clés techniques préfixées par "_")
+  const customFields = (lead.customFields as Record<string, any>) || {};
+  const mappedEntries: { label: string; value: string }[] = [];
+  const unmappedEntries: { label: string; value: string }[] = [];
+  for (const key in customFields) {
+    const value = customFields[key];
+    if (key.startsWith("_") || !value) continue;
+    const config = customFieldsConfig.find(
+      (cf) => cf.key === key || cf.mappedFormFields.some((mf) => mf.toLowerCase() === key.toLowerCase())
+    );
+    if (config) {
+      mappedEntries.push({ label: config.label, value: String(value) });
+    } else {
+      const niceLabel = key.replace(/[_-]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+      unmappedEntries.push({ label: niceLabel, value: String(value) });
+    }
+  }
+  const allCustom = mappedEntries.concat(unmappedEntries);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
       {/* Contact info */}
@@ -339,6 +368,83 @@ function OverviewTab({ lead }: { lead: any }) {
           <h3 className="text-sm font-semibold text-gray-900 mb-2">Message</h3>
           {lead.subject && <p className="text-xs font-medium text-gray-700 mb-1">{lead.subject}</p>}
           {lead.message && <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">{lead.message}</p>}
+        </div>
+      )}
+
+      {/* Informations complémentaires (champs personnalisés / formulaires) */}
+      {allCustom.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 md:col-span-3">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Informations complémentaires</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-3">
+            {allCustom.map((cf, i) => (
+              <InfoRow key={i} icon={Tag} label={cf.label} value={cf.value} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Notes Tab ───
+function NotesTab({ lead }: { lead: any }) {
+  const initial = ((lead.customFields as any)?._notes as string) || "";
+  const [savedNotes, setSavedNotes] = useState(initial);
+  const [notes, setNotes] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(!initial);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateLeadNotes(lead.id, notes);
+      setSavedNotes(notes);
+      toast.success("Notes enregistrées");
+      setEditing(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 max-w-3xl">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <StickyNote size={16} className="text-amber-500 shrink-0" />
+          <h3 className="text-sm font-semibold text-gray-700">Notes internes</h3>
+        </div>
+        {!editing && savedNotes && (
+          <button onClick={() => setEditing(true)} className="btn-secondary py-1 px-2.5 text-xs shrink-0">
+            <Pencil size={12} /> Modifier
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={"Ajoutez des notes internes sur ce lead (visibles uniquement par votre équipe)...\n\nExemples :\n• Parents divorcés, contact préférentiel : mère\n• Intéressé par la filière Marketing, budget limité\n• Doit rappeler après les examens du bac"}
+            className="input text-sm w-full min-h-[250px] sm:min-h-[300px] resize-y font-normal"
+            autoFocus
+          />
+          <div className="flex items-center justify-end gap-2 mt-3">
+            {savedNotes && (
+              <button onClick={() => { setNotes(savedNotes); setEditing(false); }} className="btn-secondary py-1.5 px-3 text-xs" disabled={saving}>
+                <XCircle size={13} /> Annuler
+              </button>
+            )}
+            <button onClick={handleSave} disabled={saving} className="btn-primary py-1.5 px-3 text-xs">
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Enregistrer
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-4">
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{savedNotes || "Aucune note"}</p>
         </div>
       )}
     </div>

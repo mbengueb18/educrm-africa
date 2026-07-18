@@ -52,6 +52,8 @@ interface LeadListViewProps {
   onOpenLead?: (leadId: string) => void;
   onAddLead?: () => void;
   currentUserRole?: string;
+  viewState: ListViewState;
+  onViewChange: (patch: Partial<ListViewState>) => void;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -69,10 +71,35 @@ const SOURCE_COLORS: Record<string, string> = {
 };
 
 // Default visible columns
-const DEFAULT_COLUMNS = ["name", "phone", "email", "stage", "source", "program", "score", "assignedTo", "lastContact", "createdAt"];
+export const DEFAULT_COLUMNS = ["name", "phone", "email", "stage", "source", "program", "score", "assignedTo", "lastContact", "createdAt"];
+
+// État "présentation + filtres liste" contrôlé par le parent (persisté dans une vue enregistrée).
+export interface ListViewState {
+  search: string;
+  sortKey: string;
+  sortDir: "asc" | "desc";
+  filterStage: string;
+  filterSource: string;
+  filterAssigned: string;
+  filterProgram: string;
+  filterCampus: string;
+  visibleColumns: string[];
+}
+
+export const DEFAULT_LIST_VIEW_STATE: ListViewState = {
+  search: "",
+  sortKey: "createdAt",
+  sortDir: "desc",
+  filterStage: "",
+  filterSource: "",
+  filterAssigned: "",
+  filterProgram: "",
+  filterCampus: "",
+  visibleColumns: DEFAULT_COLUMNS,
+};
 
 // All available system columns
-const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
+export const ALL_COLUMNS: { key: string; label: string; group: string }[] = [
   { key: "name", label: "Nom complet", group: "Contact" },
   { key: "phone", label: "Téléphone", group: "Contact" },
   { key: "email", label: "Email", group: "Contact" },
@@ -105,18 +132,20 @@ const MOBILE_SORT_OPTIONS: { value: string; dir: "asc" | "desc"; label: string }
   { value: "lastContact", dir: "desc", label: "Dernier contact" },
 ];
 
-export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, onAddLead, currentUserRole }: LeadListViewProps) {
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("createdAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [filterStage, setFilterStage] = useState<string>("");
-  const [filterSource, setFilterSource] = useState<string>("");
-  const [filterAssigned, setFilterAssigned] = useState<string>("");
-  const [filterProgram, setFilterProgram] = useState<string>("");
-  const [filterCampus, setFilterCampus] = useState<string>("");
+export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, onAddLead, currentUserRole, viewState, onViewChange }: LeadListViewProps) {
+  // État "vue" contrôlé par le parent (persisté dans la vue enregistrée).
+  const { search, sortKey, sortDir, filterStage, filterSource, filterAssigned, filterProgram, filterCampus, visibleColumns } = viewState;
+  const setSearch = (v: string) => onViewChange({ search: v });
+  const setSortKey = (v: string) => onViewChange({ sortKey: v });
+  const setSortDir = (v: "asc" | "desc") => onViewChange({ sortDir: v });
+  const setFilterStage = (v: string) => onViewChange({ filterStage: v });
+  const setFilterSource = (v: string) => onViewChange({ filterSource: v });
+  const setFilterAssigned = (v: string) => onViewChange({ filterAssigned: v });
+  const setFilterProgram = (v: string) => onViewChange({ filterProgram: v });
+  const setFilterCampus = (v: string) => onViewChange({ filterCampus: v });
+
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
   const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -130,21 +159,15 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
 
   useEffect(() => {
     getCustomFields().then(setCustomFieldsConfig).catch(() => {});
-    // Load saved columns from localStorage
-    try {
-      var saved = localStorage.getItem("educrm-lead-columns");
-      if (saved) setVisibleColumns(JSON.parse(saved));
-    } catch (e) {}
   }, []);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [search, filterStage, filterSource, filterAssigned, filterProgram, filterCampus, sortKey, sortDir]);
 
-  // Save columns preference
+  // Met à jour les colonnes visibles (persistées par la vue via le parent).
   const updateColumns = (cols: string[]) => {
-    setVisibleColumns(cols);
-    try { localStorage.setItem("educrm-lead-columns", JSON.stringify(cols)); } catch (e) {}
+    onViewChange({ visibleColumns: cols });
   };
 
   const toggleColumn = (key: string) => {

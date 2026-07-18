@@ -35,46 +35,46 @@ model Organization {
   reportingCustomEnabled Boolean       @default(false) // Rapports personnalisés activés (back-office)
   reportingAiEnabled     Boolean       @default(false) // Analyste IA activé (back-office)
 
-  campuses            Campus[]
-  users               User[]
-  leads               Lead[]
-  students            Student[]
-  pipelineStages      PipelineStage[]
-  pipelines           Pipeline[]
-  academicYears       AcademicYear[]
-  programs            Program[]
-  messageTemplates    MessageTemplate[]
-  campaigns           Campaign[]
-  payments            Payment[]
-  activities          Activity[]
-  messages            Message[]
-  automations         Automation[]
-  emailCampaigns      EmailCampaign[]
-  tasks               Task[]
-  calls               Call[]
-  appointments        Appointment[]
-  portalTokens        LeadPortalToken[]
-  sequenceExecutions  SequenceExecution[]
-  workflows           Workflow[]
-  workflowExecutions  WorkflowExecution[]
-  sequenceConfig      OrganizationSequenceConfig?
-  chatbotConfig       ChatbotConfig?
+  campuses             Campus[]
+  users                User[]
+  leads                Lead[]
+  students             Student[]
+  pipelineStages       PipelineStage[]
+  pipelines            Pipeline[]
+  academicYears        AcademicYear[]
+  programs             Program[]
+  messageTemplates     MessageTemplate[]
+  campaigns            Campaign[]
+  payments             Payment[]
+  activities           Activity[]
+  messages             Message[]
+  automations          Automation[]
+  emailCampaigns       EmailCampaign[]
+  tasks                Task[]
+  calls                Call[]
+  appointments         Appointment[]
+  portalTokens         LeadPortalToken[]
+  sequenceExecutions   SequenceExecution[]
+  workflows            Workflow[]
+  workflowExecutions   WorkflowExecution[]
+  sequenceConfig       OrganizationSequenceConfig?
+  chatbotConfig        ChatbotConfig?
   whatsappWidgetConfig WhatsAppWidgetConfig?
-  visitors            Visitor[]
-  sessions            Session[]
-  pageViews           PageView[]
-  whatsappIntegration WhatsAppIntegration?
-  audiences           Audience[]
-  whatsappTemplates   WhatsAppTemplate[]
-  whatsappCampaigns   WhatsAppCampaign[]
-  supportTickets SupportTicket[]
-  emailDomain         OrgEmailDomain?
-  planChangeLogs      PlanChangeLog[]
-  contracts           Contract[]
-  reportingGoals      ReportingGoal[]
-  customReports       CustomReport[]
-  aiReportQueries     AiReportQuery[]
-  reportDashboards    ReportDashboard[]
+  visitors             Visitor[]
+  sessions             Session[]
+  pageViews            PageView[]
+  whatsappIntegration  WhatsAppIntegration?
+  audiences            Audience[]
+  whatsappTemplates    WhatsAppTemplate[]
+  whatsappCampaigns    WhatsAppCampaign[]
+  supportTickets       SupportTicket[]
+  emailDomain          OrgEmailDomain?
+  planChangeLogs       PlanChangeLog[]
+  contracts            Contract[]
+  reportingGoals       ReportingGoal[]
+  customReports        CustomReport[]
+  aiReportQueries      AiReportQuery[]
+  reportDashboards     ReportDashboard[]
 
   @@map("organizations")
 }
@@ -192,22 +192,22 @@ enum AudienceType {
 }
 
 model Program {
-  id             String        @id @default(cuid())
-  name           String // e.g. "BTS Comptabilité", "Licence Marketing"
-  code           String? // e.g. "BTS-COMPTA"
-  level          ProgramLevel
-  durationMonths Int // 12, 24, 36...
-  tuitionAmount  Float // Annual tuition in FCFA
-  currency       String        @default("XOF")
-  isActive       Boolean       @default(true)
-  campusId       String
-  organizationId String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  formationType  FormationType @default(INITIAL)
-  pipelineId     String?
-  targetEnrollments Int        @default(0) // Objectif d'inscrits (recrutement par programme)
-  diploma        String? // Programme / diplôme de rattachement (ex. « Cycle Licence ») — regroupement dans le rapport recrutement
+  id                String        @id @default(cuid())
+  name              String // e.g. "BTS Comptabilité", "Licence Marketing"
+  code              String? // e.g. "BTS-COMPTA"
+  level             ProgramLevel
+  durationMonths    Int // 12, 24, 36...
+  tuitionAmount     Float // Annual tuition in FCFA
+  currency          String        @default("XOF")
+  isActive          Boolean       @default(true)
+  campusId          String
+  organizationId    String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  formationType     FormationType @default(INITIAL)
+  pipelineId        String?
+  targetEnrollments Int           @default(0) // Objectif d'inscrits (recrutement par programme)
+  diploma           String? // Programme / diplôme de rattachement (ex. « Cycle Licence ») — regroupement dans le rapport recrutement
 
   campus       Campus       @relation(fields: [campusId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -252,44 +252,44 @@ model AcademicYear {
 // ─── USERS & AUTH ───
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  name           String
-  phone          String?
-  passwordHash   String
-  role           UserRole
-  avatar         String?
-  isActive       Boolean   @default(true)
-  emailVerified  DateTime? // null = email non vérifié (blocage souple à l'inscription)
-  lastLoginAt    DateTime?
-  emailSignature        String?  @db.Text // signature HTML ajoutée automatiquement aux emails
-  emailSignatureEnabled Boolean  @default(true)
-  organizationId String
-  campusId       String? // null = access to all campuses
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  name                  String
+  phone                 String?
+  passwordHash          String
+  role                  UserRole
+  avatar                String?
+  isActive              Boolean   @default(true)
+  emailVerified         DateTime? // null = email non vérifié (blocage souple à l'inscription)
+  lastLoginAt           DateTime?
+  emailSignature        String?   @db.Text // signature HTML ajoutée automatiquement aux emails
+  emailSignatureEnabled Boolean   @default(true)
+  organizationId        String
+  campusId              String? // null = access to all campuses
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  organization             Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  campus                   Campus?            @relation(fields: [campusId], references: [id])
-  assignedLeads            Lead[]             @relation("AssignedLeads")
+  organization             Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campus                   Campus?                  @relation(fields: [campusId], references: [id])
+  assignedLeads            Lead[]                   @relation("AssignedLeads")
   activities               Activity[]
-  sentMessages             Message[]          @relation("SentMessages")
-  emailCampaigns           EmailCampaign[]    @relation("EmailCampaigns")
-  assignedTasks            Task[]             @relation("AssignedTasks")
-  createdTasks             Task[]             @relation("CreatedTasks")
-  calls                    Call[]             @relation("UserCalls")
-  assignedAppointments     Appointment[]      @relation("AssignedAppointments")
-  createdAppointments      Appointment[]      @relation("CreatedAppointments")
+  sentMessages             Message[]                @relation("SentMessages")
+  emailCampaigns           EmailCampaign[]          @relation("EmailCampaigns")
+  assignedTasks            Task[]                   @relation("AssignedTasks")
+  createdTasks             Task[]                   @relation("CreatedTasks")
+  calls                    Call[]                   @relation("UserCalls")
+  assignedAppointments     Appointment[]            @relation("AssignedAppointments")
+  createdAppointments      Appointment[]            @relation("CreatedAppointments")
   integrations             UserIntegration[]
   portalTokens             LeadPortalToken[]
-  audiencesCreated         Audience[]         @relation("AudiencesCreated")
-  audienceMembersAdded     AudienceMember[]   @relation("AudienceMembersAdded")
-  whatsappTemplatesCreated WhatsAppTemplate[] @relation("WhatsAppTemplatesCreated")
-  whatsappCampaignsCreated WhatsAppCampaign[] @relation("WhatsAppCampaignsCreated")
-  supportTickets SupportTicket[]
-  notifications  Notification[]
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
+  audiencesCreated         Audience[]               @relation("AudiencesCreated")
+  audienceMembersAdded     AudienceMember[]         @relation("AudienceMembersAdded")
+  whatsappTemplatesCreated WhatsAppTemplate[]       @relation("WhatsAppTemplatesCreated")
+  whatsappCampaignsCreated WhatsAppCampaign[]       @relation("WhatsAppCampaignsCreated")
+  supportTickets           SupportTicket[]
+  notifications            Notification[]
+  emailVerificationTokens  EmailVerificationToken[]
+  passwordResetTokens      PasswordResetToken[]
 
   @@index([organizationId])
   @@index([email])
@@ -547,7 +547,7 @@ model Student {
   // Personal info (copied from lead, can be updated)
   firstName        String
   lastName         String
-  civility    String?
+  civility         String?
   phone            String
   whatsapp         String?
   email            String?
@@ -766,7 +766,7 @@ model CustomReport {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   dashboardItems DashboardItem[]
 
   @@index([organizationId])
@@ -862,7 +862,7 @@ model Message {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events       MessageEvent[]
   attachments  MessageAttachment[]
-  isCampaign Boolean @default(false)
+  isCampaign   Boolean             @default(false)
 
   @@index([organizationId])
   @@index([leadId])
@@ -1103,15 +1103,15 @@ enum ActivityType {
 // ─── TASKS ───
 
 model Task {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  type        TaskType     @default(TODO)
-  priority    TaskPriority @default(MEDIUM)
-  status      TaskStatus   @default(TODO)
-  dueDate     DateTime?
-  completedAt DateTime?
-  reminderAt  DateTime?
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  type           TaskType     @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  status         TaskStatus   @default(TODO)
+  dueDate        DateTime?
+  completedAt    DateTime?
+  reminderAt     DateTime?
   reminderSentAt DateTime? // Rappel déjà notifié (anti-doublon cron)
 
   // Relations
@@ -1162,34 +1162,34 @@ enum TaskStatus {
 // ─── EMAIL CAMPAIGNS ───
 
 model EmailCampaign {
-  id              String              @id @default(cuid())
-  name            String
-  subject         String
-  body            String
-  status          EmailCampaignStatus @default(DRAFT)
-  segmentRules    Json? // Filter criteria for leads
-  scheduledAt     DateTime?
-  sentAt          DateTime?
-  completedAt     DateTime?
-  totalRecipients Int                 @default(0)
-  sentCount       Int                 @default(0)
-  deliveredCount  Int                 @default(0)
-  openedCount     Int                 @default(0)
-  clickedCount    Int                 @default(0)
-  bouncedCount    Int                 @default(0)
-  failedCount     Int                 @default(0)
-  createdById     String?
-  organizationId  String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  audienceId      String?
-  includeSignature Boolean            @default(true) // ajouter la signature de l'expéditeur en bas de chaque email
-  audience        Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
+  id               String              @id @default(cuid())
+  name             String
+  subject          String
+  body             String
+  status           EmailCampaignStatus @default(DRAFT)
+  segmentRules     Json? // Filter criteria for leads
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  completedAt      DateTime?
+  totalRecipients  Int                 @default(0)
+  sentCount        Int                 @default(0)
+  deliveredCount   Int                 @default(0)
+  openedCount      Int                 @default(0)
+  clickedCount     Int                 @default(0)
+  bouncedCount     Int                 @default(0)
+  failedCount      Int                 @default(0)
+  createdById      String?
+  organizationId   String
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  audienceId       String?
+  includeSignature Boolean             @default(true) // ajouter la signature de l'expéditeur en bas de chaque email
+  audience         Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
   createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])
   organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   recipients   EmailCampaignRecipient[]
-  attachments     Json? // [{ path, filename, contentType, size }]
+  attachments  Json? // [{ path, filename, contentType, size }]
 
   @@index([organizationId])
   @@index([status])
@@ -1928,8 +1928,8 @@ model OrgEmailDomain {
   inboundMxRecords      Json? // enregistrement(s) MX à ajouter (réception)
   inboundVerifiedAt     DateTime?
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1938,18 +1938,18 @@ model OrgEmailDomain {
 }
 
 model SupportTicket {
-  id             String                 @id @default(cuid())
-  type           SupportTicketType      @default(BUG)
-  priority       SupportTicketPriority  @default(MEDIUM)
-  status         SupportTicketStatus    @default(OPEN)
+  id             String                @id @default(cuid())
+  type           SupportTicketType     @default(BUG)
+  priority       SupportTicketPriority @default(MEDIUM)
+  status         SupportTicketStatus   @default(OPEN)
   title          String
   description    String
   screenshotPath String?
   pageUrl        String?
   organizationId String
   submittedById  String?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   submittedBy  User?        @relation(fields: [submittedById], references: [id], onDelete: SetNull)
@@ -1957,4 +1957,26 @@ model SupportTicket {
   @@index([organizationId])
   @@index([status])
   @@map("support_tickets")
+}
+
+// ─── Vues de prospects enregistrées (par conseiller) ───
+// Vue filtrée nommée et épinglable de la liste des prospects, propre à chaque
+// utilisateur. Stocke les filtres, les colonnes visibles et le tri. Isolation
+// par organizationId + userId (scalaires indexés, pas de relation navigable).
+model LeadView {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String
+  userId         String
+  pipelineId     String? // vue rattachée à un pipeline (null = tous)
+  filters        Json? // { search?, stage?, source?, assigned?, program?, campus?, mine?, toQualify?, advanced? }
+  columns        String[] // clés des colonnes visibles, dans l'ordre
+  sortKey        String?
+  sortDir        String? // "asc" | "desc"
+  isPinned       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, userId])
+  @@map("lead_views")
 }
