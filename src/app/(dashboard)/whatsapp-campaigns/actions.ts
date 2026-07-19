@@ -265,6 +265,9 @@ export async function getAvailableAudiencesForWhatsAppCampaign() {
 
 // ─── Send WhatsApp campaign ───
 export async function sendWhatsAppCampaign(campaignId: string) {
+  // Pattern { ok, error } : Next.js caviarde les throw des server actions en prod
+  // (toast illisible « Server Components render… ») — on retourne l'erreur.
+  try {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
@@ -347,12 +350,17 @@ export async function sendWhatsAppCampaign(campaignId: string) {
   revalidatePath(`/whatsapp-campaigns/${campaignId}`);
 
   return {
+    ok: true as const,
     queued: leads.length,
     total: leads.length,
   };
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || "Erreur lors de l'envoi de la campagne" };
+  }
 }
 // ─── Programmer l'envoi d'une campagne WhatsApp (miroir des campagnes email) ───
 export async function scheduleWhatsAppCampaign(campaignId: string, scheduledAtISO: string) {
+  try {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   await assertCanUseWhatsAppCampaigns(session.user.organizationId);
@@ -385,11 +393,15 @@ export async function scheduleWhatsAppCampaign(campaignId: string, scheduledAtIS
 
   revalidatePath("/whatsapp-campaigns");
   revalidatePath(`/whatsapp-campaigns/${campaignId}`);
-  return { success: true, scheduledAt: when };
+  return { ok: true as const, scheduledAt: when };
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || "Impossible de programmer l'envoi" };
+  }
 }
 
 // ─── Annuler une programmation ───
 export async function cancelScheduledWhatsAppCampaign(campaignId: string) {
+  try {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
@@ -406,11 +418,15 @@ export async function cancelScheduledWhatsAppCampaign(campaignId: string) {
 
   revalidatePath("/whatsapp-campaigns");
   revalidatePath(`/whatsapp-campaigns/${campaignId}`);
-  return { success: true };
+  return { ok: true as const };
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || "Impossible d'annuler la programmation" };
+  }
 }
 
 // ─── Envoyer un message de TEST du template à un numéro donné ───
 export async function sendWhatsAppTestMessage(campaignId: string, toNumber: string) {
+  try {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   await assertCanUseWhatsAppCampaigns(session.user.organizationId);
@@ -458,7 +474,10 @@ export async function sendWhatsAppTestMessage(campaignId: string, toNumber: stri
   if (!result.success) {
     throw new Error(result.errorMessage || "Échec de l'envoi du test");
   }
-  return { success: true };
+  return { ok: true as const };
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || "Échec de l'envoi du test" };
+  }
 }
 
 // ─── Progression d'une campagne en cours d'envoi (pour la barre de progression) ───

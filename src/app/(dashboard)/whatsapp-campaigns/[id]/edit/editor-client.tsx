@@ -11,7 +11,9 @@ import {
   sendWhatsAppCampaign,
   scheduleWhatsAppCampaign,
   sendWhatsAppTestMessage,
+  getWhatsAppCampaignRecipientStats,
 } from "../../actions";
+import { WhatsAppSendConfirmModal } from "@/components/whatsapp/send-confirm-modal";
 import { getApprovedTemplates } from "../../../settings/whatsapp-templates/actions";
 import {
   ArrowLeft, Save, Loader2, Check, Clock, MessageCircle,
@@ -58,48 +60,78 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
   const [scheduleValue, setScheduleValue] = useState("");
   const [scheduling, setScheduling] = useState(false);
   const [sending, setSending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmStats, setConfirmStats] = useState<{
+    total: number;
+    withWhatsApp: number;
+    withoutWhatsApp: number;
+    fromAudience: boolean;
+    audienceName?: string;
+  } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   const handleSendTest = async () => {
     if (!testNumber.trim()) { toast.error("Saisissez un numéro WhatsApp."); return; }
     setSendingTest(true);
-    try {
-      await doSave(); // s'assurer que le template sélectionné est sauvegardé
-      await sendWhatsAppTestMessage(campaign.id, testNumber.trim());
+    await doSave(); // s'assurer que le template sélectionné est sauvegardé
+    const res = await sendWhatsAppTestMessage(campaign.id, testNumber.trim());
+    if (res.ok) {
       toast.success("Message de test envoyé à " + testNumber.trim());
       setTestOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "Échec de l'envoi du test");
+    } else {
+      toast.error(res.error);
     }
     setSendingTest(false);
   };
 
   const handleSchedule = async () => {
     if (!scheduleValue) { toast.error("Choisissez une date et une heure."); return; }
+    const when = new Date(scheduleValue);
+    if (isNaN(when.getTime())) { toast.error("Date invalide."); return; }
+    if (when.getTime() < Date.now() + 60 * 1000) {
+      toast.error("Choisissez une date au moins 1 minute dans le futur.");
+      return;
+    }
     setScheduling(true);
-    try {
-      await doSave();
-      const when = new Date(scheduleValue);
-      await scheduleWhatsAppCampaign(campaign.id, when.toISOString());
+    await doSave();
+    const res = await scheduleWhatsAppCampaign(campaign.id, when.toISOString());
+    if (res.ok) {
       toast.success("Campagne programmée pour le " + when.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }));
       router.push("/whatsapp-campaigns");
-    } catch (e: any) {
-      toast.error(e.message || "Impossible de programmer l'envoi");
+    } else {
+      toast.error(res.error);
       setScheduling(false);
     }
   };
 
+  // Même flow que l'éditeur email : modale de confirmation avec stats destinataires
   const handleSendNow = async () => {
-    if (!selectedAudienceId) { toast.error("Sélectionnez d'abord une audience."); return; }
-    if (!confirm("Envoyer cette campagne maintenant aux " + recipientsCount + " destinataires avec WhatsApp ?")) return;
-    setSending(true);
+    if (!selectedTemplateId) { setActivePanel("content"); toast.error("Sélectionnez un template avant d'envoyer."); return; }
+    if (!selectedAudienceId) { setActivePanel("audience"); toast.error("Sélectionnez d'abord une audience."); return; }
+    setConfirmOpen(true);
+    setLoadingStats(true);
+    setConfirmStats(null);
     try {
-      await doSave();
-      const result = await sendWhatsAppCampaign(campaign.id);
-      toast.success("Campagne lancée : " + result.queued + " message" + (result.queued > 1 ? "s" : "") + " en file d'envoi (envoi en arrière-plan)");
-      router.push("/whatsapp-campaigns");
+      await doSave(); // persiste template/audience avant de calculer les destinataires
+      const stats = await getWhatsAppCampaignRecipientStats(campaign.id);
+      setConfirmStats(stats);
     } catch (e: any) {
-      toast.error(e.message || "Impossible d'envoyer la campagne");
+      toast.error(e.message || "Impossible de charger les destinataires");
+      setConfirmOpen(false);
+    }
+    setLoadingStats(false);
+  };
+
+  const confirmSend = async () => {
+    setSending(true);
+    const res = await sendWhatsAppCampaign(campaign.id);
+    if (res.ok) {
+      toast.success("Campagne lancée : " + res.queued + " message" + (res.queued > 1 ? "s" : "") + " en file d'envoi (envoi en arrière-plan)");
+      router.push("/whatsapp-campaigns");
+    } else {
+      toast.error(res.error);
       setSending(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -334,6 +366,18 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
               </div>
             </div>
           </>
+        )}
+
+        {/* Modale de confirmation d'envoi (même flow que l'éditeur email) */}
+        {confirmOpen && (
+          <WhatsAppSendConfirmModal
+            campaign={{ name: name }}
+            stats={confirmStats}
+            loading={loadingStats}
+            isPending={sending}
+            onCancel={() => { if (!sending) { setConfirmOpen(false); setConfirmStats(null); } }}
+            onConfirm={confirmSend}
+          />
         )}
 
         {/* Panel tabs */}
