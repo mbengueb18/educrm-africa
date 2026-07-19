@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { cn, formatDate, formatRelative, formatPhone, getInitials, getScoreBg } from "@/lib/utils";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
 import {
-  Search, Filter, ChevronDown, ChevronUp, ChevronRight,
-  Phone, MessageCircle, Mail, SlidersHorizontal, X,
+  Search, ChevronDown, ChevronUp, ChevronRight,
+  Phone, MessageCircle, Mail, X,
   Download, Columns3, Check, Send, Trash2, Loader2, UserPlus,
   ArrowUpDown,
 } from "lucide-react";
@@ -138,13 +138,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   const setSearch = (v: string) => onViewChange({ search: v });
   const setSortKey = (v: string) => onViewChange({ sortKey: v });
   const setSortDir = (v: "asc" | "desc") => onViewChange({ sortDir: v });
-  const setFilterStage = (v: string) => onViewChange({ filterStage: v });
-  const setFilterSource = (v: string) => onViewChange({ filterSource: v });
-  const setFilterAssigned = (v: string) => onViewChange({ filterAssigned: v });
-  const setFilterProgram = (v: string) => onViewChange({ filterProgram: v });
-  const setFilterCampus = (v: string) => onViewChange({ filterCampus: v });
 
-  const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
   const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
@@ -298,8 +292,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
     setAssigning(false);
   };
 
-  const activeFiltersCount = [filterStage, filterSource, filterAssigned, filterProgram, filterCampus].filter(Boolean).length;
-
   const getCustomFieldValue = (lead: Lead, cfKey: string): string => {
     var custom = (lead.customFields as Record<string, any>) || {};
     var cleanKey = cfKey.replace("custom_", "");
@@ -418,18 +410,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
             />
           </div>
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn("btn-secondary py-2 text-xs", activeFiltersCount > 0 && "border-brand-300 text-brand-700")}
-          >
-            <Filter size={14} />
-            Filtres
-            {activeFiltersCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-brand-600 text-white text-[10px] flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
-          <button
             onClick={() => setShowColumns(!showColumns)}
             className="btn-secondary py-2 text-xs hidden sm:inline-flex"
           >
@@ -537,63 +517,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
           )}
         </div>
       </div>
-
-      {/* Filters panel */}
-      {showFilters && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={() => { setFilterStage(""); setFilterSource(""); setFilterAssigned(""); setFilterProgram(""); setFilterCampus(""); }}
-                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-              >
-                Effacer tout
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Étape</label>
-              <select value={filterStage} onChange={(e) => setFilterStage(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Toutes</option>
-                {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Source</label>
-              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Toutes</option>
-                {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
-              <select value={filterAssigned} onChange={(e) => setFilterAssigned(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Tous</option>
-                <option value="unassigned">Non assigne</option>
-                {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Filière</label>
-              <select value={filterProgram} onChange={(e) => setFilterProgram(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Toutes</option>
-                {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
-              <select value={filterCampus} onChange={(e) => setFilterCampus(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Tous</option>
-                {campuses.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.city}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Column picker */}
       {showColumns && (

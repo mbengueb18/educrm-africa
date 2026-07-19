@@ -10,7 +10,7 @@ import {
 import { LeadCard } from "./lead-card";
 import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
 import { cn } from "@/lib/utils";
-import { Plus, Filter, SlidersHorizontal, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 interface Stage {
@@ -53,13 +53,6 @@ interface KanbanBoardProps {
   onOpenLead?: (leadId: string) => void;
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
-  WHATSAPP: "WhatsApp", PHONE_CALL: "Appel", WALK_IN: "Visite",
-  REFERRAL: "Parrainage", SALON: "Salon", RADIO: "Radio", TV: "TV",
-  PARTNER: "Partenaire", IMPORT: "Import", OTHER: "Autre",
-};
-
 export function KanbanBoard({
   stages,
   leads: initialLeads,
@@ -73,11 +66,6 @@ export function KanbanBoard({
   const [isPending, startTransition] = useTransition();
 
   const [search, setSearch] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterSource, setFilterSource] = useState("");
-  const [filterAssigned, setFilterAssigned] = useState("");
-  const [filterProgram, setFilterProgram] = useState("");
-  const [filterCampus, setFilterCampus] = useState("");
   const [sortKey, setSortKey] = useState<"score" | "createdAt" | "updatedAt">("score");
   const COLUMN_PAGE_SIZE = 50;
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
@@ -99,7 +87,7 @@ export function KanbanBoard({
 
   useEffect(() => {
     setVisibleCounts({});
-  }, [search, filterSource, filterAssigned, filterProgram, filterCampus, sortKey]);
+  }, [search, sortKey]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -111,16 +99,9 @@ export function KanbanBoard({
           (lead.city || "").toLowerCase().includes(q);
         if (!match) return false;
       }
-      if (filterSource && lead.source !== filterSource) return false;
-      if (filterAssigned) {
-        if (filterAssigned === "unassigned" && lead.assignedTo) return false;
-        if (filterAssigned !== "unassigned" && lead.assignedTo?.id !== filterAssigned) return false;
-      }
-      if (filterProgram && lead.program?.id !== filterProgram) return false;
-      if (filterCampus && lead.campusId !== filterCampus) return false;
       return true;
     });
-  }, [leads, search, filterSource, filterAssigned, filterProgram, filterCampus]);
+  }, [leads, search]);
 
   const getLeadsForStage = (stageId: string) => {
     var stageLeads = filteredLeads.filter((l) => l.stageId === stageId);
@@ -165,8 +146,6 @@ export function KanbanBoard({
     });
   };
 
-  const activeFiltersCount = [filterSource, filterAssigned, filterProgram, filterCampus].filter(Boolean).length;
-
   return (
     <div className="h-full">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -181,18 +160,6 @@ export function KanbanBoard({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn("btn-secondary py-2 text-xs", activeFiltersCount > 0 && "border-brand-300 text-brand-700")}
-          >
-            <Filter size={14} />
-            Filtres
-            {activeFiltersCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-brand-600 text-white text-[10px] flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
             <span className="text-[10px] text-gray-500 px-2 hidden sm:inline">Tri:</span>
             {[
@@ -221,54 +188,6 @@ export function KanbanBoard({
           Nouveau lead
         </button>
       </div>
-
-      {/* Filters panel */}
-      {showFilters && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-semibold text-gray-700">Filtres</h4>
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={() => { setFilterSource(""); setFilterAssigned(""); setFilterProgram(""); setFilterCampus(""); }}
-                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-              >
-                Effacer tout
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Source</label>
-              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Toutes</option>
-                {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
-              <select value={filterAssigned} onChange={(e) => setFilterAssigned(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Tous</option>
-                <option value="unassigned">Non assigné</option>
-                {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Filière</label>
-              <select value={filterProgram} onChange={(e) => setFilterProgram(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Toutes</option>
-                {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
-              <select value={filterCampus} onChange={(e) => setFilterCampus(e.target.value)} className="input text-sm py-1.5">
-                <option value="">Tous</option>
-                {campuses.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.city}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-2.5 overflow-x-auto pb-3 -mx-2 px-2"
