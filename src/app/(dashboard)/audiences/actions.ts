@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertCanAccessFeature } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
+import { buildLeadWhere } from "@/lib/lead-filters";
+import { getCustomFields } from "@/lib/custom-fields";
 
 /**
  * Helper local : vérifie l'accès aux campagnes WhatsApp depuis les audiences
@@ -783,6 +785,126 @@ export async function getAllMatchingLeadIds(
     select: { id: true },
   });
 
+  return leads.map(l => l.id);
+}
+
+// ─── FILTRES AVANCÉS (règles récursives ET/OU) pour peupler une audience statique ───
+// Réutilise le moteur de règles partagé (buildLeadWhere) — mêmes capacités que les
+// audiences dynamiques et les règles ad-hoc de campagne (champs perso, activité, dates…).
+
+/** Données nécessaires au FilterGroupBuilder (mêmes props que l'éditeur de campagne). */
+export async function getAudienceAdvancedFilterData() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+  const [stages, programs, audiences, users, customFields] = await Promise.all([
+    prisma.pipelineStage.findMany({
+      where: { organizationId: orgId },
+      orderBy: { order: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+    prisma.program.findMany({
+      where: { organizationId: orgId, isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.audience.findMany({
+      where: { organizationId: orgId },
+      select: { id: true, name: true, type: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { organizationId: orgId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    getCustomFields(),
+  ]);
+
+  return { stages, programs, audiences, users, customFields };
+}
+
+/** Recherche de leads via règles avancées (exclut les membres déjà présents). */
+export async function searchLeadsForAudienceAdvanced(
+  audienceId: string,
+  rules: any,
+  limit = 100
+) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true },
+  });
+  if (!audience) throw new Error("Audience introuvable");
+
+  const existingMembers = await prisma.audienceMember.findMany({
+    where: { audienceId },
+    select: { leadId: true },
+  });
+  const existingIds = existingMembers.map(m => m.leadId);
+
+  // buildLeadWhere pose déjà organizationId + isConverted:false
+  const rulesWhere = await buildLeadWhere(rules, orgId);
+  const where: any = {
+    ...rulesWhere,
+    ...(existingIds.length > 0 ? { id: { notIn: existingIds } } : {}),
+  };
+
+  const [leads, totalAvailable] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        score: true,
+        source: true,
+        stage: { select: { name: true, color: true } },
+        program: { select: { name: true } },
+        assignedTo: { select: { id: true, name: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return { leads, totalAvailable };
+}
+
+/** Tous les IDs correspondant aux règles avancées (pour « Tout sélectionner »). */
+export async function getAllMatchingLeadIdsAdvanced(audienceId: string, rules: any) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const orgId = session.user.organizationId;
+
+  const audience = await prisma.audience.findFirst({
+    where: { id: audienceId, organizationId: orgId },
+    select: { id: true },
+  });
+  if (!audience) throw new Error("Audience introuvable");
+
+  const existingMembers = await prisma.audienceMember.findMany({
+    where: { audienceId },
+    select: { leadId: true },
+  });
+  const existingIds = existingMembers.map(m => m.leadId);
+
+  const rulesWhere = await buildLeadWhere(rules, orgId);
+  const where: any = {
+    ...rulesWhere,
+    ...(existingIds.length > 0 ? { id: { notIn: existingIds } } : {}),
+  };
+
+  const leads = await prisma.lead.findMany({ where, select: { id: true } });
   return leads.map(l => l.id);
 }
 

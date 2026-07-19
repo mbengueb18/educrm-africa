@@ -8,10 +8,15 @@ import {
   addLeadsToAudience,
   getAllMatchingLeadIds,
   getFilterOptions,
+  searchLeadsForAudienceAdvanced,
+  getAllMatchingLeadIdsAdvanced,
+  getAudienceAdvancedFilterData,
 } from "@/app/(dashboard)/audiences/actions";
+import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
+import type { CustomFieldConfig } from "@/lib/custom-fields";
 import {
   X, Search, Loader2, Plus, UserPlus, Filter,
-  Mail, Phone, ChevronDown, ChevronUp,
+  Mail, Phone, ChevronDown, ChevronUp, SlidersHorizontal,
 } from "lucide-react";
 
 interface Lead {
@@ -65,6 +70,17 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectingAll, setSelectingAll] = useState(false);
 
+  // ─── Mode filtres avancés (règles récursives ET/OU, comme les campagnes) ───
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [filterGroup, setFilterGroup] = useState<FilterGroup>({ operator: "AND", rules: [] });
+  const [advancedData, setAdvancedData] = useState<{
+    stages: { id: string; name: string; color: string }[];
+    programs: { id: string; name: string; code: string | null }[];
+    audiences: { id: string; name: string; type: string }[];
+    users: { id: string; name: string }[];
+    customFields: CustomFieldConfig[];
+  } | null>(null);
+
   // ─── Filtres ───
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
@@ -89,6 +105,15 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
       .catch(() => toast.error("Erreur lors du chargement des filtres"));
   }, []);
 
+  // Charger les données du builder avancé à la première activation
+  useEffect(() => {
+    if (advancedMode && !advancedData) {
+      getAudienceAdvancedFilterData()
+        .then(setAdvancedData as any)
+        .catch(() => toast.error("Erreur lors du chargement des filtres avancés"));
+    }
+  }, [advancedMode, advancedData]);
+
   const getCurrentFilters = useCallback(() => ({
     search: search.trim() || undefined,
     onlyMine: scope === "mine",
@@ -105,23 +130,35 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
   const loadLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await searchLeadsForAudience(audienceId, {
-        ...getCurrentFilters(),
-        limit: 100,
-      });
-      setLeads(result.leads as any);
-      setTotalAvailable(result.totalAvailable);
+      if (advancedMode) {
+        // En mode avancé : sans règle, on n'affiche rien (évite de charger toute la base)
+        if (filterGroup.rules.length === 0) {
+          setLeads([]);
+          setTotalAvailable(0);
+        } else {
+          const result = await searchLeadsForAudienceAdvanced(audienceId, filterGroup, 100);
+          setLeads(result.leads as any);
+          setTotalAvailable(result.totalAvailable);
+        }
+      } else {
+        const result = await searchLeadsForAudience(audienceId, {
+          ...getCurrentFilters(),
+          limit: 100,
+        });
+        setLeads(result.leads as any);
+        setTotalAvailable(result.totalAvailable);
+      }
     } catch (err: any) {
       toast.error(err.message || "Erreur");
     }
     setLoading(false);
-  }, [audienceId, getCurrentFilters]);
+  }, [audienceId, getCurrentFilters, advancedMode, filterGroup]);
 
   // Debounced reload quand les filtres changent
   useEffect(() => {
-    const t = setTimeout(loadLeads, 300);
+    const t = setTimeout(loadLeads, advancedMode ? 500 : 300);
     return () => clearTimeout(t);
-  }, [loadLeads]);
+  }, [loadLeads, advancedMode]);
 
   const toggleSelect = (leadId: string) => {
     setSelectedIds(prev => {
@@ -136,7 +173,9 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
   const handleSelectAllMatching = async () => {
     setSelectingAll(true);
     try {
-      const allIds = await getAllMatchingLeadIds(audienceId, getCurrentFilters());
+      const allIds = advancedMode
+        ? await getAllMatchingLeadIdsAdvanced(audienceId, filterGroup)
+        : await getAllMatchingLeadIds(audienceId, getCurrentFilters());
       setSelectedIds(new Set(allIds));
       toast.success(`${allIds.length} lead${allIds.length > 1 ? "s" : ""} sélectionné${allIds.length > 1 ? "s" : ""}`);
     } catch (err: any) {
@@ -216,6 +255,30 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
 
           {/* Filtres */}
           <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
+            {/* Toggle mode simple / avancé */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5 w-fit">
+              <button
+                onClick={() => setAdvancedMode(false)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                  !advancedMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <Filter size={12} /> Filtres simples
+              </button>
+              <button
+                onClick={() => setAdvancedMode(true)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                  advancedMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <SlidersHorizontal size={12} /> Filtres avancés
+              </button>
+            </div>
+
+            {!advancedMode && (
+            <>
             {/* Search */}
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -346,6 +409,34 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
                 </div>
               </div>
             )}
+            </>
+            )}
+
+            {/* Mode avancé : builder de règles récursif (mêmes capacités que les campagnes) */}
+            {advancedMode && (
+              advancedData ? (
+                <div className="max-h-[280px] overflow-y-auto pr-1">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Combinez des critères (étape, source, filière, champs personnalisés, activité, audience) avec des groupes ET/OU.
+                  </p>
+                  <FilterGroupBuilder
+                    group={filterGroup}
+                    onChange={setFilterGroup}
+                    stages={advancedData.stages}
+                    programs={advancedData.programs}
+                    audiences={advancedData.audiences}
+                    users={advancedData.users}
+                    customFields={advancedData.customFields}
+                    emptyHint="Aucun critère — ajoutez-en un pour rechercher des leads à ajouter"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-6 text-gray-400">
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                  <span className="text-xs">Chargement des filtres avancés...</span>
+                </div>
+              )
+            )}
           </div>
 
           {/* Barre de sélection */}
@@ -410,11 +501,15 @@ export function AddLeadsModal({ audienceId, audienceName, onClose, onAdded }: Ad
             ) : leads.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                 <UserPlus size={32} className="text-gray-300 mb-3" />
-                <p className="text-sm font-medium text-gray-600">Aucun lead disponible</p>
+                <p className="text-sm font-medium text-gray-600">
+                  {advancedMode && filterGroup.rules.length === 0 ? "Aucun critère défini" : "Aucun lead disponible"}
+                </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {hasActiveFilters
-                    ? "Modifiez vos filtres pour élargir la recherche."
-                    : "Tous les leads existants sont déjà dans cette audience."}
+                  {advancedMode && filterGroup.rules.length === 0
+                    ? "Ajoutez au moins un critère pour rechercher des leads."
+                    : (advancedMode || hasActiveFilters)
+                      ? "Modifiez vos filtres pour élargir la recherche."
+                      : "Tous les leads existants sont déjà dans cette audience."}
                 </p>
               </div>
             ) : (

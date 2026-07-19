@@ -62,6 +62,7 @@ export function WhatsAppCampaignsClient({ campaigns }: Props) {
     withoutWhatsApp: number;
     fromAudience: boolean;
     audienceName?: string;
+    estimatedCost?: import("@/lib/whatsapp/pricing").WhatsAppCostEstimate | null;
   } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
   const [progress, setProgress] = useState<Record<string, { total: number; done: number }>>({});

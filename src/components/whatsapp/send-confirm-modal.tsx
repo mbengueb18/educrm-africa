@@ -3,8 +3,9 @@
 // Modale de confirmation d'envoi d'une campagne WhatsApp — partagée entre la liste
 // et l'éditeur (même flow que les campagnes email : modal + stats destinataires).
 import { cn } from "@/lib/utils";
+import { formatUsd, formatXof, type WhatsAppCostEstimate } from "@/lib/whatsapp/pricing";
 import {
-  MessageCircle, Send, Loader2, CheckCircle, XCircle, AlertTriangle, Target,
+  MessageCircle, Send, Loader2, CheckCircle, XCircle, AlertTriangle, Target, Wallet,
 } from "lucide-react";
 
 export function WhatsAppSendConfirmModal({
@@ -22,6 +23,7 @@ export function WhatsAppSendConfirmModal({
     withoutWhatsApp: number;
     fromAudience: boolean;
     audienceName?: string;
+    estimatedCost?: WhatsAppCostEstimate | null;
   } | null;
   loading: boolean;
   isPending: boolean;
@@ -123,7 +125,30 @@ export function WhatsAppSendConfirmModal({
                 </span>
               </div>
 
-              {!hasNoRecipients && (
+              {!hasNoRecipients && stats.estimatedCost && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                      <Wallet size={15} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-blue-900">
+                        Coût Meta estimé : ≈ {formatXof(stats.estimatedCost.totalXof)}
+                        <span className="font-normal text-blue-700"> ({formatUsd(stats.estimatedCost.totalUsd)})</span>
+                      </p>
+                      <p className="text-[11px] text-blue-700 mt-0.5">
+                        {stats.estimatedCost.breakdown.map((l) =>
+                          `${l.count} msg ${l.marketLabel} × ${l.rateUsd.toLocaleString("fr-FR", { minimumFractionDigits: 4 })} $`
+                        ).join(" · ")}
+                      </p>
+                      <p className="text-[10px] text-blue-600/80 mt-1">
+                        Facturé par Meta à la livraison (catégorie {stats.estimatedCost.category === "MARKETING" ? "Marketing" : stats.estimatedCost.category === "UTILITY" ? "Utilitaire" : "Authentification"}). Les messages non délivrés ne sont pas facturés.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!hasNoRecipients && !stats.estimatedCost && (
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-[11px] text-blue-800">
                     💡 <strong>Important</strong> : chaque message WhatsApp utilise un template Meta-approuvé. Coûts à votre charge selon votre compte WhatsApp Business.

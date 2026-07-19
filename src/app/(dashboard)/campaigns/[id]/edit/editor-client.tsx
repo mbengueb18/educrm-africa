@@ -712,6 +712,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
                   audiences={audiences}
                   users={users}
                   customFields={customFields}
+                  emptyHint="Aucun critère — tous les prospects avec email seront inclus"
                 />
 
                 {/* Aperçu live */}

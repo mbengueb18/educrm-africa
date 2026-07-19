@@ -692,6 +692,7 @@ export function PipelineClient({
             users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
             customFields={customFields || []}
             hiddenCategories={["Activité", "Audience"]}
+            emptyHint="Aucun critère — tous les prospects sont affichés"
           />
           <p className="text-[11px] text-gray-400 mt-3">
             {filteredLeads.length} lead{filteredLeads.length > 1 ? "s" : ""} correspondent aux filtres

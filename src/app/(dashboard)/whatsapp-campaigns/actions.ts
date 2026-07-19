@@ -7,6 +7,15 @@ import { getWhatsAppIntegration } from "@/lib/whatsapp/integration";
 import { sendTemplateMessage, resolveVariablesFromLead } from "@/lib/whatsapp/send";
 import { assertCanAccessFeature } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
+import { estimateWhatsAppCost, type WhatsAppCostEstimate, type WhatsAppPricingCategory } from "@/lib/whatsapp/pricing";
+import { getCampaignLeadsQuery } from "@/lib/campaign-leads";
+
+/** Vrai si des règles de segmentation ad-hoc sont définies (format plat ou FilterGroup). */
+function hasSegmentRules(rules: any): boolean {
+  if (!rules) return false;
+  if (Array.isArray(rules)) return rules.length > 0;
+  return Array.isArray(rules.rules) && rules.rules.length > 0;
+}
 
 /**
  * Helper local : vérifie l'accès aux campagnes WhatsApp
@@ -110,6 +119,7 @@ export async function updateWhatsAppCampaignDraft(campaignId: string, data: {
 
   const campaign = await prisma.whatsAppCampaign.findFirst({
     where: { id: campaignId, organizationId: session.user.organizationId },
+    select: { id: true, status: true, audienceId: true, segmentRules: true },
   });
 
   if (!campaign) throw new Error("Campagne introuvable");
@@ -123,30 +133,24 @@ export async function updateWhatsAppCampaignDraft(campaignId: string, data: {
   if (data.audienceId !== undefined) updateData.audienceId = data.audienceId;
   if (data.segmentRules !== undefined) updateData.segmentRules = data.segmentRules as any;
 
-  // Recalculer le compte des destinataires
+  // Mode courant après application des changements (audience OU règles ad-hoc, comme l'emailing)
+  const newAudienceId = data.audienceId !== undefined ? data.audienceId : campaign.audienceId;
+  const newRules = data.segmentRules !== undefined ? data.segmentRules : (campaign.segmentRules as any);
+
+  // Recalculer le compte des destinataires (leads avec WhatsApp) si audience ou règles changent
   let totalRecipients = 0;
-  if (data.audienceId) {
-    const audience = await prisma.audience.findFirst({
-      where: { id: data.audienceId, organizationId: session.user.organizationId },
-    });
-    if (audience && audience.type !== "DYNAMIC") {
-      const members = await prisma.audienceMember.findMany({
-        where: { audienceId: data.audienceId },
-        select: { leadId: true },
-      });
-      const leadIds = members.map(m => m.leadId);
-      if (leadIds.length > 0) {
-        totalRecipients = await prisma.lead.count({
-          where: {
-            id: { in: leadIds },
-            whatsapp: { not: null },
-            isConverted: false,
-          },
-        });
+  if (data.audienceId !== undefined || data.segmentRules !== undefined) {
+    if (newAudienceId || hasSegmentRules(newRules)) {
+      try {
+        const { where } = await getCampaignLeadsQuery(session.user.organizationId, newAudienceId ?? null, newRules ?? []);
+        totalRecipients = await prisma.lead.count({ where: { ...where, whatsapp: { not: null } } });
+      } catch {
+        // audience introuvable / dynamique → compte 0 (l'UI empêche déjà ces cas)
+        totalRecipients = 0;
       }
     }
+    updateData.totalRecipients = totalRecipients;
   }
-  updateData.totalRecipients = totalRecipients;
 
   await prisma.whatsAppCampaign.update({
     where: { id: campaignId },
@@ -154,6 +158,20 @@ export async function updateWhatsAppCampaignDraft(campaignId: string, data: {
   });
 
   return { success: true, totalRecipients };
+}
+
+// ─── Aperçu live d'un segment de règles ad-hoc (miroir de previewSegment email) ───
+export async function previewWhatsAppSegment(rules: any) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const { where } = await getCampaignLeadsQuery(session.user.organizationId, null, rules);
+  const [count, totalMatching] = await Promise.all([
+    prisma.lead.count({ where: { ...where, whatsapp: { not: null } } }),
+    prisma.lead.count({ where }),
+  ]);
+  const withoutWhatsApp = Math.max(0, totalMatching - count);
+  return { count, withoutWhatsApp, totalMatching };
 }
 
 // ─── Get recipient stats for confirmation modal ───
@@ -164,7 +182,7 @@ export async function getWhatsAppCampaignRecipientStats(campaignId: string) {
   const campaign = await prisma.whatsAppCampaign.findFirst({
     where: { id: campaignId, organizationId: session.user.organizationId },
     include: {
-      audience: { select: { id: true, name: true, type: true } },
+      template: { select: { category: true } },
     },
   });
   if (!campaign) throw new Error("Campagne introuvable");
@@ -174,31 +192,33 @@ export async function getWhatsAppCampaignRecipientStats(campaignId: string) {
   let withoutWhatsApp = 0;
   let fromAudience = false;
   let audienceName: string | undefined;
+  let estimatedCost: WhatsAppCostEstimate | null = null;
 
-  if (campaign.audienceId && campaign.audience) {
-    fromAudience = true;
-    audienceName = campaign.audience.name;
+  const rules = (campaign.segmentRules as any) ?? [];
 
-    if (campaign.audience.type === "DYNAMIC") {
-      throw new Error("Les audiences dynamiques ne peuvent pas être utilisées pour les campagnes WhatsApp");
-    }
+  // Mode audience OU règles ad-hoc — même moteur que l'emailing (getCampaignLeadsQuery)
+  if (campaign.audienceId || hasSegmentRules(rules)) {
+    const query = await getCampaignLeadsQuery(session.user.organizationId, campaign.audienceId, rules);
+    fromAudience = query.fromAudience;
+    audienceName = query.audienceName;
 
-    const members = await prisma.audienceMember.findMany({
-      where: { audienceId: campaign.audienceId },
-      select: { leadId: true },
-    });
-    const leadIds = members.map(m => m.leadId);
+    const [totalCount, recipients] = await Promise.all([
+      prisma.lead.count({ where: query.where }),
+      prisma.lead.findMany({
+        where: { ...query.where, whatsapp: { not: null } },
+        select: { whatsapp: true },
+      }),
+    ]);
+    total = totalCount;
+    withWhatsApp = recipients.length;
+    withoutWhatsApp = total - withWhatsApp;
 
-    if (leadIds.length > 0) {
-      [total, withWhatsApp] = await Promise.all([
-        prisma.lead.count({
-          where: { id: { in: leadIds }, isConverted: false },
-        }),
-        prisma.lead.count({
-          where: { id: { in: leadIds }, whatsapp: { not: null }, isConverted: false },
-        }),
-      ]);
-      withoutWhatsApp = total - withWhatsApp;
+    // Estimation du coût Meta (par message, selon catégorie du template + pays)
+    if (recipients.length > 0 && campaign.template) {
+      estimatedCost = estimateWhatsAppCost(
+        recipients.map(r => r.whatsapp!),
+        campaign.template.category as WhatsAppPricingCategory
+      );
     }
   }
 
@@ -208,6 +228,7 @@ export async function getWhatsAppCampaignRecipientStats(campaignId: string) {
     withoutWhatsApp,
     fromAudience,
     audienceName,
+    estimatedCost,
   };
 }
 
@@ -274,12 +295,11 @@ export async function sendWhatsAppCampaign(campaignId: string) {
   // check feature gate AVANT toute opération
   await assertCanUseWhatsAppCampaigns(session.user.organizationId);
 
-  // Récupérer la campagne avec template + audience
+  // Récupérer la campagne avec template
   const campaign = await prisma.whatsAppCampaign.findFirst({
     where: { id: campaignId, organizationId: session.user.organizationId },
     include: {
       template: true,
-      audience: { select: { id: true, name: true, type: true } },
     },
   });
 
@@ -289,10 +309,9 @@ export async function sendWhatsAppCampaign(campaignId: string) {
   if (campaign.template.status !== "APPROVED") {
     throw new Error("Le template doit être approuvé par Meta avant utilisation");
   }
-  if (!campaign.audienceId) throw new Error("Aucune audience sélectionnée");
-  if (!campaign.audience) throw new Error("Audience introuvable");
-  if (campaign.audience.type === "DYNAMIC") {
-    throw new Error("Les audiences dynamiques ne peuvent pas être utilisées");
+  const rules = (campaign.segmentRules as any) ?? [];
+  if (!campaign.audienceId && !hasSegmentRules(rules)) {
+    throw new Error("Aucune audience ni règle de segmentation sélectionnée");
   }
 
   // ⚡ Vérifier l'intégration WhatsApp AVANT de commencer
@@ -303,25 +322,14 @@ export async function sendWhatsAppCampaign(campaignId: string) {
     throw new Error(e.message);
   }
 
-  // Récupérer les leads de l'audience qui ont un WhatsApp
-  const members = await prisma.audienceMember.findMany({
-    where: { audienceId: campaign.audienceId },
-    select: { leadId: true },
-  });
-  const leadIds = members.map((m) => m.leadId);
-
-  if (leadIds.length === 0) throw new Error("Aucun lead dans l'audience");
-
+  // Récupérer les leads (audience figée OU règles ad-hoc) qui ont un WhatsApp
+  const { where } = await getCampaignLeadsQuery(session.user.organizationId, campaign.audienceId, rules);
   const leads = await prisma.lead.findMany({
-    where: {
-      id: { in: leadIds },
-      whatsapp: { not: null },
-      isConverted: false,
-    },
+    where: { ...where, whatsapp: { not: null } },
     include: { program: { select: { name: true } } }, // pour résoudre {{lead.programName}}
   });
 
-  if (leads.length === 0) throw new Error("Aucun lead avec WhatsApp dans cette audience");
+  if (leads.length === 0) throw new Error("Aucun lead avec WhatsApp dans ce segment");
 
   // Marquer la campagne comme SENDING
   await prisma.whatsAppCampaign.update({
@@ -367,17 +375,19 @@ export async function scheduleWhatsAppCampaign(campaignId: string, scheduledAtIS
 
   const campaign = await prisma.whatsAppCampaign.findFirst({
     where: { id: campaignId, organizationId: session.user.organizationId },
-    include: { template: true, audience: { select: { id: true, type: true } } },
+    include: { template: true },
   });
   if (!campaign) throw new Error("Campagne introuvable");
   if (campaign.status !== "DRAFT") throw new Error("Cette campagne ne peut plus être programmée.");
   if (!campaign.template || campaign.template.status !== "APPROVED") {
     throw new Error("Le template doit être approuvé par Meta avant utilisation");
   }
-  if (!campaign.audienceId || !campaign.audience) throw new Error("Aucune audience sélectionnée");
-  if (campaign.audience.type === "DYNAMIC") {
-    throw new Error("Les audiences dynamiques ne peuvent pas être utilisées");
+  const rules = (campaign.segmentRules as any) ?? [];
+  if (!campaign.audienceId && !hasSegmentRules(rules)) {
+    throw new Error("Aucune audience ni règle de segmentation sélectionnée");
   }
+  // Valide l'audience/les règles dès maintenant (rejette audience dynamique/introuvable)
+  await getCampaignLeadsQuery(session.user.organizationId, campaign.audienceId, rules);
   // Intégration vérifiée dès maintenant (échec clair plutôt qu'à l'échéance)
   await getWhatsAppIntegration(session.user.organizationId);
 
@@ -444,14 +454,19 @@ export async function sendWhatsAppTestMessage(campaignId: string, toNumber: stri
   }
   await getWhatsAppIntegration(session.user.organizationId);
 
-  // Variables résolues depuis un vrai lead de l'audience si possible, sinon valeurs de démo
+  // Variables résolues depuis un vrai lead du segment si possible, sinon valeurs de démo
   let sampleLead: any = null;
-  if (campaign.audienceId) {
-    const member = await prisma.audienceMember.findFirst({
-      where: { audienceId: campaign.audienceId, lead: { organizationId: session.user.organizationId, whatsapp: { not: null } } },
-      include: { lead: { include: { program: { select: { name: true } } } } },
-    });
-    sampleLead = member?.lead || null;
+  const testRules = (campaign.segmentRules as any) ?? [];
+  if (campaign.audienceId || hasSegmentRules(testRules)) {
+    try {
+      const { where } = await getCampaignLeadsQuery(session.user.organizationId, campaign.audienceId, testRules);
+      sampleLead = await prisma.lead.findFirst({
+        where: { ...where, whatsapp: { not: null } },
+        include: { program: { select: { name: true } } },
+      });
+    } catch {
+      sampleLead = null;
+    }
   }
   if (!sampleLead) {
     sampleLead = {

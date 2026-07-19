@@ -161,7 +161,7 @@ export interface ParsedIncomingMessage {
   externalId: string;       // wamid Meta
   from: string;              // numéro lead (ex: "221775320355")
   timestamp: Date;
-  type: "text" | "image" | "audio" | "document" | "video" | "location" | "contacts" | "sticker" | "unknown";
+  type: "text" | "image" | "audio" | "document" | "video" | "location" | "contacts" | "sticker" | "reaction" | "unknown";
   textContent: string | null; // contenu texte ou caption ou label
   mediaId: string | null;     // ID Meta du média à télécharger
   contactName: string | null; // Nom WhatsApp du contact
@@ -230,6 +230,12 @@ export function parseIncomingMessage(
     case "sticker":
       mediaId = message.sticker?.id || null;
       textContent = "[Sticker reçu]";
+      break;
+
+    case "reaction":
+      // Réaction emoji à un message. Emoji vide/absent = réaction retirée.
+      const reactionEmoji = message.reaction?.emoji;
+      textContent = reactionEmoji ? `A réagi ${reactionEmoji}` : "[Réaction retirée]";
       break;
 
     default:

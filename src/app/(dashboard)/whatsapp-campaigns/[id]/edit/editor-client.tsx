@@ -12,13 +12,17 @@ import {
   scheduleWhatsAppCampaign,
   sendWhatsAppTestMessage,
   getWhatsAppCampaignRecipientStats,
+  previewWhatsAppSegment,
 } from "../../actions";
 import { WhatsAppSendConfirmModal } from "@/components/whatsapp/send-confirm-modal";
+import { formatUsd, formatXof, type WhatsAppCostEstimate } from "@/lib/whatsapp/pricing";
 import { getApprovedTemplates } from "../../../settings/whatsapp-templates/actions";
+import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
+import type { CustomFieldConfig } from "@/lib/custom-fields";
 import {
   ArrowLeft, Save, Loader2, Check, Clock, MessageCircle,
   Users, FileText, Eye, Tag, Globe, CheckCircle, AlertTriangle,
-  Sparkles, Plus, Search, Send, X,
+  Sparkles, Plus, Search, Send, X, SlidersHorizontal,
 } from "lucide-react";
 
 interface CampaignProps {
@@ -31,6 +35,11 @@ interface CampaignProps {
     totalRecipients: number;
     status: string;
   };
+  stages: { id: string; name: string; color: string }[];
+  programs: { id: string; name: string; code: string | null }[];
+  audiences: { id: string; name: string; type: string }[];
+  users: { id: string; name: string }[];
+  customFields: CustomFieldConfig[];
 }
 
 const DEMO_VALUES: Record<string, string> = {
@@ -43,12 +52,29 @@ const DEMO_VALUES: Record<string, string> = {
   "lead.score": "75",
 };
 
-export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
+// Normalise segmentRules (format plat hérité OU FilterGroup) en FilterGroup
+function toFilterGroup(sr: any): FilterGroup {
+  if (sr && typeof sr === "object" && !Array.isArray(sr) && Array.isArray(sr.rules)) return sr as FilterGroup;
+  if (Array.isArray(sr) && sr.length > 0) return { operator: "AND", rules: sr };
+  return { operator: "AND", rules: [] };
+}
+
+export function WhatsAppCampaignEditorClient({ campaign, stages, programs, audiences, users, customFields }: CampaignProps) {
   const router = useRouter();
   const [name, setName] = useState(campaign.name);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(campaign.templateId);
   const [selectedAudienceId, setSelectedAudienceId] = useState<string | null>(campaign.audienceId);
   const [activePanel, setActivePanel] = useState<"content" | "audience">("content");
+
+  // Mode audience figée vs règles ad-hoc (miroir de l'éditeur email)
+  const initialGroup = toFilterGroup(campaign.segmentRules);
+  const initialHasRules = initialGroup.rules.length > 0;
+  const [audienceMode, setAudienceMode] = useState<"audience" | "rules">(
+    campaign.audienceId ? "audience" : (initialHasRules ? "rules" : "audience")
+  );
+  const [filterGroup, setFilterGroup] = useState<FilterGroup>(initialGroup);
+  const [rulesPreview, setRulesPreview] = useState<{ count: number; withoutWhatsApp: number; totalMatching: number } | null>(null);
+  const [rulesPreviewLoading, setRulesPreviewLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -59,6 +85,7 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleValue, setScheduleValue] = useState("");
   const [scheduling, setScheduling] = useState(false);
+  const [scheduleEstimate, setScheduleEstimate] = useState<WhatsAppCostEstimate | null>(null);
   const [sending, setSending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmStats, setConfirmStats] = useState<{
@@ -67,6 +94,7 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
     withoutWhatsApp: number;
     fromAudience: boolean;
     audienceName?: string;
+    estimatedCost?: WhatsAppCostEstimate | null;
   } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
@@ -82,6 +110,19 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
       toast.error(res.error);
     }
     setSendingTest(false);
+  };
+
+  // Estimation du coût Meta affichée dans la modale de programmation
+  const openScheduleModal = async () => {
+    setScheduleOpen(true);
+    setScheduleEstimate(null);
+    try {
+      await doSave(); // persiste template/audience avant de calculer
+      const stats = await getWhatsAppCampaignRecipientStats(campaign.id);
+      setScheduleEstimate(stats.estimatedCost ?? null);
+    } catch {
+      // estimation indisponible : la modale reste utilisable sans
+    }
   };
 
   const handleSchedule = async () => {
@@ -105,9 +146,16 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
   };
 
   // Même flow que l'éditeur email : modale de confirmation avec stats destinataires
+  // Le ciblage est prêt si une audience est choisie (mode audience) OU au moins une règle (mode règles)
+  const audienceReady = audienceMode === "audience" ? !!selectedAudienceId : filterGroup.rules.length > 0;
+
   const handleSendNow = async () => {
     if (!selectedTemplateId) { setActivePanel("content"); toast.error("Sélectionnez un template avant d'envoyer."); return; }
-    if (!selectedAudienceId) { setActivePanel("audience"); toast.error("Sélectionnez d'abord une audience."); return; }
+    if (!audienceReady) {
+      setActivePanel("audience");
+      toast.error(audienceMode === "audience" ? "Sélectionnez d'abord une audience." : "Ajoutez au moins une règle de segmentation.");
+      return;
+    }
     setConfirmOpen(true);
     setLoadingStats(true);
     setConfirmStats(null);
@@ -173,7 +221,9 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
       const result = await updateWhatsAppCampaignDraft(campaign.id, {
         name,
         templateId: selectedTemplateId,
-        audienceId: selectedAudienceId,
+        // Mode audience → audienceId fixé, règles vidées ; mode règles → l'inverse
+        audienceId: audienceMode === "audience" ? selectedAudienceId : null,
+        segmentRules: audienceMode === "rules" ? (filterGroup as any) : [],
       });
       setRecipientsCount(result.totalRecipients);
       setLastSaved(new Date());
@@ -181,7 +231,7 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
       // silent fail
     }
     setSaving(false);
-  }, [campaign.id, name, selectedTemplateId, selectedAudienceId]);
+  }, [campaign.id, name, selectedTemplateId, selectedAudienceId, audienceMode, filterGroup]);
 
   useEffect(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -189,7 +239,21 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, selectedTemplateId, selectedAudienceId, doSave]);
+  }, [name, selectedTemplateId, selectedAudienceId, audienceMode, filterGroup, doSave]);
+
+  // Aperçu live du segment de règles ad-hoc
+  useEffect(() => {
+    if (audienceMode !== "rules") return;
+    if (filterGroup.rules.length === 0) { setRulesPreview(null); return; }
+    setRulesPreviewLoading(true);
+    const t = setTimeout(() => {
+      previewWhatsAppSegment(filterGroup as any)
+        .then((data) => setRulesPreview(data))
+        .catch(() => setRulesPreview(null))
+        .finally(() => setRulesPreviewLoading(false));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [audienceMode, filterGroup]);
 
   // ─── Selected template object ───
   const selectedTemplate = availableTemplates.find((t: any) => t.id === selectedTemplateId);
@@ -284,8 +348,8 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
               <Send size={13} /> Test
             </button>
             <button
-              onClick={() => setScheduleOpen(true)}
-              disabled={!selectedTemplateId || !selectedAudienceId}
+              onClick={openScheduleModal}
+              disabled={!selectedTemplateId || !audienceReady}
               className="btn-secondary py-1.5 text-xs disabled:opacity-50"
               title="Programmer l'envoi à une date/heure"
             >
@@ -293,7 +357,7 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
             </button>
             <button
               onClick={handleSendNow}
-              disabled={sending || !selectedTemplateId || !selectedAudienceId}
+              disabled={sending || !selectedTemplateId || !audienceReady}
               className="btn-primary py-1.5 text-xs disabled:opacity-50"
             >
               {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Envoyer
@@ -350,6 +414,17 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
               <p className="text-xs text-gray-500 mb-3">
                 Les destinataires seront calculés à l'échéance, sur l'audience à jour ({recipientsCount} avec WhatsApp aujourd'hui).
               </p>
+              {scheduleEstimate && (
+                <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-900 font-semibold">
+                    Coût Meta estimé : ≈ {formatXof(scheduleEstimate.totalXof)}
+                    <span className="font-normal text-blue-700"> ({formatUsd(scheduleEstimate.totalUsd)})</span>
+                  </p>
+                  <p className="text-[10px] text-blue-600/80 mt-0.5">
+                    Sur la base de l'audience actuelle — facturé par Meta à la livraison.
+                  </p>
+                </div>
+              )}
               <input
                 type="datetime-local"
                 value={scheduleValue}
@@ -569,6 +644,30 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
           /* Audience panel */
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-2xl mx-auto">
+              {/* Toggle mode : audience figée vs règles ad-hoc (miroir de l'éditeur email) */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5 mb-4 w-fit">
+                <button
+                  onClick={() => setAudienceMode("audience")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                    audienceMode === "audience" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <Users size={13} /> Audience enregistrée
+                </button>
+                <button
+                  onClick={() => setAudienceMode("rules")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                    audienceMode === "rules" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <SlidersHorizontal size={13} /> Règles ad-hoc
+                </button>
+              </div>
+
+              {audienceMode === "audience" && (
+              <>
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-gray-700 mb-1">Choisir une audience</h3>
                 <p className="text-xs text-gray-500">
@@ -698,6 +797,51 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
                   </div>
                 );
               })()}
+              </>
+              )}
+
+              {audienceMode === "rules" && (
+                <div>
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Critères de segmentation</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Combinez des critères (étape, source, filière, champs personnalisés, activité, audience) avec des groupes ET/OU. Seuls les leads avec un numéro WhatsApp recevront le message.
+                    </p>
+                  </div>
+
+                  <FilterGroupBuilder
+                    group={filterGroup}
+                    onChange={setFilterGroup}
+                    stages={stages}
+                    programs={programs}
+                    audiences={audiences}
+                    users={users}
+                    customFields={customFields}
+                    emptyHint="Aucun critère — tous les prospects avec WhatsApp seront inclus"
+                  />
+
+                  {/* Aperçu live */}
+                  {rulesPreview && (
+                    <div className="bg-emerald-50 rounded-xl p-4 mt-4 border border-emerald-200">
+                      <div className="flex items-center gap-2">
+                        <Users size={16} className="text-emerald-600" />
+                        <span className="text-sm font-semibold text-emerald-800">
+                          {rulesPreview.count} destinataire{rulesPreview.count > 1 ? "s" : ""} avec WhatsApp
+                        </span>
+                        {rulesPreviewLoading && <Loader2 size={13} className="animate-spin text-emerald-400" />}
+                      </div>
+                      {rulesPreview.withoutWhatsApp > 0 && (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-2">
+                          {rulesPreview.withoutWhatsApp} prospect{rulesPreview.withoutWhatsApp > 1 ? "s" : ""} sans WhatsApp {rulesPreview.withoutWhatsApp > 1 ? "sont exclus" : "est exclu"} de l'envoi (sur {rulesPreview.totalMatching} correspondant{rulesPreview.totalMatching > 1 ? "s" : ""} aux filtres).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {filterGroup.rules.length === 0 && (
+                    <p className="text-xs text-gray-400 mt-4 text-center">Ajoutez au moins un critère pour cibler des destinataires.</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

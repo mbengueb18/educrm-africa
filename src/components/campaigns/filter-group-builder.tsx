@@ -14,7 +14,7 @@ function isGroup(node: any): node is FilterGroup {
 interface FieldOption {
   value: string;
   label: string;
-  type: "select" | "text" | "number" | "date" | "activity" | "audience";
+  type: "select" | "text" | "number" | "date" | "activity" | "activity-date" | "audience";
   options?: { value: string; label: string }[];
 }
 
@@ -27,6 +27,8 @@ interface BuilderProps {
   users: { id: string; name: string }[];
   customFields: CustomFieldConfig[];
   hiddenCategories?: string[];
+  // Message affiché quand aucun critère n'est défini (dépend du contexte : email, WhatsApp, audience)
+  emptyHint?: string;
 }
 
 var SOURCE_OPTIONS = [
@@ -71,12 +73,12 @@ function buildFieldCatalog(props: BuilderProps): { category: string; fields: Fie
     });
 
   var activity: FieldOption[] = [
-    { value: "activity:has_message", label: "A reçu un message", type: "activity" },
-    { value: "activity:no_message", label: "N'a reçu aucun message", type: "activity" },
-    { value: "activity:has_inbound", label: "A répondu", type: "activity" },
+    { value: "activity:has_message", label: "A au moins un message (envoyé ou reçu)", type: "activity" },
+    { value: "activity:no_message", label: "N'a aucun message (ni envoyé ni reçu)", type: "activity" },
+    { value: "activity:has_inbound", label: "A répondu (message reçu)", type: "activity" },
     { value: "activity:no_inbound", label: "N'a jamais répondu", type: "activity" },
-    { value: "activity:last_message_after", label: "Dernier message après", type: "date" },
-    { value: "activity:last_message_before", label: "Dernier message avant", type: "date" },
+    { value: "activity:last_message_after", label: "Message échangé depuis le", type: "activity-date" },
+    { value: "activity:last_message_before", label: "Aucun message depuis le", type: "activity-date" },
   ];
 
   var audience: FieldOption[] = [
@@ -96,8 +98,9 @@ function buildFieldCatalog(props: BuilderProps): { category: string; fields: Fie
 function operatorsForField(fieldDef: FieldOption | undefined): { value: string; label: string }[] {
   if (!fieldDef) return [{ value: "equals", label: "est" }];
 
-  if (fieldDef.type === "activity") {
-    // Les champs has_message/no_message/etc n'ont pas d'opérateur (ils SONT la condition)
+  if (fieldDef.type === "activity" || fieldDef.type === "activity-date") {
+    // Les champs d'activité n'ont pas d'opérateur (ils SONT la condition).
+    // activity-date attend juste une date ; activity est une condition seule.
     return [];
   }
   if (fieldDef.type === "audience") {
@@ -229,7 +232,7 @@ function RuleRow({ rule, catalog, onChange, onRemove }: {
               return <option key={o.value} value={o.value}>{o.label}</option>;
             })}
           </select>
-        ) : fieldDef.type === "date" ? (
+        ) : (fieldDef.type === "date" || fieldDef.type === "activity-date") ? (
           <input
             type="date"
             value={rule.value}
@@ -318,7 +321,7 @@ export function FilterGroupBuilder(props: BuilderProps) {
       {group.rules.length === 0 ? (
         <div className="bg-gray-50 rounded-xl p-6 text-center">
           <Filter size={24} className="text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Aucun critère — tous les leads avec email seront inclus</p>
+          <p className="text-sm text-gray-500">{props.emptyHint || "Aucun critère — tous les prospects correspondants seront inclus"}</p>
         </div>
       ) : (
         <div className="space-y-2">

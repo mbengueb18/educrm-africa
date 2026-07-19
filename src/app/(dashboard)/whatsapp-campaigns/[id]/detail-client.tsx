@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { formatUsd, formatXof, type WhatsAppCostEstimate } from "@/lib/whatsapp/pricing";
 import {
   ArrowLeft, Send, CheckCheck, Check, Clock, XCircle, AlertTriangle,
   MessageCircle, Users, FileText, BarChart3, Target, Tag, Globe,
-  Search, Eye,
+  Search, Eye, Wallet,
 } from "lucide-react";
 
 interface Recipient {
@@ -63,7 +64,15 @@ const TABS = [
   { key: "recipients", label: "Destinataires", icon: Users },
 ];
 
-export function WhatsAppCampaignDetailClient({ campaign }: { campaign: Campaign }) {
+export function WhatsAppCampaignDetailClient({
+  campaign,
+  spentEstimate,
+}: {
+  campaign: Campaign;
+  // Dépense Meta estimée, calculée côté serveur sur tous les destinataires
+  // délivrés/lus (seuls messages facturés par Meta)
+  spentEstimate: WhatsAppCostEstimate | null;
+}) {
   const [activeTab, setActiveTab] = useState("overview");
 
   const deliveryRate = campaign.sentCount > 0 ? Math.round((campaign.deliveredCount / campaign.sentCount) * 100) : 0;
@@ -121,7 +130,7 @@ export function WhatsAppCampaignDetailClient({ campaign }: { campaign: Campaign 
 
       {/* Content */}
       {activeTab === "overview" && (
-        <OverviewTab campaign={campaign} deliveryRate={deliveryRate} readRate={readRate} failRate={failRate} />
+        <OverviewTab campaign={campaign} deliveryRate={deliveryRate} readRate={readRate} failRate={failRate} spentEstimate={spentEstimate} />
       )}
       {activeTab === "template" && <TemplateTab campaign={campaign} />}
       {activeTab === "recipients" && <RecipientsTab recipients={campaign.recipients} />}
@@ -135,19 +144,31 @@ function OverviewTab({
   deliveryRate,
   readRate,
   failRate,
+  spentEstimate,
 }: {
   campaign: Campaign;
   deliveryRate: number;
   readRate: number;
   failRate: number;
+  spentEstimate: WhatsAppCostEstimate | null;
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard label="Envoyés" value={campaign.sentCount.toString()} desc={`/ ${campaign.totalRecipients} dest.`} color="text-blue-600" bg="bg-blue-50" icon={Send} />
         <MetricCard label="Délivrés" value={`${deliveryRate}%`} desc={`${campaign.deliveredCount} délivrés`} color="text-emerald-600" bg="bg-emerald-50" icon={CheckCheck} />
         <MetricCard label="Lus" value={`${readRate}%`} desc={`${campaign.readCount} lus`} color="text-blue-700" bg="bg-blue-50" icon={Eye} />
         <MetricCard label="Échecs" value={`${failRate}%`} desc={`${campaign.failedCount} échoués`} color="text-red-600" bg="bg-red-50" icon={AlertTriangle} />
+        <MetricCard
+          label="Dépense Meta"
+          value={spentEstimate ? `≈ ${formatXof(spentEstimate.totalXof)}` : "0 FCFA"}
+          desc={spentEstimate
+            ? `${formatUsd(spentEstimate.totalUsd)} · ${spentEstimate.messageCount} msg délivré${spentEstimate.messageCount > 1 ? "s" : ""}`
+            : "Aucun message délivré facturé"}
+          color="text-violet-600"
+          bg="bg-violet-50"
+          icon={Wallet}
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -181,12 +202,21 @@ function OverviewTab({
           <InfoRow label="Créée par" value={campaign.createdBy?.name || "—"} />
           <InfoRow label="Envoi" value={campaign.sentAt ? formatDateTime(campaign.sentAt) : "—"} />
           <InfoRow label="Terminée" value={campaign.completedAt ? formatDateTime(campaign.completedAt) : "—"} />
+          {spentEstimate && (
+            <InfoRow
+              label="Dépense Meta estimée"
+              value={spentEstimate.breakdown
+                .map(l => `${l.count} msg ${l.marketLabel} × ${l.rateUsd.toLocaleString("fr-FR", { minimumFractionDigits: 4 })} $`)
+                .join(" · ")}
+            />
+          )}
         </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
         <p className="text-xs text-blue-700">
-          💡 Les statuts <strong>Délivré</strong> et <strong>Lu</strong> sont mis à jour automatiquement via les webhooks Meta dès que le destinataire reçoit/lit le message. La mise à jour peut prendre quelques secondes à quelques minutes.
+          💡 Les statuts <strong>Délivré</strong> et <strong>Lu</strong> sont mis à jour automatiquement via les webhooks Meta dès que le destinataire reçoit/lit le message.
+          La <strong>dépense Meta</strong> est une estimation calculée sur les messages délivrés (grille tarifaire Meta par pays et catégorie de template) — le montant exact facturé est visible dans votre Gestionnaire WhatsApp Business.
         </p>
       </div>
     </div>

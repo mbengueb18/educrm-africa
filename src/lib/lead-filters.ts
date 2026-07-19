@@ -161,8 +161,12 @@ export async function buildLeadWhere(input: any, organizationId: string): Promis
     if (!rule.field) continue;
 
     var noValueOperators = ["exists", "not_exists", "has_message", "no_message", "has_inbound", "no_inbound", "today", "yesterday", "this_week", "this_month", "last_month"];
-    var needsValue = noValueOperators.indexOf(rule.operator) === -1
-      && ["has_message", "no_message", "has_inbound", "no_inbound"].indexOf(rule.field) === -1;
+    // Les 4 conditions d'activité autonomes portent le préfixe "activity:" dans le field
+    // (ex. "activity:no_message") : on compare donc sur le nom SANS préfixe, sinon
+    // l'exemption échoue et le filtre (valeur vide) est ignoré → compte faux.
+    var bareField = rule.field.indexOf("activity:") === 0 ? rule.field.slice(9) : rule.field;
+    var isStandaloneActivity = ["has_message", "no_message", "has_inbound", "no_inbound"].indexOf(bareField) !== -1;
+    var needsValue = noValueOperators.indexOf(rule.operator) === -1 && !isStandaloneActivity;
     if (needsValue && (rule.value === "" || rule.value === null || rule.value === undefined)) continue;
 
     // Famille déduite du préfixe du field

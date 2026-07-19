@@ -229,23 +229,19 @@ export async function GET(request: NextRequest) {
     });
     for (var wsc of waDueScheduled) {
       try {
-        if (!wsc.audienceId) {
+        var wscRules = (wsc.segmentRules as any) || [];
+        var wscHasRules = Array.isArray(wscRules) ? wscRules.length > 0 : (wscRules && Array.isArray(wscRules.rules) && wscRules.rules.length > 0);
+        if (!wsc.audienceId && !wscHasRules) {
           await prisma.whatsAppCampaign.update({
             where: { id: wsc.id },
             data: { status: "FAILED" },
           });
           continue;
         }
-        var waMembers = await prisma.audienceMember.findMany({
-          where: { audienceId: wsc.audienceId },
-          select: { leadId: true },
-        });
+        // Audience figée OU règles ad-hoc — même moteur que l'emailing
+        var wscQuery = await getCampaignLeadsQuery(wsc.organizationId, wsc.audienceId, wscRules);
         var waSchedLeads = await prisma.lead.findMany({
-          where: {
-            id: { in: waMembers.map(function(m) { return m.leadId; }) },
-            whatsapp: { not: null },
-            isConverted: false,
-          },
+          where: { ...wscQuery.where, whatsapp: { not: null } },
           select: { id: true, whatsapp: true },
         });
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { WhatsAppCampaignDetailClient } from "./detail-client";
+import { estimateWhatsAppCost, type WhatsAppPricingCategory } from "@/lib/whatsapp/pricing";
 
 export const metadata: Metadata = { title: "Détail campagne WhatsApp" };
 
@@ -32,5 +33,18 @@ export default async function WhatsAppCampaignDetailPage({ params }: { params: P
 
   if (!campaign) redirect("/whatsapp-campaigns");
 
-  return <WhatsAppCampaignDetailClient campaign={campaign as any} />;
+  // Dépense Meta estimée sur TOUS les destinataires délivrés/lus (la liste
+  // affichée est limitée à 500, le calcul du coût ne doit pas l'être).
+  const billedRecipients = await prisma.whatsAppCampaignRecipient.findMany({
+    where: { campaignId: id, status: { in: ["DELIVERED", "READ"] } },
+    select: { whatsappNumber: true },
+  });
+  const spentEstimate = billedRecipients.length > 0
+    ? estimateWhatsAppCost(
+        billedRecipients.map(r => r.whatsappNumber),
+        campaign.template.category as WhatsAppPricingCategory
+      )
+    : null;
+
+  return <WhatsAppCampaignDetailClient campaign={campaign as any} spentEstimate={spentEstimate} />;
 }
