@@ -50,6 +50,14 @@ export async function GET(request: NextRequest) {
 
     for (const task of dueTasks) {
       try {
+        // Claim ATOMIQUE avant envoi : si un tick concurrent a déjà pris cette tâche
+        // (reminderSentAt non nul), count = 0 → on passe. Élimine les doubles rappels.
+        const claimed = await prisma.task.updateMany({
+          where: { id: task.id, reminderSentAt: null },
+          data: { reminderSentAt: now },
+        });
+        if (claimed.count === 0) continue;
+
         const leadName = task.lead ? task.lead.firstName + " " + task.lead.lastName : null;
         const typeLabel = TYPE_LABELS[task.type] || task.type;
         const dueStr = formatDateTimeFr(task.dueDate);
@@ -98,11 +106,7 @@ export async function GET(request: NextRequest) {
           if (res.success) stats.emailed++;
         }
 
-        // 3) Marquer comme notifié (anti-doublon)
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { reminderSentAt: now },
-        });
+        // (reminderSentAt déjà posé par le claim atomique en tête de boucle)
         stats.processed++;
       } catch (err: any) {
         console.error("[Task reminder] " + task.id, err?.message);

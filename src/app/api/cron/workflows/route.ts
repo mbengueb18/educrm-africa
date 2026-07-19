@@ -91,75 +91,82 @@ async function checkAndTriggerWorkflow(wf: any): Promise<number> {
   const triggerType = wf.triggerType;
   const config = (wf.triggerConfig as any) || {};
 
-  // Find candidate leads not yet in execution for this workflow
-  let leads: any[] = [];
-
-  if (triggerType === "LEAD_CREATED") {
-    const since = new Date(Date.now() - 86400000);
-    leads = await prisma.lead.findMany({
-      where: {
-        organizationId: wf.organizationId,
-        createdAt: { gte: since },
-        ...(config.source ? { source: config.source as any } : {}),
-      },
-      include: LEAD_FILTER_INCLUDE,
-      take: 200,
-    });
-    // Apply advanced filters (même moteur que les audiences/campagnes)
-    if (config.filters) {
-      leads = leads.filter((l) => evaluateLeadFilters(l, config.filters));
-    }
-  } else if (triggerType === "NO_RESPONSE_DAYS") {
-    const days = config.days || 7;
-    const cutoff = new Date(Date.now() - days * 86400000);
-    leads = await prisma.lead.findMany({
-      where: {
-        organizationId: wf.organizationId,
-        isConverted: false,
-        createdAt: { lte: cutoff },
-        messages: { none: { direction: "INBOUND" } },
-      },
-      include: LEAD_FILTER_INCLUDE,
-      take: 50,
-    });
-    // Apply advanced filters (même moteur que les audiences/campagnes)
-    if (config.filters) {
-      leads = leads.filter((l) => evaluateLeadFilters(l, config.filters));
-    }
-  } else if (triggerType === "STAGE_CHANGED" || triggerType === "FORM_SUBMITTED") {
+  if (triggerType === "STAGE_CHANGED" || triggerType === "FORM_SUBMITTED") {
     // Déclencheurs événementiels (pipeline / soumission de formulaire) — pas dans le cron
     return 0;
   }
 
-  // Filter out leads with existing execution
+  // 1. Candidats en IDs seulement (pas d'include lourd à ce stade)
+  let candidateWhere: any = null;
+  let take = 200;
+
+  if (triggerType === "LEAD_CREATED") {
+    const since = new Date(Date.now() - 86400000);
+    candidateWhere = {
+      organizationId: wf.organizationId,
+      createdAt: { gte: since },
+      ...(config.source ? { source: config.source as any } : {}),
+    };
+  } else if (triggerType === "NO_RESPONSE_DAYS") {
+    const days = config.days || 7;
+    const cutoff = new Date(Date.now() - days * 86400000);
+    candidateWhere = {
+      organizationId: wf.organizationId,
+      isConverted: false,
+      createdAt: { lte: cutoff },
+      messages: { none: { direction: "INBOUND" } },
+    };
+    take = 50;
+  }
+
+  if (!candidateWhere) return 0;
+
+  const candidates = await prisma.lead.findMany({
+    where: candidateWhere,
+    select: { id: true },
+    take,
+  });
+  if (candidates.length === 0) return 0;
+
+  // 2. Exclure ceux qui ont déjà une exécution (1 requête indexée workflowId+leadId)
   const existingExecs = await prisma.workflowExecution.findMany({
     where: {
       workflowId: wf.id,
-      leadId: { in: leads.map((l) => l.id) },
+      leadId: { in: candidates.map((l) => l.id) },
     },
     select: { leadId: true },
   });
   const executedIds = new Set(existingExecs.map((e) => e.leadId));
-  const newLeads = leads.filter((l) => !executedIds.has(l.id));
+  let newLeadIds = candidates.map((l) => l.id).filter((id) => !executedIds.has(id));
+  if (newLeadIds.length === 0) return 0;
 
-  // Create executions
+  // 3. Charger l'include lourd UNIQUEMENT si des filtres avancés sont configurés,
+  //    et seulement pour les survivants (au lieu de 200 leads avec 5 relations à chaque tick)
+  if (config.filters && config.filters.rules && config.filters.rules.length > 0) {
+    const fullLeads = await prisma.lead.findMany({
+      where: { id: { in: newLeadIds } },
+      include: LEAD_FILTER_INCLUDE,
+    });
+    newLeadIds = fullLeads.filter((l) => evaluateLeadFilters(l, config.filters)).map((l) => l.id);
+    if (newLeadIds.length === 0) return 0;
+  }
+
+  // 4. Créer les exécutions en une requête
   const graph = wf.graph as any;
   const startNode = graph.nodes?.find((n: any) => n.type === "trigger");
 
-  for (const lead of newLeads) {
-    await prisma.workflowExecution.create({
-      data: {
-        workflowId: wf.id,
-        leadId: lead.id,
-        status: "RUNNING",
-        currentNode: startNode?.id || null,
-        context: { trigger: triggerType },
-        organizationId: wf.organizationId,
-      },
-    });
-  }
+  await prisma.workflowExecution.createMany({
+    data: newLeadIds.map((leadId) => ({
+      workflowId: wf.id,
+      leadId,
+      status: "RUNNING",
+      currentNode: startNode?.id || null,
+      context: { trigger: triggerType },
+      organizationId: wf.organizationId,
+    })),
+  });
 
-  return newLeads.length;
+  return newLeadIds.length;
 }
 
 // ─── Execute next step in a workflow execution ───

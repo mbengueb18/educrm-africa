@@ -4,7 +4,11 @@ import { sendEmail } from "@/lib/email";
 import { DEFAULT_SEQUENCE_STEPS, getStepsOrDefault, replaceVars, type SequenceStep } from "@/lib/sequence-defaults";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300s (plan Pro) : le run quotidien doit pouvoir traiter tout le backlog sans
+// perdre silencieusement les derniers steps comme avec 60s.
+export const maxDuration = 300;
+
+const TIME_BUDGET_MS = 280_000;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -12,7 +16,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const stats = { processed: 0, sent: 0, skipped: 0, errors: 0, autoLost: 0 };
+  const started = Date.now();
+  const stats = { processed: 0, sent: 0, skipped: 0, errors: 0, autoLost: 0, timedOut: false };
 
   try {
     const orgs = await prisma.organizationSequenceConfig.findMany({
@@ -21,16 +26,23 @@ export async function GET(request: NextRequest) {
     });
 
     for (const orgConfig of orgs) {
+      if (Date.now() - started > TIME_BUDGET_MS) { stats.timedOut = true; break; }
+
       const orgId = orgConfig.organizationId;
       const orgName = orgConfig.organization.name;
       const steps = getStepsOrDefault(orgConfig.steps).filter((s) => s.enabled);
 
       if (steps.length === 0) continue;
 
+      // Pré-filtre SQL : un lead ne peut avoir un step dû qu'à partir du plus petit daysAfter
+      const minDaysAfter = Math.min(...steps.map((s) => s.daysAfter));
+      const maxCreatedAt = new Date(Date.now() - minDaysAfter * 86400000);
+
       const leads = await prisma.lead.findMany({
         where: {
           organizationId: orgId,
           isConverted: false,
+          createdAt: { lte: maxCreatedAt },
           stage: {
             name: { not: { in: ["Perdu", "Admis", "Inscrit", "perdu", "admis", "inscrit"] } },
           },
@@ -41,7 +53,36 @@ export async function GET(request: NextRequest) {
         },
       });
 
+      if (leads.length === 0) continue;
+
+      // Pauses évaluées en 2 requêtes GROUPÉES pour toute l'org
+      // (au lieu de 2 findFirst PAR lead → ~7000 requêtes/run à 3500 leads)
+      const leadIds = leads.map((l) => l.id);
+
+      let lastInboundByLead = new Map<string, Date>();
+      if (orgConfig.pauseOnReply) {
+        const inbound = await prisma.message.groupBy({
+          by: ["leadId"],
+          where: { leadId: { in: leadIds }, direction: "INBOUND" },
+          _max: { sentAt: true },
+        });
+        lastInboundByLead = new Map(
+          inbound.filter((g) => g.leadId && g._max.sentAt).map((g) => [g.leadId as string, g._max.sentAt as Date])
+        );
+      }
+
+      let leadsWithFutureAppt = new Set<string>();
+      if (orgConfig.pauseOnAppointment) {
+        const appts = await prisma.appointment.findMany({
+          where: { leadId: { in: leadIds }, status: { in: ["SCHEDULED", "CONFIRMED"] }, startAt: { gte: new Date() } },
+          select: { leadId: true },
+          distinct: ["leadId"],
+        });
+        leadsWithFutureAppt = new Set(appts.map((a) => a.leadId).filter(Boolean) as string[]);
+      }
+
       for (const lead of leads) {
+        if (Date.now() - started > TIME_BUDGET_MS) { stats.timedOut = true; break; }
         stats.processed++;
 
         const daysSinceCreated = Math.floor(
@@ -49,17 +90,13 @@ export async function GET(request: NextRequest) {
         );
 
         if (orgConfig.pauseOnReply) {
-          const inboundMsg = await prisma.message.findFirst({
-            where: { leadId: lead.id, direction: "INBOUND", sentAt: { gt: lead.createdAt } },
-          });
-          if (inboundMsg) { stats.skipped++; continue; }
+          const lastInbound = lastInboundByLead.get(lead.id);
+          if (lastInbound && lastInbound > lead.createdAt) { stats.skipped++; continue; }
         }
 
-        if (orgConfig.pauseOnAppointment) {
-          const futureAppt = await prisma.appointment.findFirst({
-            where: { leadId: lead.id, status: { in: ["SCHEDULED", "CONFIRMED"] }, startAt: { gte: new Date() } },
-          });
-          if (futureAppt) { stats.skipped++; continue; }
+        if (orgConfig.pauseOnAppointment && leadsWithFutureAppt.has(lead.id)) {
+          stats.skipped++;
+          continue;
         }
 
         const executedSteps = new Set(lead.sequenceExecutions.map((e) => e.stepName));
@@ -143,6 +180,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    console.log(JSON.stringify({ scope: "cron/sequences", durationMs: Date.now() - started, ...stats }));
     return NextResponse.json({ success: true, stats });
   } catch (error: any) {
     console.error("[Cron Sequences] Fatal error", error);

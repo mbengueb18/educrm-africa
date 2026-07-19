@@ -107,8 +107,7 @@ export function WhatsAppCampaignsClient({ campaigns }: Props) {
       try {
         const result = await sendWhatsAppCampaign(campaign.id);
         toast.success(
-          `${result.sentCount} message${result.sentCount > 1 ? "s" : ""} envoyé${result.sentCount > 1 ? "s" : ""}` +
-            (result.failedCount > 0 ? ` · ${result.failedCount} échoué${result.failedCount > 1 ? "s" : ""}` : "")
+          `Campagne lancée : ${result.queued} message${result.queued > 1 ? "s" : ""} en file d'envoi (envoi en arrière-plan)`
         );
         router.refresh();
       } catch (e: any) {

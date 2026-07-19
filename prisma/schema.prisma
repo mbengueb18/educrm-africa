@@ -1137,6 +1137,7 @@ model Task {
   @@index([leadId])
   @@index([status])
   @@index([dueDate])
+  @@index([reminderSentAt, reminderAt])
   @@map("tasks")
 }
 
@@ -1214,7 +1215,8 @@ model EmailCampaignRecipient {
   campaignId     String
   leadId         String
   email          String
-  status         String    @default("PENDING") // PENDING, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED
+  status         String    @default("PENDING") // PENDING, PROCESSING, SENT, DELIVERED, OPENED, CLICKED, BOUNCED, FAILED
+  processingAt   DateTime? // horodatage du claim par le cron (récupération des claims orphelins)
   sentAt         DateTime?
   deliveredAt    DateTime?
   openedAt       DateTime?
@@ -1228,6 +1230,7 @@ model EmailCampaignRecipient {
   campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
+  @@index([campaignId, status])
   @@index([brevoMessageId])
   @@map("email_campaign_recipients")
 }
@@ -1751,6 +1754,7 @@ enum WhatsAppCampaignStatus {
 
 enum WhatsAppRecipientStatus {
   PENDING
+  PROCESSING // claimé par le cron d'envoi (anti double-envoi)
   SENT
   DELIVERED
   READ
@@ -1853,7 +1857,8 @@ model WhatsAppCampaignRecipient {
 
   whatsappNumber String
 
-  status WhatsAppRecipientStatus @default(PENDING)
+  status       WhatsAppRecipientStatus @default(PENDING)
+  processingAt DateTime? // horodatage du claim par le cron (récupération des claims orphelins)
 
   metaMessageId String? @unique
 

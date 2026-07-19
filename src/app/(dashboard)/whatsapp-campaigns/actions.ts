@@ -263,8 +263,6 @@ export async function getAvailableAudiencesForWhatsAppCampaign() {
 }
 
 // ─── Send WhatsApp campaign ───
-import { sendTemplateMessage, formatPhoneForMeta, resolveVariablesFromLead } from "@/lib/whatsapp/send";
-
 export async function sendWhatsAppCampaign(campaignId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -341,80 +339,14 @@ export async function sendWhatsAppCampaign(campaignId: string) {
     })),
   });
 
-  // Récupérer les recipients créés pour pouvoir les mettre à jour
-  const recipients = await prisma.whatsAppCampaignRecipient.findMany({
-    where: { campaignId: campaignId },
-  });
-
-  // Mapping variables du template
-  const variableMapping = (campaign.template.variableMapping as Record<string, string> | null) || {};
-
-  let sentCount = 0;
-  let failedCount = 0;
-
-  // Boucle d'envoi avec rate limit (250ms entre chaque message pour rester sous les limites Meta)
-  for (const recipient of recipients) {
-    const lead = leads.find((l) => l.id === recipient.leadId);
-    if (!lead) continue;
-
-    // Résoudre les variables pour ce lead
-    const bodyVariables = resolveVariablesFromLead(campaign.template.bodyText, variableMapping, lead);
-
-    // Envoyer via Meta
-    const result = await sendTemplateMessage(session.user.organizationId, {
-      to: lead.whatsapp!,
-      templateName: campaign.template.metaName,
-      templateLanguage: campaign.template.language,
-      bodyVariables: bodyVariables,
-    });
-
-    if (result.success) {
-      await prisma.whatsAppCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: "SENT",
-          sentAt: new Date(),
-          metaMessageId: result.metaMessageId || null,
-          variableValues: bodyVariables.reduce((acc: any, val, idx) => {
-            acc[(idx + 1).toString()] = val;
-            return acc;
-          }, {}),
-        },
-      });
-      sentCount++;
-    } else {
-      await prisma.whatsAppCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: "FAILED",
-          errorCode: result.errorCode || "UNKNOWN",
-          errorMessage: result.errorMessage || "Erreur inconnue",
-        },
-      });
-      failedCount++;
-    }
-
-    // Rate limit Meta : ~80 msg/seconde max, on reste sage avec 250ms
-    await new Promise((r) => setTimeout(r, 250));
-  }
-
-  // Mettre à jour les totaux finaux
-  await prisma.whatsAppCampaign.update({
-    where: { id: campaignId },
-    data: {
-      status: "SENT",
-      completedAt: new Date(),
-      sentCount: sentCount,
-      failedCount: failedCount,
-    },
-  });
-
+  // L'envoi réel se fait par lots via le cron /api/cron/campaigns (comme les campagnes
+  // email) : la server action retourne immédiatement — plus de timeout au-delà de
+  // ~50 destinataires, et reprise automatique si un tick échoue.
   revalidatePath("/whatsapp-campaigns");
   revalidatePath(`/whatsapp-campaigns/${campaignId}`);
 
   return {
-    sentCount,
-    failedCount,
+    queued: leads.length,
     total: leads.length,
   };
 }
