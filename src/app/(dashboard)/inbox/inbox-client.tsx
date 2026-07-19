@@ -96,6 +96,7 @@ function getMessagePreview(content: string): string {
 
 export function InboxClient({ conversations: initialConversations, users }: InboxClientProps) {
   const [conversations, setConversations] = useState(initialConversations);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
   const [userFilter, setUserFilter] = useState<string>("");
@@ -106,6 +107,13 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
   useEffect(() => {
     setConversations(initialConversations);
   }, [initialConversations]);
+
+  // Debounce : la recherche scanne le contenu de TOUS les messages — inutile
+  // de relancer le filtre à chaque frappe.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const filtered = useMemo(() => conversations.filter((c) => {
     if (search) {
@@ -177,8 +185,8 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
               type="text"
               placeholder="Rechercher (nom, email, mot-clé du message)..."
               className="input pl-9 text-sm py-2 w-full"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           <div className="relative sm:w-56 shrink-0">

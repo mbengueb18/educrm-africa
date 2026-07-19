@@ -6,7 +6,7 @@ import {
   Plus, Pin, PinOff, Save, MoreHorizontal, Pencil, Trash2,
   Check, X, Loader2, Star, Columns3,
 } from "lucide-react";
-import { getCustomFields } from "@/lib/custom-fields";
+import { type CustomFieldConfig } from "@/lib/custom-fields";
 import { ALL_COLUMNS, DEFAULT_COLUMNS } from "./lead-list-view";
 import type { LeadViewDTO } from "@/app/(dashboard)/pipeline/view-actions";
 
@@ -15,6 +15,7 @@ interface ProspectViewsBarProps {
   activeViewId: string | null;
   isDirty: boolean;
   currentColumns: string[];
+  customFields?: CustomFieldConfig[];
   loading?: boolean;
   onSelectView: (id: string | null) => void;
   onCreateView: (payload: { name: string; columns: string[]; isPinned: boolean }) => Promise<void> | void;
@@ -29,6 +30,7 @@ export function ProspectViewsBar({
   activeViewId,
   isDirty,
   currentColumns,
+  customFields = [],
   loading,
   onSelectView,
   onCreateView,
@@ -189,6 +191,7 @@ export function ProspectViewsBar({
       {createOpen && (
         <CreateViewModal
           seedColumns={currentColumns.length ? currentColumns : DEFAULT_COLUMNS}
+          customFields={customFields}
           onClose={() => setCreateOpen(false)}
           onCreate={async (payload) => {
             await onCreateView(payload);
@@ -202,10 +205,12 @@ export function ProspectViewsBar({
 
 function CreateViewModal({
   seedColumns,
+  customFields,
   onClose,
   onCreate,
 }: {
   seedColumns: string[];
+  customFields: CustomFieldConfig[];
   onClose: () => void;
   onCreate: (payload: { name: string; columns: string[]; isPinned: boolean }) => Promise<void> | void;
 }) {
@@ -213,19 +218,16 @@ function CreateViewModal({
   const [isPinned, setIsPinned] = useState(false);
   const [columns, setColumns] = useState<string[]>(seedColumns);
   const [saving, setSaving] = useState(false);
-  const [customCols, setCustomCols] = useState<{ key: string; label: string; group: string }[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     nameRef.current?.focus();
-    getCustomFields()
-      .then((cfs) =>
-        setCustomCols(
-          cfs.filter((cf) => cf.showInList).map((cf) => ({ key: "custom_" + cf.key, label: cf.label, group: "Personnalisés" }))
-        )
-      )
-      .catch(() => {});
   }, []);
+
+  // Colonnes custom depuis la prop (chargée côté serveur) — plus de fetch au montage
+  const customCols = customFields
+    .filter((cf) => cf.showInList)
+    .map((cf) => ({ key: "custom_" + cf.key, label: cf.label, group: "Personnalisés" }));
 
   const allColumns = [...ALL_COLUMNS, ...customCols];
 

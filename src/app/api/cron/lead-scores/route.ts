@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { calculateLeadScores } from "@/app/(dashboard)/pipeline/actions";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300s (plan Pro) : la boucle par org ne doit pas laisser les dernières orgs
+// systématiquement non recalculées à cause d'un timeout à 60s.
+export const maxDuration = 300;
 
 // Recalcule quotidiennement le score de tous les leads non convertis, par organisation.
 // Sert de filet de sécurité (backfill des leads à 0) et garde les scores à jour

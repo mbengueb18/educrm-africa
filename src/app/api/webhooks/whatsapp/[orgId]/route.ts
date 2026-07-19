@@ -294,41 +294,28 @@ async function processMessageStatus(orgId: string, status: any) {
     data: updateData,
   });
 
-  // Recalculer les stats agrégées de la campagne
-  await refreshCampaignStats(recipient.campaign.id);
-
-  console.log(`[WA Webhook] Status ${statusType} updated for recipient ${recipient.id}`);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Recalcul des stats d'une campagne à partir des recipients
-// ═══════════════════════════════════════════════════════════════
-
-async function refreshCampaignStats(campaignId: string) {
-  const recipients = await prisma.whatsAppCampaignRecipient.findMany({
-    where: { campaignId: campaignId },
-    select: { status: true },
-  });
-
-  let sentCount = 0;
-  let deliveredCount = 0;
-  let readCount = 0;
-  let failedCount = 0;
-
-  for (const r of recipients) {
-    if (r.status === "SENT" || r.status === "DELIVERED" || r.status === "READ") sentCount++;
-    if (r.status === "DELIVERED" || r.status === "READ") deliveredCount++;
-    if (r.status === "READ") readCount++;
-    if (r.status === "FAILED") failedCount++;
+  // Stats de campagne par INCREMENTS atomiques sur première transition uniquement.
+  // (Avant : rechargement de TOUS les recipients à CHAQUE événement Meta —
+  // O(N²) par campagne, des millions de lignes lues sur une campagne de 1000.)
+  const campaignIncrements: any = {};
+  if (statusType === "delivered" && !recipient.deliveredAt && recipient.status !== "FAILED") {
+    campaignIncrements.deliveredCount = { increment: 1 };
+  } else if (statusType === "read" && !recipient.readAt && recipient.status !== "FAILED") {
+    campaignIncrements.readCount = { increment: 1 };
+    // read implique delivered : compter la livraison si jamais reçue
+    if (!recipient.deliveredAt) campaignIncrements.deliveredCount = { increment: 1 };
+  } else if (statusType === "failed" && recipient.status !== "FAILED") {
+    campaignIncrements.failedCount = { increment: 1 };
+    // Le recipient était compté comme envoyé (metaMessageId ⇒ envoi parti) → on le retire
+    campaignIncrements.sentCount = { decrement: 1 };
   }
 
-  await prisma.whatsAppCampaign.update({
-    where: { id: campaignId },
-    data: {
-      sentCount,
-      deliveredCount,
-      readCount,
-      failedCount,
-    },
-  });
+  if (Object.keys(campaignIncrements).length > 0) {
+    await prisma.whatsAppCampaign.update({
+      where: { id: recipient.campaign.id },
+      data: campaignIncrements,
+    });
+  }
+
+  console.log(`[WA Webhook] Status ${statusType} updated for recipient ${recipient.id}`);
 }

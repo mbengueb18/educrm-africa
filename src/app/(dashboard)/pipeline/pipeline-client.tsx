@@ -1,9 +1,24 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { KanbanBoard } from "@/components/pipeline/kanban-board";
+import dynamic from "next/dynamic";
 import { LeadListView, DEFAULT_LIST_VIEW_STATE, DEFAULT_COLUMNS, type ListViewState } from "@/components/pipeline/lead-list-view";
+
+// Lazy : le Kanban (+ lib drag-and-drop) et les modales CSV ne sont chargés qu'à l'usage
+// — la vue par défaut est la liste, inutile de les embarquer dans le First Load.
+const KanbanBoard = dynamic(
+  () => import("@/components/pipeline/kanban-board").then((m) => m.KanbanBoard),
+  { ssr: false, loading: () => <div className="py-16 text-center text-sm text-gray-400">Chargement du kanban…</div> }
+);
+const ImportCSVModal = dynamic(
+  () => import("@/components/pipeline/import-csv-modal").then((m) => m.ImportCSVModal),
+  { ssr: false }
+);
+const ExportCSVModal = dynamic(
+  () => import("@/components/pipeline/export-csv-modal").then((m) => m.ExportCSVModal),
+  { ssr: false }
+);
 import { ProspectViewsBar } from "@/components/pipeline/prospect-views-bar";
 import {
   createLeadView, updateLeadView, deleteLeadView, togglePinLeadView,
@@ -11,7 +26,6 @@ import {
 } from "@/app/(dashboard)/pipeline/view-actions";
 import { NewLeadModal } from "@/components/pipeline/new-lead-modal";
 import { LeadSlideOver } from "@/components/pipeline/lead-slide-over";
-import { ImportCSVModal } from "@/components/pipeline/import-csv-modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
 import {
@@ -20,7 +34,6 @@ import {
   MoreHorizontal,  GitBranch, ChevronDown, SlidersHorizontal, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ExportCSVModal } from "@/components/pipeline/export-csv-modal";
 import { detectDuplicates, mergeDuplicateLeads, recalculateOrgLeadScores } from "@/app/(dashboard)/pipeline/actions";
 import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
 import { evaluateLeadAgainstGroup } from "@/lib/lead-filters";
@@ -121,8 +134,13 @@ export function PipelineClient({
   };
 
   var activeView = views.find(function(v) { return v.id === activeViewId; }) || null;
-  var currentSignature = viewSignature(buildCurrentFilters(), listState.visibleColumns, listState.sortKey, listState.sortDir);
-  var isViewDirty = activeView ? currentSignature !== viewSignature(activeView.filters, activeView.columns, activeView.sortKey, activeView.sortDir) : false;
+  // Memoïsé : évite 2 JSON.stringify de l'état complet à chaque render
+  var isViewDirty = useMemo(function() {
+    if (!activeView) return false;
+    var currentSignature = viewSignature(buildCurrentFilters(), listState.visibleColumns, listState.sortKey, listState.sortDir);
+    return currentSignature !== viewSignature(activeView.filters, activeView.columns, activeView.sortKey, activeView.sortDir);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, listState, filterMine, filterToQualify, advancedFilter]);
 
   var applyViewState = function(v: LeadViewDTO) {
     var f = v.filters || {};
@@ -264,18 +282,48 @@ export function PipelineClient({
     setMerging(false);
   };
 
-   // Filter leads
-  var filteredLeads = leads.filter(function(l: any) {
-    if (filterMine && l.assignedToId !== currentUserId) return false;
-    if (filterToQualify && l.programId) return false;
-    if (advancedFilter.rules.length > 0 && !evaluateLeadAgainstGroup(l, advancedFilter)) return false;
-    return true;
-  });
+  // Filter leads — memoïsé : le filtre avancé peut évaluer des milliers de leads,
+  // inutile de le refaire à chaque frappe dans la recherche ou autre re-render.
+  var filteredLeads = useMemo(function() {
+    return leads.filter(function(l: any) {
+      if (filterMine && l.assignedToId !== currentUserId) return false;
+      if (filterToQualify && l.programId) return false;
+      if (advancedFilter.rules.length > 0 && !evaluateLeadAgainstGroup(l, advancedFilter)) return false;
+      return true;
+    });
+  }, [leads, filterMine, filterToQualify, advancedFilter, currentUserId]);
 
   // Compteur leads à qualifier (sans filière)
-  var leadsToQualifyCount = leads.filter(function(l: any) { 
-    return !l.programId; 
-  }).length;
+  var leadsToQualifyCount = useMemo(function() {
+    return leads.filter(function(l: any) { return !l.programId; }).length;
+  }, [leads]);
+
+  // Tableaux dérivés stables pour les composants enfants (évite de casser leurs memo)
+  var stagesLite = useMemo(function() {
+    return stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; });
+  }, [stages]);
+  var usersLite = useMemo(function() {
+    return users.map(function(u: any) { return { id: u.id, name: u.name }; });
+  }, [users]);
+
+  // Stats « Mes performances » — memoïsées (5 filters + 1 reduce sur tous les leads)
+  var myPerfStats = useMemo(function() {
+    var myLeads = leads.filter(function(l: any) { return l.assignedToId === currentUserId; });
+    var totalMine = myLeads.length;
+    var urgentMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 7; }).length;
+    var warningMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 3 && l.daysSinceContact < 7; }).length;
+    var recentMine = myLeads.filter(function(l: any) { return l.daysSinceContact < 3; }).length;
+    var avgScore = totalMine > 0 ? Math.round(myLeads.reduce(function(sum: number, l: any) { return sum + l.score; }, 0) / totalMine) : 0;
+    var highScoreMine = myLeads.filter(function(l: any) { return l.score >= 60; }).length;
+    return [
+      { label: "Mes leads", value: String(totalMine), color: "text-brand-700" },
+      { label: "À jour (< 3j)", value: String(recentMine), color: "text-emerald-600" },
+      { label: "À relancer (3-7j)", value: String(warningMine), color: "text-amber-600" },
+      { label: "Urgents (> 7j)", value: String(urgentMine), color: "text-red-600" },
+      { label: "Score moyen", value: String(avgScore), color: "text-purple-600" },
+      { label: "Score élevé (60+)", value: String(highScoreMine), color: "text-blue-600" },
+    ];
+  }, [leads, currentUserId]);
 
   var router = useRouter();
 
@@ -561,6 +609,7 @@ export function PipelineClient({
         activeViewId={activeViewId}
         isDirty={isViewDirty}
         currentColumns={listState.visibleColumns}
+        customFields={customFields || []}
         onSelectView={handleSelectView}
         onCreateView={handleCreateView}
         onSaveActive={handleSaveActive}
@@ -577,31 +626,14 @@ export function PipelineClient({
             <span className="text-[10px] text-gray-400">Période en cours</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-            {(function() {
-              var myLeads = leads.filter(function(l: any) { return l.assignedToId === currentUserId; });
-              var totalMine = myLeads.length;
-              var urgentMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 7; }).length;
-              var warningMine = myLeads.filter(function(l: any) { return l.daysSinceContact >= 3 && l.daysSinceContact < 7; }).length;
-              var recentMine = myLeads.filter(function(l: any) { return l.daysSinceContact < 3; }).length;
-              var avgScore = totalMine > 0 ? Math.round(myLeads.reduce(function(sum: number, l: any) { return sum + l.score; }, 0) / totalMine) : 0;
-              var highScoreMine = myLeads.filter(function(l: any) { return l.score >= 60; }).length;
-
-              return [
-                { label: "Mes leads", value: String(totalMine), color: "text-brand-700" },
-                { label: "À jour (< 3j)", value: String(recentMine), color: "text-emerald-600" },
-                { label: "À relancer (3-7j)", value: String(warningMine), color: "text-amber-600" },
-                { label: "Urgents (> 7j)", value: String(urgentMine), color: "text-red-600" },
-                { label: "Score moyen", value: String(avgScore), color: "text-purple-600" },
-                { label: "Score élevé (60+)", value: String(highScoreMine), color: "text-blue-600" },
-              ].map(function(stat) {
-                return (
-                  <div key={stat.label} className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
-                    <div className={cn("text-lg font-bold", stat.color)}>{stat.value}</div>
-                    <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{stat.label}</div>
-                  </div>
-                );
-              });
-            })()}
+            {myPerfStats.map(function(stat) {
+              return (
+                <div key={stat.label} className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
+                  <div className={cn("text-lg font-bold", stat.color)}>{stat.value}</div>
+                  <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{stat.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -672,7 +704,7 @@ export function PipelineClient({
         <KanbanBoard
           stages={stages}
           leads={filteredLeads}
-          users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+          users={usersLite}
           programs={programs}
           campuses={campuses}
           onAddLead={function() { setModalOpen(true); }}
@@ -681,8 +713,8 @@ export function PipelineClient({
       ) : (
         <LeadListView
           leads={filteredLeads}
-          stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
-          users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+          stages={stagesLite}
+          users={usersLite}
           programs={programs}
           campuses={campuses}
           onOpenLead={function(id) { setSelectedLeadId(id); }}
@@ -690,6 +722,7 @@ export function PipelineClient({
           currentUserRole={currentUserRole}
           viewState={listState}
           onViewChange={onViewChange}
+          customFieldsConfig={customFields || []}
         />
       )}
 
@@ -705,19 +738,23 @@ export function PipelineClient({
       <LeadSlideOver
         leadId={selectedLeadId}
         onClose={function() { setSelectedLeadId(null); }}
-        stages={stages.map(function(s: any) { return { id: s.id, name: s.name, color: s.color }; })}
-        users={users.map(function(u: any) { return { id: u.id, name: u.name }; })}
+        stages={stagesLite}
+        users={usersLite}
         programs={programs}
         campuses={campuses}
         currentUserRole={currentUserRole}
+        customFields={customFields || []}
       />
 
-      <ImportCSVModal
-        open={importOpen}
-        onClose={handleImportClose}
-        programs={programs}
-        crmFields={crmFields}
-      />
+      {/* Modales CSV : rendues seulement quand ouvertes → leur chunk JS n'est chargé qu'à l'usage */}
+      {importOpen && (
+        <ImportCSVModal
+          open={importOpen}
+          onClose={handleImportClose}
+          programs={programs}
+          crmFields={crmFields}
+        />
+      )}
 
       {/* Duplicates modal */}
       {duplicatesOpen && (
@@ -790,11 +827,13 @@ export function PipelineClient({
         </>
       )}
       
-      <ExportCSVModal
-        open={exportOpen}
-        onClose={function() { setExportOpen(false); }}
-        crmFields={crmFields}
-      />
+      {exportOpen && (
+        <ExportCSVModal
+          open={exportOpen}
+          onClose={function() { setExportOpen(false); }}
+          crmFields={crmFields}
+        />
+      )}
     </div>
   );
 }

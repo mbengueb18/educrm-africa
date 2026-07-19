@@ -17,7 +17,12 @@ import {
   PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle, Briefcase,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
-import { ComposeEmail } from "@/components/messaging/compose-email";
+import dynamic from "next/dynamic";
+// Lazy : l'éditeur email complet ne charge qu'au clic sur "Email" (déjà rendu conditionnellement)
+const ComposeEmail = dynamic(
+  () => import("@/components/messaging/compose-email").then((m) => m.ComposeEmail),
+  { ssr: false }
+);
 import { ConvertLeadModal } from "@/components/pipeline/convert-lead-modal";
 import Link from "next/link";
 import { stripHtml } from "@/lib/email-blocks";
@@ -36,6 +41,7 @@ interface LeadSlideOverProps {
   programs: { id: string; name: string }[];
   campuses: { id: string; name: string; city: string }[];
   currentUserRole?: string;
+  customFields?: CustomFieldConfig[];
 }
 
 var sourceLabels: Record<string, string> = {
@@ -65,7 +71,7 @@ var activityIcons: Record<string, typeof Activity> = {
   DOCUMENT_UPLOADED: FileText,
 };
 
-export function LeadSlideOver({ leadId, onClose, stages, users, programs, campuses, currentUserRole }: LeadSlideOverProps) {
+export function LeadSlideOver({ leadId, onClose, stages, users, programs, campuses, currentUserRole, customFields: customFieldsProp }: LeadSlideOverProps) {
   var [lead, setLead] = useState<LeadDetail | null>(null);
   var [loading, setLoading] = useState(false);
   var [activeTab, setActiveTab] = useState<"info" | "history" | "notes">("info");
@@ -93,13 +99,22 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
       .finally(function() { setLoading(false); });
   }, [leadId]);
 
-  var [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
+  // Config custom fields : passée en prop par la page (déjà chargée côté serveur) ;
+  // fetch en repli uniquement si le composant est utilisé sans la prop.
+  var [customFieldsFetched, setCustomFieldsFetched] = useState<CustomFieldConfig[]>([]);
+  var customFieldsConfig = customFieldsProp || customFieldsFetched;
   useEffect(function() {
-    getCustomFields().then(setCustomFieldsConfig).catch(function() {});
-  }, []);
+    if (customFieldsProp || !leadId) return;
+    getCustomFields().then(setCustomFieldsFetched).catch(function() {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
 
-    // ✅ NOUVEAU : charger les infos plan au mount
+  // Infos plan : chargées à la PREMIÈRE ouverture d'un lead seulement
+  // (avant : au montage → 1 server action inutile à chaque affichage du pipeline)
+  var [planLoaded, setPlanLoaded] = useState(false);
   useEffect(function() {
+    if (!leadId || planLoaded) return;
+    setPlanLoaded(true);
     getCurrentPlanInfo().then(function(info) {
       if (info) {
         setCanUseWhatsAppAPI(info.features.WHATSAPP_BUSINESS_API);
@@ -108,7 +123,8 @@ export function LeadSlideOver({ leadId, onClose, stages, users, programs, campus
     }).catch(function() {
       // Silent fail, on garde les valeurs par défaut
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId, planLoaded]);
 
   useEffect(function() {
     var handler = function(e: KeyboardEvent) {

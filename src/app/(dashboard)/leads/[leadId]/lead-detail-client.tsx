@@ -18,7 +18,7 @@ import { ComposeEmail } from "@/components/messaging/compose-email";
 import { createTask, updateTask, deleteTask } from "@/app/(dashboard)/tasks/actions";
 import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
 import { updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
-import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
+import { type CustomFieldConfig } from "@/lib/custom-fields";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { startCallTracking } from "@/lib/call-tracking";
@@ -44,6 +44,7 @@ interface LeadDetailClientProps {
   canUseWhatsAppAPI: boolean;
   currentPlanName: string;
   stages: { id: string; name: string; color: string }[];
+  customFields?: CustomFieldConfig[];
 }
 
 const TABS = [
@@ -63,7 +64,8 @@ export function LeadDetailClient({
   initialTab,
   canUseWhatsAppAPI,
   currentPlanName,
-  stages, }: LeadDetailClientProps) {
+  stages,
+  customFields = [] }: LeadDetailClientProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -187,7 +189,7 @@ export function LeadDetailClient({
       </div>
 
       {/* Tab content */}
-      {activeTab === "overview" && <OverviewTab lead={lead} />}
+      {activeTab === "overview" && <OverviewTab lead={lead} customFieldsConfig={customFields} />}
       {activeTab === "notes" && <NotesTab lead={lead} />}
       {activeTab === "ai" && <AIAssistantTab lead={lead} />}
       {activeTab === "journey" && <JourneyTab lead={lead} />}
@@ -265,12 +267,7 @@ function StageSelector({ leadId, currentStage, stages }: {
   );
 }
 
-function OverviewTab({ lead }: { lead: any }) {
-  const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
-  useEffect(() => {
-    getCustomFields().then(setCustomFieldsConfig).catch(() => {});
-  }, []);
-
+function OverviewTab({ lead, customFieldsConfig = [] }: { lead: any; customFieldsConfig?: CustomFieldConfig[] }) {
   // Informations complémentaires : champs custom (hors clés techniques préfixées par "_")
   const customFields = (lead.customFields as Record<string, any>) || {};
   const mappedEntries: { label: string; value: string }[] = [];

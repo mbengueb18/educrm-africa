@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
+import { getCustomFields } from "@/lib/custom-fields";
 import { LeadDetailClient } from "./lead-detail-client";
 
 export const metadata: Metadata = {
@@ -39,13 +40,16 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
   const currentPlanName = planInfo?.planName ?? "Essentiel";
 
   // Étapes du pipeline du lead (pour changer le statut depuis la fiche)
-  const stages = await prisma.pipelineStage.findMany({
-    where: lead.pipelineId
-      ? { pipelineId: lead.pipelineId, organizationId: session.user.organizationId }
-      : { organizationId: session.user.organizationId },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true, color: true },
-  });
+  const [stages, customFields] = await Promise.all([
+    prisma.pipelineStage.findMany({
+      where: lead.pipelineId
+        ? { pipelineId: lead.pipelineId, organizationId: session.user.organizationId }
+        : { organizationId: session.user.organizationId },
+      orderBy: { order: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+    getCustomFields(),
+  ]);
 
   return (
     <LeadDetailClient
@@ -54,6 +58,7 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
       canUseWhatsAppAPI={canUseWhatsAppAPI}
       currentPlanName={currentPlanName}
       stages={stages}
+      customFields={customFields}
     />
   );
 }

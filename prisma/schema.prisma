@@ -9,8 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooler (6543, pgbouncer) — runtime serverless
+  directUrl = env("DIRECT_URL") // connexion directe (5432) — migrations/db push uniquement
 }
 
 // ─── MULTI-TENANT ROOT ───
@@ -487,6 +488,7 @@ model Lead {
   @@index([assignedToId])
   @@index([organizationId, createdAt])
   @@index([organizationId, lastContactAt])
+  @@index([organizationId, phone]) // matching des webhooks WhatsApp/inbound sans scan
   @@map("leads")
 }
 
@@ -875,6 +877,8 @@ model Message {
   @@index([channel])
   @@index([sentAt])
   @@index([externalId]) // NEW: anti-doublon webhook
+  @@index([organizationId, sentAt]) // inbox : dernier message par lead, tri org
+  @@index([leadId, sentAt]) // fil de conversation d'un lead
   @@map("messages")
 }
 
@@ -1232,6 +1236,7 @@ model EmailCampaignRecipient {
   @@index([campaignId])
   @@index([campaignId, status])
   @@index([brevoMessageId])
+  @@index([leadId]) // purge/fusion de leads sans scan de la table
   @@map("email_campaign_recipients")
 }
 

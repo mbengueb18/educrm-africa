@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { cn, formatDate, formatRelative, formatPhone, getInitials, getScoreBg } from "@/lib/utils";
-import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
+import { type CustomFieldConfig } from "@/lib/custom-fields";
 import {
   Search, ChevronDown, ChevronUp, ChevronRight,
   Phone, MessageCircle, Mail, X,
   Download, Columns3, Check, Send, Trash2, Loader2, UserPlus,
   ArrowUpDown,
 } from "lucide-react";
-import { BulkEmailModal } from "@/components/messaging/bulk-email-modal";
-import { deleteLeads, assignLead } from "@/app/(dashboard)/pipeline/actions";
+import dynamic from "next/dynamic";
+// Lazy : l'éditeur email (~1300 lignes) ne charge qu'au clic sur "Envoyer un email"
+const BulkEmailModal = dynamic(
+  () => import("@/components/messaging/bulk-email-modal").then((m) => m.BulkEmailModal),
+  { ssr: false }
+);
+import { deleteLeads, assignLeadsBulk } from "@/app/(dashboard)/pipeline/actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -54,6 +59,7 @@ interface LeadListViewProps {
   currentUserRole?: string;
   viewState: ListViewState;
   onViewChange: (patch: Partial<ListViewState>) => void;
+  customFieldsConfig?: CustomFieldConfig[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -132,7 +138,7 @@ const MOBILE_SORT_OPTIONS: { value: string; dir: "asc" | "desc"; label: string }
   { value: "lastContact", dir: "desc", label: "Dernier contact" },
 ];
 
-export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, onAddLead, currentUserRole, viewState, onViewChange }: LeadListViewProps) {
+export function LeadListView({ leads, stages, users, programs = [], campuses = [], onOpenLead, onAddLead, currentUserRole, viewState, onViewChange, customFieldsConfig = [] }: LeadListViewProps) {
   // État "vue" contrôlé par le parent (persisté dans la vue enregistrée).
   const { search, sortKey, sortDir, filterStage, filterSource, filterAssigned, filterProgram, filterCampus, visibleColumns } = viewState;
   const setSearch = (v: string) => onViewChange({ search: v });
@@ -140,7 +146,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   const setSortDir = (v: "asc" | "desc") => onViewChange({ sortDir: v });
 
   const [showColumns, setShowColumns] = useState(false);
-  const [customFieldsConfig, setCustomFieldsConfig] = useState<CustomFieldConfig[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -150,10 +155,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   var [showAssignMenu, setShowAssignMenu] = useState(false);
   var router = useRouter();
   var canAssign = currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
-
-  useEffect(() => {
-    getCustomFields().then(setCustomFieldsConfig).catch(() => {});
-  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -273,17 +274,15 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
     setAssigning(true);
     setShowAssignMenu(false);
     try {
-      var ids = Array.from(selectedLeads);
-      for (var i = 0; i < ids.length; i++) {
-        var res = await assignLead(ids[i], userId);
-        if (res && !res.success) {
-          toast.error(res.error || "Erreur lors de l'assignation");
-          setAssigning(false);
-          return;
-        }
+      // 1 seule requête serveur (updateMany) au lieu d'un aller-retour par lead
+      var res = await assignLeadsBulk(Array.from(selectedLeads), userId);
+      if (!res.success) {
+        toast.error(res.error || "Erreur lors de l'assignation");
+        setAssigning(false);
+        return;
       }
       var userName = userId ? users.find(function(u) { return u.id === userId; })?.name || "utilisateur" : "personne";
-      toast.success(ids.length + " lead(s) assigné(s) a " + userName);
+      toast.success((res.count || 0) + " lead(s) assigné(s) à " + userName);
       setSelectedLeads(new Set());
       router.refresh();
     } catch (err: any) {
@@ -780,16 +779,18 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
         </div>
       )}
 
-      <BulkEmailModal
-        open={bulkEmailOpen}
-        onClose={() => { setBulkEmailOpen(false); setSelectedLeads(new Set()); }}
-        selectedLeads={leads.filter((l) => selectedLeads.has(l.id)).map((l) => ({
-          id: l.id,
-          firstName: l.firstName,
-          lastName: l.lastName,
-          email: l.email,
-        }))}
-      />
+      {bulkEmailOpen && (
+        <BulkEmailModal
+          open={bulkEmailOpen}
+          onClose={() => { setBulkEmailOpen(false); setSelectedLeads(new Set()); }}
+          selectedLeads={leads.filter((l) => selectedLeads.has(l.id)).map((l) => ({
+            id: l.id,
+            firstName: l.firstName,
+            lastName: l.lastName,
+            email: l.email,
+          }))}
+        />
+      )}
     </div>
   );
 }

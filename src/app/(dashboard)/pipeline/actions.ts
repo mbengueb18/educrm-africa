@@ -362,6 +362,55 @@ export async function assignLead(leadId: string, userId: string | null): Promise
   return { success: true };
 }
 
+// ─── Assign leads in bulk (1 requête au lieu de N allers-retours client) ───
+export async function assignLeadsBulk(
+  leadIds: string[],
+  userId: string | null
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  if (!canAssignLeads(session.user.role)) {
+    return { success: false, error: "Seul un administrateur peut assigner les leads" };
+  }
+  if (leadIds.length === 0) return { success: true, count: 0 };
+
+  // Si assignation à un utilisateur : vérifier qu'il appartient à l'organisation
+  if (userId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: userId, organizationId: session.user.organizationId },
+      select: { id: true },
+    });
+    if (!assignee) return { success: false, error: "Utilisateur introuvable" };
+  }
+
+  // Sécurité multi-tenant : ne toucher que les leads de l'organisation
+  const owned = await prisma.lead.findMany({
+    where: { id: { in: leadIds }, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  const validIds = owned.map((l) => l.id);
+  if (validIds.length === 0) return { success: false, error: "Aucun lead trouvé" };
+
+  await prisma.lead.updateMany({
+    where: { id: { in: validIds }, organizationId: session.user.organizationId },
+    data: { assignedToId: userId },
+  });
+
+  await prisma.activity.createMany({
+    data: validIds.map((leadId) => ({
+      type: "LEAD_ASSIGNED" as const,
+      description: userId ? "Lead assigné" : "Lead désassigné",
+      userId: session.user.id,
+      leadId,
+      organizationId: session.user.organizationId,
+    })),
+  });
+
+  revalidatePath("/pipeline");
+  return { success: true, count: validIds.length };
+}
+
 // ─── Get pipeline stats ───
 export async function getPipelineStats() {
   const session = await auth();
@@ -921,53 +970,49 @@ export async function detectDuplicates() {
     orderBy: { createdAt: "asc" },
   });
 
+  // Regroupement en UN SEUL passage via Map (téléphone normalisé / email minuscule)
+  // — l'ancienne double boucle était O(n²) : ~12M comparaisons à 3500 leads.
+  var byPhone = new Map<string, typeof leads>();
+  var byEmail = new Map<string, typeof leads>();
+  for (var lead of leads) {
+    var pKey = (lead.phone || "").replace(/\D/g, "");
+    if (pKey.length >= 8) {
+      var pArr = byPhone.get(pKey);
+      if (pArr) pArr.push(lead); else byPhone.set(pKey, [lead]);
+    }
+    var eKey = (lead.email || "").toLowerCase().trim();
+    if (eKey) {
+      var eArr = byEmail.get(eKey);
+      if (eArr) eArr.push(lead); else byEmail.set(eKey, [lead]);
+    }
+  }
+
+  // Fusionne les groupes téléphone/email qui partagent des leads (union simple :
+  // le groupe est ancré sur le plus ancien lead, comme avant).
   var duplicateGroups: { key: string; reason: string; leads: typeof leads }[] = [];
   var processed = new Set<string>();
 
-  for (var i = 0; i < leads.length; i++) {
-    if (processed.has(leads[i].id)) continue;
+  var collectGroup = function(seed: (typeof leads)[number]) {
+    if (processed.has(seed.id)) return;
+    var members = new Map<string, (typeof leads)[number]>();
+    members.set(seed.id, seed);
+    var pKey = (seed.phone || "").replace(/\D/g, "");
+    if (pKey.length >= 8) (byPhone.get(pKey) || []).forEach(function(l) { members.set(l.id, l); });
+    var eKey = (seed.email || "").toLowerCase().trim();
+    if (eKey) (byEmail.get(eKey) || []).forEach(function(l) { members.set(l.id, l); });
 
-    var group: typeof leads = [leads[i]];
-
-    for (var j = i + 1; j < leads.length; j++) {
-      if (processed.has(leads[j].id)) continue;
-
-      var reason = "";
-
-      // Same phone
-      if (leads[i].phone && leads[j].phone) {
-        var p1 = leads[i].phone.replace(/\D/g, "");
-        var p2 = leads[j].phone.replace(/\D/g, "");
-        if (p1.length >= 8 && p1 === p2) {
-          reason = "Même téléphone";
-        }
-      }
-
-      // Same email
-      if (!reason && leads[i].email && leads[j].email) {
-        if (leads[i].email!.toLowerCase() === leads[j].email!.toLowerCase()) {
-          reason = "Même email";
-        }
-      }
-
-      if (reason) {
-        group.push(leads[j]);
-        processed.add(leads[j].id);
-        if (!duplicateGroups.find(function(g) { return g.key === leads[i].id; })) {
-          // Set reason for first match
-        }
-      }
-    }
-
-    if (group.length > 1) {
-      processed.add(leads[i].id);
+    if (members.size > 1) {
+      var group = Array.from(members.values());
+      group.forEach(function(l) { processed.add(l.id); });
       duplicateGroups.push({
-        key: leads[i].id,
-        reason: getGroupReason(leads[i], group.slice(1)),
+        key: seed.id,
+        reason: getGroupReason(seed, group.filter(function(l) { return l.id !== seed.id; })),
         leads: group,
       });
     }
-  }
+  };
+
+  for (var l of leads) collectGroup(l);
 
   return duplicateGroups;
 }

@@ -126,7 +126,11 @@ export function middleware(request: NextRequest) {
 }
 
 export var config = {
+  // /api exclu : le middleware n'y fait que du pass-through (tous domaines) —
+  // l'exclure évite une invocation Edge par requête API/webhook/cron/tracker.
+  // `.*\\..*` exclut aussi les fichiers statiques (double emploi avec le check
+  // pathname.includes(".") conservé en ceinture de sécurité).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|public|.*\\..*).*)",
   ],
 };

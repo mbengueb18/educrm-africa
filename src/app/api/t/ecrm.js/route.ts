@@ -1244,7 +1244,10 @@ export async function GET(request: NextRequest) {
       "Content-Type": "application/javascript; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
       // Cache court : 60s pour que les changements ON/OFF se propagent rapidement
-      "Cache-Control": "public, max-age=60, s-maxage=60",
+      // 1h de cache CDN + revalidation en arrière-plan : le script est quasi statique
+      // (seul le flag webTrackingEnabled varie, tolérant à 1h de délai) — évite une
+      // lambda + une requête DB à CHAQUE page vue des sites clients.
+      "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
     },
   });
 }
