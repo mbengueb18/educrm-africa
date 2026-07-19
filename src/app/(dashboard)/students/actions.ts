@@ -142,7 +142,8 @@ export async function updateStudent(studentId: string, data: {
   if (data.campusId !== undefined) updateData.campusId = data.campusId;
 
   var student = await prisma.student.update({
-    where: { id: studentId },
+    // Sécurité multi-tenant : scoper par organisation
+    where: { id: studentId, organizationId: session.user.organizationId },
     data: updateData,
   });
 
@@ -160,6 +161,9 @@ export async function deleteStudent(studentId: string) {
     where: { id: studentId, organizationId: session.user.organizationId },
     select: { leadId: true },
   });
+
+  // Sécurité multi-tenant : la garde doit BLOQUER si l'étudiant n'appartient pas à l'org
+  if (!student) throw new Error("Étudiant introuvable");
 
   // Delete related records
   await prisma.enrollment.deleteMany({ where: { studentId } });

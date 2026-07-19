@@ -131,6 +131,19 @@ export async function moveLeadToStage(leadId: string, stageId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  // Sécurité multi-tenant : le lead ET l'étape cible doivent appartenir à l'organisation
+  const [target, targetStage] = await Promise.all([
+    prisma.lead.findFirst({
+      where: { id: leadId, organizationId: session.user.organizationId },
+      select: { id: true },
+    }),
+    prisma.pipelineStage.findFirst({
+      where: { id: stageId, organizationId: session.user.organizationId },
+      select: { id: true },
+    }),
+  ]);
+  if (!target || !targetStage) throw new Error("Lead ou étape introuvable");
+
   const lead = await prisma.lead.update({
     where: { id: leadId },
     data: { stageId },
@@ -303,7 +316,8 @@ export async function updateLeadScore(leadId: string, score: number) {
   if (!session?.user) throw new Error("Non authentifié");
 
   await prisma.lead.update({
-    where: { id: leadId },
+    // Sécurité multi-tenant : scoper par organisation
+    where: { id: leadId, organizationId: session.user.organizationId },
     data: { score: Math.max(0, Math.min(100, score)) },
   });
 
@@ -469,6 +483,13 @@ export async function deleteLead(leadId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  // Sécurité multi-tenant : vérifier l'appartenance avant toute purge
+  var target = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!target) throw new Error("Lead introuvable");
+
   // Delete related records first
   await prisma.activity.deleteMany({ where: { leadId } });
   await prisma.message.deleteMany({ where: { leadId } });
@@ -486,19 +507,26 @@ export async function deleteLeads(leadIds: string[]) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  for (var id of leadIds) {
-    await prisma.activity.deleteMany({ where: { leadId: id } });
-    await prisma.message.deleteMany({ where: { leadId: id } });
-    await prisma.document.deleteMany({ where: { leadId: id } });
-    await prisma.emailCampaignRecipient.deleteMany({ where: { leadId: id } });
-  }
+  // Sécurité multi-tenant : ne purger que les leads appartenant à l'organisation
+  var owned = await prisma.lead.findMany({
+    where: { id: { in: leadIds }, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  var validIds = owned.map(function(l) { return l.id; });
+  if (validIds.length === 0) return { success: true, count: 0 };
+
+  // 4 requêtes au total (au lieu de 4 × N en boucle)
+  await prisma.activity.deleteMany({ where: { leadId: { in: validIds } } });
+  await prisma.message.deleteMany({ where: { leadId: { in: validIds } } });
+  await prisma.document.deleteMany({ where: { leadId: { in: validIds } } });
+  await prisma.emailCampaignRecipient.deleteMany({ where: { leadId: { in: validIds } } });
 
   await prisma.lead.deleteMany({
-    where: { id: { in: leadIds }, organizationId: session.user.organizationId },
+    where: { id: { in: validIds }, organizationId: session.user.organizationId },
   });
 
   revalidatePath("/pipeline");
-  return { success: true, count: leadIds.length };
+  return { success: true, count: validIds.length };
 }
 
 // ─── Import leads from CSV data (optimisé) ───

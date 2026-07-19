@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Resend } from "resend";
+import crypto from "crypto";
 
 // Resend webhook (inbound + tracking)
 // Configure: https://resend.com/webhooks
@@ -16,9 +17,53 @@ const TRACKING_EVENTS: Record<string, "DELIVERED" | "OPENED" | "CLICKED" | "BOUN
   "email.failed": "FAILED",
 };
 
+// Vérification de signature Svix (Resend signe ses webhooks via Svix).
+// Signature = HMAC-SHA256(base64) de "<svix-id>.<svix-timestamp>.<rawBody>"
+// avec le secret (préfixe "whsec_" retiré, décodé base64).
+function verifySvixSignature(rawBody: string, headers: Headers, secret: string): boolean {
+  try {
+    var svixId = headers.get("svix-id");
+    var svixTimestamp = headers.get("svix-timestamp");
+    var svixSignature = headers.get("svix-signature");
+    if (!svixId || !svixTimestamp || !svixSignature) return false;
+
+    // Anti-rejeu : tolérance de 5 minutes
+    var ts = parseInt(svixTimestamp, 10);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+
+    var secretBytes = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+    var signedContent = svixId + "." + svixTimestamp + "." + rawBody;
+    var expected = crypto.createHmac("sha256", secretBytes).update(signedContent).digest("base64");
+
+    // Le header contient une liste "v1,<sig> v1,<sig2>..."
+    return svixSignature.split(" ").some(function(part) {
+      var sig = part.split(",")[1];
+      if (!sig) return false;
+      var a = Buffer.from(sig);
+      var b = Buffer.from(expected);
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    var body = await request.json();
+    var rawBody = await request.text();
+
+    // Sécurité : vérifier la signature Svix si le secret est configuré.
+    // (Sans secret configuré, on accepte en loguant — configurer RESEND_WEBHOOK_SECRET au plus vite.)
+    var webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      if (!verifySvixSignature(rawBody, request.headers, webhookSecret)) {
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
+    } else {
+      console.warn("[Resend Webhook] RESEND_WEBHOOK_SECRET non configuré — signature NON vérifiée");
+    }
+
+    var body = JSON.parse(rawBody);
     var eventType = body.type as string;
     var data = body.data || {};
 
@@ -100,6 +145,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, skipped: "no from email" });
       }
 
+      // Anti-doublon : Resend retente en cas de réponse lente — ne pas recréer le message
+      if (resendMessageId) {
+        var existingInbound = await prisma.message.findFirst({
+          where: { externalId: resendMessageId, direction: "INBOUND", channel: "EMAIL" },
+          select: { id: true },
+        });
+        if (existingInbound) {
+          return NextResponse.json({ ok: true, skipped: "duplicate", messageId: existingInbound.id });
+        }
+      }
+
       // Try to extract leadId from "reply+{leadId}@..." pattern
       var leadId: string | null = null;
       for (var to of toEmails) {
@@ -119,10 +175,33 @@ export async function POST(request: NextRequest) {
         });
       }
       if (!lead && fromEmail) {
-        lead = await prisma.lead.findFirst({
+        // Sécurité multi-tenant : plusieurs orgs peuvent avoir un lead avec ce même email
+        // (le domaine reply.talibcrm.com est partagé, il n'identifie pas l'org).
+        var candidates = await prisma.lead.findMany({
           where: { email: { equals: fromEmail, mode: "insensitive" } },
           select: { id: true, organizationId: true, firstName: true, lastName: true },
+          take: 10,
         });
+        if (candidates.length === 1) {
+          lead = candidates[0];
+        } else if (candidates.length > 1) {
+          // Ambigu : rattacher au lead qui a reçu le dernier email SORTANT
+          // (une réponse suit un envoi) — sinon skip plutôt que risquer la mauvaise org.
+          var lastOutbound = await prisma.message.findFirst({
+            where: {
+              leadId: { in: candidates.map(function(c) { return c.id; }) },
+              direction: "OUTBOUND",
+              channel: "EMAIL",
+            },
+            orderBy: { sentAt: "desc" },
+            select: { leadId: true },
+          });
+          lead = candidates.find(function(c) { return c.id === lastOutbound?.leadId; }) || null;
+          if (!lead) {
+            console.warn("[Resend Inbound] Email ambigu entre plusieurs organisations, skip:", fromEmail);
+            return NextResponse.json({ ok: true, skipped: "ambiguous lead email" });
+          }
+        }
       }
 
       if (!lead) {

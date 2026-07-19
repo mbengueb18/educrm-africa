@@ -158,7 +158,8 @@ export async function updateCall(callId: string, data: {
   if (data.leadId !== undefined) updateData.leadId = data.leadId;
 
   var call = await prisma.call.update({
-    where: { id: callId },
+    // Sécurité multi-tenant : scoper par organisation
+    where: { id: callId, organizationId: session.user.organizationId },
     data: updateData,
   });
 
@@ -171,7 +172,10 @@ export async function deleteCall(callId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  await prisma.call.delete({ where: { id: callId } });
+  // Sécurité multi-tenant : scoper par organisation
+  await prisma.call.delete({
+    where: { id: callId, organizationId: session.user.organizationId },
+  });
 
   revalidatePath("/calls");
   return { success: true };

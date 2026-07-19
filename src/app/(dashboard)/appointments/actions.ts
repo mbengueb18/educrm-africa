@@ -89,6 +89,20 @@ export async function createAppointment(data: {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  // Sécurité multi-tenant : le lead et l'assigné doivent appartenir à l'organisation
+  if (data.leadId) {
+    var leadOk = await prisma.lead.findFirst({
+      where: { id: data.leadId, organizationId: session.user.organizationId },
+      select: { id: true },
+    });
+    if (!leadOk) throw new Error("Lead introuvable");
+  }
+  var assigneeOk = await prisma.user.findFirst({
+    where: { id: data.assignedToId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!assigneeOk) throw new Error("Utilisateur assigné introuvable");
+
   var appointment = await prisma.appointment.create({
     data: {
       title: data.title,
@@ -163,7 +177,8 @@ export async function updateAppointment(appointmentId: string, data: {
   if (data.notes !== undefined) updateData.notes = data.notes;
 
   var appointment = await prisma.appointment.update({
-    where: { id: appointmentId },
+    // Sécurité multi-tenant : scoper par organisation
+    where: { id: appointmentId, organizationId: session.user.organizationId },
     data: updateData,
   });
 
@@ -181,7 +196,10 @@ export async function deleteAppointment(appointmentId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  await prisma.appointment.delete({ where: { id: appointmentId } });
+  // Sécurité multi-tenant : scoper par organisation
+  await prisma.appointment.delete({
+    where: { id: appointmentId, organizationId: session.user.organizationId },
+  });
 
   revalidatePath("/appointments");
   return { success: true };

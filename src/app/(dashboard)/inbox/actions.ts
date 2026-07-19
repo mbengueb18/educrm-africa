@@ -19,8 +19,9 @@ export async function sendEmailToLead(
   if (!session?.user) throw new Error("Non authentifié");
 
   const [lead, sender, org] = await Promise.all([
-    prisma.lead.findUnique({
-      where: { id: leadId },
+    // Sécurité multi-tenant : le lead doit appartenir à l'organisation
+    prisma.lead.findFirst({
+      where: { id: leadId, organizationId: session.user.organizationId },
       select: { email: true, firstName: true, lastName: true },
     }),
     prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }),

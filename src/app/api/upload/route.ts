@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { auth } from "@/lib/auth";
 
 var supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 var supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export async function POST(request: NextRequest) {
   try {
+    // Sécurité : upload réservé aux utilisateurs authentifiés
+    var session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
         { error: "Supabase non configure" },
@@ -22,11 +29,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Aucun fichier" }, { status: 400 });
     }
 
-    // Validate file type
-    var allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+    // Validate file type — pas de SVG (vecteur XSS : peut embarquer du <script>)
+    var allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: "Type de fichier non supporte. Utilisez JPG, PNG, GIF, WebP ou SVG." },
+        { error: "Type de fichier non supporte. Utilisez JPG, PNG, GIF ou WebP." },
         { status: 400 }
       );
     }
@@ -39,10 +46,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique filename
+    // Generate unique filename — chemin préfixé par organisation
     var ext = file.name.split(".").pop() || "jpg";
     var filename = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
-    var path = "campaigns/" + filename;
+    var path = "campaigns/" + session.user.organizationId + "/" + filename;
 
     // Convert to buffer
     var arrayBuffer = await file.arrayBuffer();

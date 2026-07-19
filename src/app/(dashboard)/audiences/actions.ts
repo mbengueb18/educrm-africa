@@ -235,9 +235,11 @@ export async function getAudienceLeads(audienceId: string, page = 1, pageSize = 
     return { leads: orderedLeads, total, page, pageSize };
   } else {
     // STATIC / IMPORTED : on lit AudienceMember
+    // Sécurité multi-tenant : n'inclure que les membres dont le lead appartient à l'org
+    const memberWhere = { audienceId, lead: { organizationId: orgId } };
     const [members, total] = await Promise.all([
       prisma.audienceMember.findMany({
-        where: { audienceId },
+        where: memberWhere,
         include: {
           lead: {
             include: {
@@ -251,7 +253,7 @@ export async function getAudienceLeads(audienceId: string, page = 1, pageSize = 
         skip,
         take: pageSize,
       }),
-      prisma.audienceMember.count({ where: { audienceId } }),
+      prisma.audienceMember.count({ where: memberWhere }),
     ]);
 
     return {
@@ -510,6 +512,14 @@ export async function createAudienceFromImport(
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  if (leadIds.length === 0) throw new Error("Aucun lead à ajouter à l'audience");
+
+  // Sécurité multi-tenant : ne garder que les leads appartenant à l'organisation
+  const ownedLeads = await prisma.lead.findMany({
+    where: { id: { in: leadIds }, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  leadIds = ownedLeads.map((l) => l.id);
   if (leadIds.length === 0) throw new Error("Aucun lead à ajouter à l'audience");
 
   // Vérifier unicité du nom
@@ -1030,7 +1040,8 @@ export async function getAllAudienceLeads(audienceId: string) {
     return { leads: ordered, total: ordered.length };
   } else {
     const members = await prisma.audienceMember.findMany({
-      where: { audienceId },
+      // Sécurité multi-tenant : n'inclure que les membres dont le lead appartient à l'org
+      where: { audienceId, lead: { organizationId: orgId } },
       include: {
         lead: {
           select: {

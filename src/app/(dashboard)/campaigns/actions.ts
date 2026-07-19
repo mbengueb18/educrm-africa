@@ -217,8 +217,9 @@ export async function getCampaignDetail(campaignId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  var campaign = await prisma.emailCampaign.findUnique({
-    where: { id: campaignId },
+  // Sécurité multi-tenant : la campagne doit appartenir à l'organisation
+  var campaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
     include: {
       createdBy: { select: { name: true } },
       recipients: {
@@ -385,8 +386,9 @@ export async function sendCampaign(campaignId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  var campaign = await prisma.emailCampaign.findUnique({
-    where: { id: campaignId },
+  // Sécurité multi-tenant : la campagne doit appartenir à l'organisation
+  var campaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
   });
   if (!campaign) throw new Error("Campagne introuvable");
   if (campaign.status !== "DRAFT") throw new Error("Cette campagne a deja ete envoyee");
@@ -483,7 +485,10 @@ export async function deleteCampaign(campaignId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  await prisma.emailCampaign.delete({ where: { id: campaignId } });
+  // Sécurité multi-tenant : scoper par organisation
+  await prisma.emailCampaign.delete({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+  });
   revalidatePath("/campaigns");
 }
 
@@ -521,6 +526,16 @@ export async function getCampaignStats() {
 
 // ─── Refresh campaign stats from recipients ───
 export async function refreshCampaignStats(campaignId: string) {
+  // Sécurité : server action exportée = endpoint public → garde d'auth + scope org obligatoires
+  var session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  var campaign = await prisma.emailCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!campaign) throw new Error("Campagne introuvable");
+
   var recipients = await prisma.emailCampaignRecipient.findMany({
     where: { campaignId: campaignId },
   });
@@ -614,12 +629,15 @@ export async function getCampaignProgress(campaignId: string) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
+  // Sécurité multi-tenant : scoper les compteurs via l'appartenance de la campagne
+  var recipientWhere = {
+    campaignId: campaignId,
+    campaign: { organizationId: session.user.organizationId },
+  };
   var [total, done] = await Promise.all([
+    prisma.emailCampaignRecipient.count({ where: recipientWhere }),
     prisma.emailCampaignRecipient.count({
-      where: { campaignId: campaignId },
-    }),
-    prisma.emailCampaignRecipient.count({
-      where: { campaignId: campaignId, status: { not: "PENDING" } },
+      where: { ...recipientWhere, status: { not: "PENDING" } },
     }),
   ]);
 

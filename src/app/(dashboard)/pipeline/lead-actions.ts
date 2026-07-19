@@ -8,8 +8,9 @@ export async function getLeadDetail(leadId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  const lead = await prisma.lead.findUnique({
-    where: { id: leadId },
+  // Sécurité multi-tenant : findFirst scopé par organisation
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
     include: {
       assignedTo: { select: { id: true, name: true, avatar: true, email: true } },
       program: { select: { id: true, name: true, code: true, level: true, tuitionAmount: true, currency: true, formationType: true } },
@@ -84,6 +85,13 @@ export async function getLeadDetail(leadId: string) {
 export async function logWhatsAppMessage(leadId: string, content: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  // Sécurité multi-tenant : le lead doit appartenir à l'organisation
+  const target = await prisma.lead.findFirst({
+    where: { id: leadId, organizationId: session.user.organizationId },
+    select: { id: true },
+  });
+  if (!target) throw new Error("Lead introuvable");
 
   await prisma.message.create({
     data: {
