@@ -3,6 +3,9 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { touchLeadLastContact } from "@/lib/lead-contact";
+
+const CONTACT_APPT_STATUSES = ["SCHEDULED", "CONFIRMED", "COMPLETED"];
 
 // ─── Get all appointments ───
 export async function getAppointments(filters?: {
@@ -117,6 +120,7 @@ export async function createAppointment(data: {
         metadata: { appointmentId: appointment.id, type: data.type },
       },
     });
+    await touchLeadLastContact(data.leadId, appointment.startAt);
   }
 
   revalidatePath("/appointments");
@@ -162,6 +166,10 @@ export async function updateAppointment(appointmentId: string, data: {
     where: { id: appointmentId },
     data: updateData,
   });
+
+  if (appointment.leadId && CONTACT_APPT_STATUSES.includes(appointment.status as any)) {
+    await touchLeadLastContact(appointment.leadId, appointment.startAt);
+  }
 
   revalidatePath("/appointments");
   revalidatePath("/pipeline");

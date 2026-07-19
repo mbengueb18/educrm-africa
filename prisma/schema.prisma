@@ -451,6 +451,10 @@ model Lead {
 
   customFields Json? // Stores unmapped/custom form fields
 
+  // Dénormalisé : dernier contact (max appel / message OUTBOUND / RDV programmé-confirmé-terminé).
+  // Mis à jour à chaque contact + réconcilié par le cron lead-scores. Évite 3 groupBy au rendu du pipeline.
+  lastContactAt DateTime?
+
   organizationId String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -482,6 +486,7 @@ model Lead {
   @@index([stageId])
   @@index([assignedToId])
   @@index([organizationId, createdAt])
+  @@index([organizationId, lastContactAt])
   @@map("leads")
 }
 

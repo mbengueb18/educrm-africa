@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { touchLeadLastContact } from "@/lib/lead-contact";
 import { sendWhatsAppTemplate, sendWhatsAppText } from "@/lib/whatsapp";
 import { resolveVariablesFromLead } from "@/lib/whatsapp/send";
 import { assertCanAccessFeature } from "@/lib/plans/checks";
@@ -108,6 +109,7 @@ export async function sendWhatsAppToLead(input: SendTemplateInput | SendTextInpu
       sentAt: new Date(),
     },
   });
+  await touchLeadLastContact(lead.id, new Date());
 
   // Activité
   await prisma.activity.create({

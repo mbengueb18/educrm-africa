@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, sendBulkEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
+import { touchLeadLastContact } from "@/lib/lead-contact";
 
 // ─── Send email to a lead ───
 export async function sendEmailToLead(
@@ -509,6 +510,7 @@ export async function sendWhatsAppTemplateFromInbox(
       sentById: session.user.id,
     },
   });
+  await touchLeadLastContact(lead.id, new Date());
 
   // Créer une Activity
   await prisma.activity.create({

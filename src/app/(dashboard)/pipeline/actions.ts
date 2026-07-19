@@ -111,41 +111,17 @@ export async function getPipelineData(pipelineId?: string) {
   // Le score est désormais recalculé à la demande / à la création, pas à chaque rendu.
   // await calculateLeadScores(organizationId);
 
-  // Calculate last contact date for each lead
-  var leadIds = leads.map(function(l) { return l.id; });
-
-  var [lastCalls, lastMessages, lastAppointments] = await Promise.all([
-    prisma.call.groupBy({
-      by: ["leadId"],
-      where: { leadId: { in: leadIds } },
-      _max: { calledAt: true },
-    }),
-    prisma.message.groupBy({
-      by: ["leadId"],
-      where: { leadId: { in: leadIds }, direction: "OUTBOUND" },
-      _max: { sentAt: true },
-    }),
-    prisma.appointment.groupBy({
-      by: ["leadId"],
-      where: { leadId: { in: leadIds }, status: { in: ["COMPLETED", "CONFIRMED", "SCHEDULED"] } },
-      _max: { startAt: true },
-    }),
-  ]);
-
+  // lastContactAt est dénormalisé sur Lead (mis à jour à chaque contact + réconcilié
+  // quotidiennement par le cron lead-scores). On évite ainsi 3 groupBy + un scan O(n²)
+  // à chaque rendu du pipeline.
+  var now = new Date();
   var enrichedLeads = leads.map(function(lead) {
-    var callDate = lastCalls.find(function(c) { return c.leadId === lead.id; })?._max?.calledAt;
-    var msgDate = lastMessages.find(function(m) { return m.leadId === lead.id; })?._max?.sentAt;
-    var apptDate = lastAppointments.find(function(a) { return a.leadId === lead.id; })?._max?.startAt;
-
-    var dates = [callDate, msgDate, apptDate].filter(Boolean) as Date[];
-    var lastContactAt = dates.length > 0 ? new Date(Math.max(...dates.map(function(d) { return d.getTime(); }))) : null;
-
-    var now = new Date();
+    var lastContactAt = lead.lastContactAt;
     var daysSinceContact = lastContactAt
       ? Math.floor((now.getTime() - lastContactAt.getTime()) / 86_400_000)
       : Math.floor((now.getTime() - lead.createdAt.getTime()) / 86_400_000);
 
-    return { ...lead, lastContactAt, daysSinceContact };
+    return { ...lead, daysSinceContact };
   });
 
   return { stages, leads: enrichedLeads, users, currentPipelineId: targetPipelineId };
@@ -825,12 +801,16 @@ export async function calculateLeadScores(orgId: string) {
     }),
   ]);
 
+  // Index par leadId (O(1)) — évite un scan O(n²) sur l'ensemble des leads de l'org.
+  var scoreCallMap = new Map(lastCalls.map(function(c) { return [c.leadId, c._max?.calledAt]; }));
+  var scoreMsgMap = new Map(lastMessages.map(function(m) { return [m.leadId, m._max?.sentAt]; }));
+
   var updates: { id: string; score: number }[] = [];
 
   for (var lead of leads) {
     // Dernier contact (appel/message) pour le bonus de récence
-    var callDate = lastCalls.find(function(c) { return c.leadId === lead.id; })?._max?.calledAt;
-    var msgDate = lastMessages.find(function(m) { return m.leadId === lead.id; })?._max?.sentAt;
+    var callDate = scoreCallMap.get(lead.id);
+    var msgDate = scoreMsgMap.get(lead.id);
     var dates = [callDate, msgDate].filter(Boolean) as Date[];
     var lastContact = dates.length > 0 ? new Date(Math.max(...dates.map(function(d) { return d.getTime(); }))) : null;
 
@@ -868,6 +848,26 @@ export async function calculateLeadScores(orgId: string) {
       `;
     }
   }
+
+  // Réconciliation de lastContactAt (dénormalisé) — 100% en SQL, sans charger de lignes :
+  // max(dernier appel / dernier message OUTBOUND / dernier RDV programmé-confirmé-terminé).
+  // GREATEST ignore les NULL ; IS DISTINCT FROM évite les écritures inutiles. Corrige toute
+  // dérive laissée par les envois automatisés non instrumentés (campagnes, séquences, emails).
+  await prisma.$executeRaw`
+    UPDATE "leads" AS l
+    SET "lastContactAt" = sub.maxdate
+    FROM (
+      SELECT l2.id,
+        GREATEST(
+          (SELECT max(c."calledAt") FROM "calls" c WHERE c."leadId" = l2.id),
+          (SELECT max(m."sentAt") FROM "messages" m WHERE m."leadId" = l2.id AND m.direction = 'OUTBOUND'),
+          (SELECT max(a."startAt") FROM "appointments" a WHERE a."leadId" = l2.id AND a.status IN ('SCHEDULED','CONFIRMED','COMPLETED'))
+        ) AS maxdate
+      FROM "leads" l2
+      WHERE l2."organizationId" = ${orgId} AND l2."isConverted" = false
+    ) AS sub
+    WHERE l.id = sub.id AND l."lastContactAt" IS DISTINCT FROM sub.maxdate
+  `;
 
   return { updated: updates.length };
 }

@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { touchLeadLastContact } from "@/lib/lead-contact";
 
 export async function getLeadDetail(leadId: string) {
   const session = await auth();
@@ -106,6 +107,8 @@ export async function logWhatsAppMessage(leadId: string, content: string) {
       organizationId: session.user.organizationId,
     },
   });
+
+  await touchLeadLastContact(leadId, new Date());
 }
 
 // ─── Update lead notes ───

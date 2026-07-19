@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { touchLeadLastContact } from "@/lib/lead-contact";
 
 // ─── Recherche de leads (pour rattacher un appel au bon prospect) ───
 export async function searchLeads(query: string) {
@@ -132,6 +133,7 @@ export async function logCall(data: {
         metadata: { callId: call.id, direction: data.direction, outcome: data.outcome, duration: data.duration },
       },
     });
+    await touchLeadLastContact(data.leadId, call.calledAt);
   }
 
   revalidatePath("/calls");
