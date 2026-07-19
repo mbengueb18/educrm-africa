@@ -1746,6 +1746,7 @@ model AudienceMember {
 
 enum WhatsAppCampaignStatus {
   DRAFT
+  SCHEDULED // envoi programmé (promu en SENDING par le cron à l'échéance)
   SENDING
   SENT
   CANCELLED

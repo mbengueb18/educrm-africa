@@ -69,15 +69,15 @@ var STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof S
   DRAFT: { label: "Brouillon", color: "badge-gray", icon: Clock },
   SENDING: { label: "En cours", color: "badge-amber", icon: Loader2 },
   SENT: { label: "Envoyé", color: "badge-green", icon: CheckCircle },
-  CANCELLED: { label: "Annule", color: "badge-red", icon: XCircle },
+  CANCELLED: { label: "Annulé", color: "badge-red", icon: XCircle },
 };
 
 var RECIPIENT_STATUS: Record<string, { label: string; color: string; icon: typeof Send }> = {
   PENDING: { label: "En attente", color: "text-gray-500 bg-gray-50", icon: Clock },
   SENT: { label: "Envoyé", color: "text-blue-600 bg-blue-50", icon: Send },
-  DELIVERED: { label: "Delivre", color: "text-emerald-600 bg-emerald-50", icon: CheckCircle },
+  DELIVERED: { label: "Délivré", color: "text-emerald-600 bg-emerald-50", icon: CheckCircle },
   OPENED: { label: "Ouvert", color: "text-purple-600 bg-purple-50", icon: Eye },
-  CLICKED: { label: "Clique", color: "text-indigo-600 bg-indigo-50", icon: MousePointer },
+  CLICKED: { label: "Cliqué", color: "text-indigo-600 bg-indigo-50", icon: MousePointer },
   BOUNCED: { label: "Rebond", color: "text-amber-600 bg-amber-50", icon: AlertTriangle },
   FAILED: { label: "Échoué", color: "text-red-600 bg-red-50", icon: XCircle },
 };
@@ -118,7 +118,7 @@ export function CampaignDetailClient({ campaign, showBranding = true }: Props) {
           </div>
           <p className="text-xs sm:text-sm text-gray-500">
             {campaign.createdBy ? "Par " + campaign.createdBy.name : ""}
-            {campaign.sentAt ? " — Envoye le " + formatDateTime(campaign.sentAt) : " — Créé le " + formatDate(campaign.createdAt)}
+            {campaign.sentAt ? " — Envoyé le " + formatDateTime(campaign.sentAt) : " — Créé le " + formatDate(campaign.createdAt)}
           </p>
         </div>
       </div>
@@ -174,10 +174,10 @@ function OverviewTab({ campaign, stats, openRate, clickRate, deliveryRate, bounc
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-5">Entonnoir de la campagne</h3>
         <div className="space-y-3">
-          <FunnelBar label="Envoyes" value={stats.sent} max={stats.total} color="bg-brand-500" icon={Send} />
-          <FunnelBar label="Delivres" value={stats.delivered} max={stats.total} color="bg-emerald-500" icon={CheckCircle} />
+          <FunnelBar label="Envoyés" value={stats.sent} max={stats.total} color="bg-brand-500" icon={Send} />
+          <FunnelBar label="Délivrés" value={stats.delivered} max={stats.total} color="bg-emerald-500" icon={CheckCircle} />
           <FunnelBar label="Ouverts" value={stats.opened} max={stats.total} color="bg-blue-500" icon={Eye} />
-          <FunnelBar label="Cliques" value={stats.clicked} max={stats.total} color="bg-purple-500" icon={MousePointer} />
+          <FunnelBar label="Cliqués" value={stats.clicked} max={stats.total} color="bg-purple-500" icon={MousePointer} />
         </div>
       </div>
 
@@ -186,11 +186,11 @@ function OverviewTab({ campaign, stats, openRate, clickRate, deliveryRate, bounc
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Detail des statuts</h3>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           <StatMini label="Total" value={stats.total} color="text-gray-700" />
-          <StatMini label="Envoyes" value={stats.sent} color="text-brand-600" />
-          <StatMini label="Delivres" value={stats.delivered} color="text-emerald-600" />
+          <StatMini label="Envoyés" value={stats.sent} color="text-brand-600" />
+          <StatMini label="Délivrés" value={stats.delivered} color="text-emerald-600" />
           <StatMini label="Ouverts" value={stats.opened} color="text-blue-600" />
-          <StatMini label="Cliques" value={stats.clicked} color="text-purple-600" />
-          <StatMini label="Echoues" value={stats.failed + stats.bounced} color="text-red-500" />
+          <StatMini label="Cliqués" value={stats.clicked} color="text-purple-600" />
+          <StatMini label="Échoués" value={stats.failed + stats.bounced} color="text-red-500" />
         </div>
       </div>
 
@@ -411,6 +411,7 @@ function RecipientsTab({ campaignId, initialRecipients, stats }: { campaignId: s
                 {recipient.openedAt && <span className="text-blue-600">Ouvert : {formatDateTime(recipient.openedAt)}</span>}
                 {recipient.clickedAt && <span className="text-purple-600">Cliqué : {formatDateTime(recipient.clickedAt)}</span>}
                 {recipient.openCount > 1 && <span className="text-gray-700 font-medium">{recipient.openCount} ouvertures</span>}
+                {recipient.clickCount > 1 && <span className="text-gray-700 font-medium">{recipient.clickCount} clics</span>}
               </div>
             </div>
           );
@@ -430,11 +431,12 @@ function RecipientsTab({ campaignId, initialRecipients, stats }: { campaignId: s
               <tr className="bg-gray-50/80 border-b border-gray-200">
                 <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Email</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Statut</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Envoye</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Delivre</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Envoyé</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Délivré</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvert</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Clique</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Cliqué</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ouvertures</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Clics</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -455,6 +457,7 @@ function RecipientsTab({ campaignId, initialRecipients, stats }: { campaignId: s
                     <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.openedAt ? formatDateTime(recipient.openedAt) : "—"}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-500">{recipient.clickedAt ? formatDateTime(recipient.clickedAt) : "—"}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">{recipient.openCount > 0 ? recipient.openCount + "x" : "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">{recipient.clickCount > 0 ? recipient.clickCount + "x" : "—"}</td>
                   </tr>
                 );
               })}

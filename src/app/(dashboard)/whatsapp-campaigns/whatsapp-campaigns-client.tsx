@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -10,11 +10,13 @@ import {
   deleteWhatsAppCampaign,
   sendWhatsAppCampaign,
   getWhatsAppCampaignRecipientStats,
+  getWhatsAppCampaignProgress,
+  cancelScheduledWhatsAppCampaign,
 } from "./actions";
 import {
   Plus, MessageCircle, Send, Trash2, Users, Eye, CheckCheck,
   Loader2, Clock, CheckCircle, XCircle, AlertTriangle, Tag,
-  BarChart3, Target, FileText, Globe,
+  BarChart3, Target, FileText, Globe, X,
 } from "lucide-react";
 
 interface Campaign {
@@ -27,6 +29,7 @@ interface Campaign {
   readCount: number;
   failedCount: number;
   sentAt: Date | null;
+  scheduledAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
   createdBy: { name: string } | null;
@@ -41,6 +44,7 @@ interface Props {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Send }> = {
   DRAFT: { label: "Brouillon", color: "bg-gray-100 text-gray-700", icon: Clock },
+  SCHEDULED: { label: "Programmée", color: "bg-blue-50 text-blue-700", icon: Clock },
   SENDING: { label: "En cours", color: "bg-amber-50 text-amber-700", icon: Loader2 },
   SENT: { label: "Envoyé", color: "bg-emerald-50 text-emerald-700", icon: CheckCircle },
   CANCELLED: { label: "Annulé", color: "bg-red-50 text-red-700", icon: XCircle },
@@ -59,6 +63,46 @@ export function WhatsAppCampaignsClient({ campaigns }: Props) {
     audienceName?: string;
   } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [progress, setProgress] = useState<Record<string, { total: number; done: number }>>({});
+
+  // Rafraîchit + récupère la progression tant qu'une campagne est en cours d'envoi
+  // (même mécanique que les campagnes email)
+  useEffect(() => {
+    const sendingCampaigns = campaigns.filter((c) => c.status === "SENDING");
+    if (sendingCampaigns.length === 0) {
+      setProgress({});
+      return;
+    }
+
+    const fetchProgress = () => {
+      sendingCampaigns.forEach((c) => {
+        getWhatsAppCampaignProgress(c.id)
+          .then((p) => {
+            setProgress((prev) => ({ ...prev, [c.id]: p }));
+          })
+          .catch(() => {});
+      });
+    };
+
+    fetchProgress();
+    const interval = setInterval(() => {
+      fetchProgress();
+      router.refresh();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [campaigns, router]);
+
+  const handleCancelSchedule = (id: string) => {
+    startTransition(async () => {
+      try {
+        await cancelScheduledWhatsAppCampaign(id);
+        toast.success("Programmation annulée — la campagne repasse en brouillon");
+        router.refresh();
+      } catch (e: any) {
+        toast.error(e.message);
+      }
+    });
+  };
 
   const handleCreate = () => {
     startTransition(async () => {
@@ -163,6 +207,8 @@ export function WhatsAppCampaignsClient({ campaigns }: Props) {
               campaign={c}
               onDelete={() => handleDelete(c.id)}
               onSend={() => handleSend(c)}
+              onCancelSchedule={() => handleCancelSchedule(c.id)}
+              progress={progress[c.id]}
               isPending={isPending}
             />
           ))}
@@ -216,11 +262,15 @@ function CampaignCard({
   campaign,
   onDelete,
   onSend,
+  onCancelSchedule,
+  progress,
   isPending,
 }: {
   campaign: Campaign;
   onDelete: () => void;
   onSend: () => void;
+  onCancelSchedule: () => void;
+  progress?: { total: number; done: number };
   isPending: boolean;
 }) {
   const statusStyle = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.DRAFT;
@@ -268,9 +318,23 @@ function CampaignCard({
               ? `Envoyé le ${formatDate(campaign.sentAt)}`
               : `Créé le ${formatDate(campaign.createdAt)}`}
           </p>
+          {campaign.status === "SCHEDULED" && campaign.scheduledAt && (
+            <p className="text-xs text-blue-600 font-medium mt-1 flex items-center gap-1">
+              <Clock size={12} /> Envoi programmé le {new Date(campaign.scheduledAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {campaign.status === "SCHEDULED" && (
+            <button
+              onClick={onCancelSchedule}
+              disabled={isPending}
+              className="btn-secondary py-1.5 px-3 text-xs"
+            >
+              <X size={13} /> Annuler l'envoi
+            </button>
+          )}
           {campaign.status === "DRAFT" && (
             <>
               <Link
@@ -315,6 +379,35 @@ function CampaignCard({
           <MiniMetric label="Échoués" value={campaign.failedCount} icon={AlertTriangle} color="text-red-500" />
         </div>
       )}
+
+      {/* Barre de progression pour campagne en cours d'envoi (même mécanique que l'email) */}
+      {campaign.status === "SENDING" && (() => {
+        const total = progress ? progress.total : campaign.totalRecipients;
+        const done = progress ? progress.done : 0;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        return (
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Loader2 size={14} className="text-amber-500 animate-spin" />
+                <span className="text-xs font-medium text-amber-700">Envoi en cours…</span>
+              </div>
+              <span className="text-xs font-semibold text-gray-700 tabular-nums">
+                {done} / {total} <span className="text-gray-400">({pct}%)</span>
+              </span>
+            </div>
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700 ease-out"
+                style={{ width: pct + "%" }}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">
+              Les messages partent progressivement pour respecter les limites Meta.
+            </p>
+          </div>
+        );
+      })()}
 
       {campaign.status === "DRAFT" && (
         <div className="flex items-center gap-2 pt-3 border-t border-gray-100">

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getWhatsAppIntegration } from "@/lib/whatsapp/integration";
+import { sendTemplateMessage, resolveVariablesFromLead } from "@/lib/whatsapp/send";
 import { assertCanAccessFeature } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
 
@@ -349,4 +350,132 @@ export async function sendWhatsAppCampaign(campaignId: string) {
     queued: leads.length,
     total: leads.length,
   };
+}
+// ─── Programmer l'envoi d'une campagne WhatsApp (miroir des campagnes email) ───
+export async function scheduleWhatsAppCampaign(campaignId: string, scheduledAtISO: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
+
+  const campaign = await prisma.whatsAppCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    include: { template: true, audience: { select: { id: true, type: true } } },
+  });
+  if (!campaign) throw new Error("Campagne introuvable");
+  if (campaign.status !== "DRAFT") throw new Error("Cette campagne ne peut plus être programmée.");
+  if (!campaign.template || campaign.template.status !== "APPROVED") {
+    throw new Error("Le template doit être approuvé par Meta avant utilisation");
+  }
+  if (!campaign.audienceId || !campaign.audience) throw new Error("Aucune audience sélectionnée");
+  if (campaign.audience.type === "DYNAMIC") {
+    throw new Error("Les audiences dynamiques ne peuvent pas être utilisées");
+  }
+  // Intégration vérifiée dès maintenant (échec clair plutôt qu'à l'échéance)
+  await getWhatsAppIntegration(session.user.organizationId);
+
+  const when = new Date(scheduledAtISO);
+  if (isNaN(when.getTime())) throw new Error("Date invalide.");
+  if (when.getTime() < Date.now() + 60 * 1000) throw new Error("Choisissez une date au moins 1 minute dans le futur.");
+
+  // Les destinataires seront calculés à l'échéance (par le cron), sur l'audience à jour.
+  await prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: { status: "SCHEDULED", scheduledAt: when },
+  });
+
+  revalidatePath("/whatsapp-campaigns");
+  revalidatePath(`/whatsapp-campaigns/${campaignId}`);
+  return { success: true, scheduledAt: when };
+}
+
+// ─── Annuler une programmation ───
+export async function cancelScheduledWhatsAppCampaign(campaignId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const campaign = await prisma.whatsAppCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+  });
+  if (!campaign) throw new Error("Campagne introuvable");
+  if (campaign.status !== "SCHEDULED") throw new Error("Cette campagne n'est pas programmée.");
+
+  await prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: { status: "DRAFT", scheduledAt: null },
+  });
+
+  revalidatePath("/whatsapp-campaigns");
+  revalidatePath(`/whatsapp-campaigns/${campaignId}`);
+  return { success: true };
+}
+
+// ─── Envoyer un message de TEST du template à un numéro donné ───
+export async function sendWhatsAppTestMessage(campaignId: string, toNumber: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  await assertCanUseWhatsAppCampaigns(session.user.organizationId);
+
+  const to = (toNumber || "").trim();
+  if (!to) throw new Error("Saisissez un numéro WhatsApp.");
+
+  const campaign = await prisma.whatsAppCampaign.findFirst({
+    where: { id: campaignId, organizationId: session.user.organizationId },
+    include: { template: true },
+  });
+  if (!campaign) throw new Error("Campagne introuvable");
+  if (!campaign.template || campaign.template.status !== "APPROVED") {
+    throw new Error("Le template doit être approuvé par Meta avant utilisation");
+  }
+  await getWhatsAppIntegration(session.user.organizationId);
+
+  // Variables résolues depuis un vrai lead de l'audience si possible, sinon valeurs de démo
+  let sampleLead: any = null;
+  if (campaign.audienceId) {
+    const member = await prisma.audienceMember.findFirst({
+      where: { audienceId: campaign.audienceId, lead: { organizationId: session.user.organizationId, whatsapp: { not: null } } },
+      include: { lead: { include: { program: { select: { name: true } } } } },
+    });
+    sampleLead = member?.lead || null;
+  }
+  if (!sampleLead) {
+    sampleLead = {
+      firstName: "Fatou", lastName: "Diallo", email: "fatou@example.com",
+      phone: "+221770000000", whatsapp: "+221770000000", city: "Dakar",
+      score: 75, customFields: {}, program: { name: "MBA Marketing Digital" },
+    };
+  }
+
+  const variableMapping = (campaign.template.variableMapping as Record<string, string> | null) || {};
+  const bodyVariables = resolveVariablesFromLead(campaign.template.bodyText, variableMapping, sampleLead);
+
+  const result = await sendTemplateMessage(session.user.organizationId, {
+    to,
+    templateName: campaign.template.metaName,
+    templateLanguage: campaign.template.language,
+    bodyVariables,
+  });
+
+  if (!result.success) {
+    throw new Error(result.errorMessage || "Échec de l'envoi du test");
+  }
+  return { success: true };
+}
+
+// ─── Progression d'une campagne en cours d'envoi (pour la barre de progression) ───
+export async function getWhatsAppCampaignProgress(campaignId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const recipientWhere = {
+    campaignId: campaignId,
+    campaign: { organizationId: session.user.organizationId },
+  };
+  const [total, done] = await Promise.all([
+    prisma.whatsAppCampaignRecipient.count({ where: recipientWhere }),
+    prisma.whatsAppCampaignRecipient.count({
+      where: { ...recipientWhere, status: { notIn: ["PENDING", "PROCESSING"] } },
+    }),
+  ]);
+
+  return { total, done };
 }

@@ -222,6 +222,57 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ─── Campagnes WHATSAPP PROGRAMMÉES à échéance → matérialiser les destinataires ───
+    var waDueScheduled = await prisma.whatsAppCampaign.findMany({
+      where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } },
+      take: 5,
+    });
+    for (var wsc of waDueScheduled) {
+      try {
+        if (!wsc.audienceId) {
+          await prisma.whatsAppCampaign.update({
+            where: { id: wsc.id },
+            data: { status: "FAILED" },
+          });
+          continue;
+        }
+        var waMembers = await prisma.audienceMember.findMany({
+          where: { audienceId: wsc.audienceId },
+          select: { leadId: true },
+        });
+        var waSchedLeads = await prisma.lead.findMany({
+          where: {
+            id: { in: waMembers.map(function(m) { return m.leadId; }) },
+            whatsapp: { not: null },
+            isConverted: false,
+          },
+          select: { id: true, whatsapp: true },
+        });
+
+        if (waSchedLeads.length === 0) {
+          await prisma.whatsAppCampaign.update({
+            where: { id: wsc.id },
+            data: { status: "SENT", sentAt: new Date(), completedAt: new Date(), totalRecipients: 0 },
+          });
+          continue;
+        }
+
+        await prisma.whatsAppCampaignRecipient.createMany({
+          data: waSchedLeads.map(function(l) {
+            return { campaignId: wsc.id, leadId: l.id, whatsappNumber: l.whatsapp as string, status: "PENDING" as const };
+          }),
+          skipDuplicates: true,
+        });
+        await prisma.whatsAppCampaign.update({
+          where: { id: wsc.id },
+          data: { status: "SENDING", sentAt: new Date(), totalRecipients: waSchedLeads.length },
+        });
+        stats.campaignsStarted++;
+      } catch (e) {
+        console.error("[Cron Campaigns] Promotion campagne WhatsApp programmée échouée", wsc.id, e);
+      }
+    }
+
     // ─── Campagnes WHATSAPP en cours d'envoi (même modèle : claim + lots via cron) ───
     var waCampaigns = await prisma.whatsAppCampaign.findMany({
       where: { status: "SENDING" },

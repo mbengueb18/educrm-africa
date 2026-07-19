@@ -2,17 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   updateWhatsAppCampaignDraft,
   getAvailableAudiencesForWhatsAppCampaign,
+  sendWhatsAppCampaign,
+  scheduleWhatsAppCampaign,
+  sendWhatsAppTestMessage,
 } from "../../actions";
 import { getApprovedTemplates } from "../../../settings/whatsapp-templates/actions";
 import {
   ArrowLeft, Save, Loader2, Check, Clock, MessageCircle,
   Users, FileText, Eye, Tag, Globe, CheckCircle, AlertTriangle,
-  Sparkles, Plus, Search,
+  Sparkles, Plus, Search, Send, X,
 } from "lucide-react";
 
 interface CampaignProps {
@@ -38,12 +42,66 @@ const DEMO_VALUES: Record<string, string> = {
 };
 
 export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
+  const router = useRouter();
   const [name, setName] = useState(campaign.name);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(campaign.templateId);
   const [selectedAudienceId, setSelectedAudienceId] = useState<string | null>(campaign.audienceId);
   const [activePanel, setActivePanel] = useState<"content" | "audience">("content");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Test / Programmer / Envoyer (harmonisé avec l'éditeur de campagne email)
+  const [testOpen, setTestOpen] = useState(false);
+  const [testNumber, setTestNumber] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleValue, setScheduleValue] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const handleSendTest = async () => {
+    if (!testNumber.trim()) { toast.error("Saisissez un numéro WhatsApp."); return; }
+    setSendingTest(true);
+    try {
+      await doSave(); // s'assurer que le template sélectionné est sauvegardé
+      await sendWhatsAppTestMessage(campaign.id, testNumber.trim());
+      toast.success("Message de test envoyé à " + testNumber.trim());
+      setTestOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "Échec de l'envoi du test");
+    }
+    setSendingTest(false);
+  };
+
+  const handleSchedule = async () => {
+    if (!scheduleValue) { toast.error("Choisissez une date et une heure."); return; }
+    setScheduling(true);
+    try {
+      await doSave();
+      const when = new Date(scheduleValue);
+      await scheduleWhatsAppCampaign(campaign.id, when.toISOString());
+      toast.success("Campagne programmée pour le " + when.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }));
+      router.push("/whatsapp-campaigns");
+    } catch (e: any) {
+      toast.error(e.message || "Impossible de programmer l'envoi");
+      setScheduling(false);
+    }
+  };
+
+  const handleSendNow = async () => {
+    if (!selectedAudienceId) { toast.error("Sélectionnez d'abord une audience."); return; }
+    if (!confirm("Envoyer cette campagne maintenant aux " + recipientsCount + " destinataires avec WhatsApp ?")) return;
+    setSending(true);
+    try {
+      await doSave();
+      const result = await sendWhatsAppCampaign(campaign.id);
+      toast.success("Campagne lancée : " + result.queued + " message" + (result.queued > 1 ? "s" : "") + " en file d'envoi (envoi en arrière-plan)");
+      router.push("/whatsapp-campaigns");
+    } catch (e: any) {
+      toast.error(e.message || "Impossible d'envoyer la campagne");
+      setSending(false);
+    }
+  };
 
   // Templates
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
@@ -173,6 +231,9 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/whatsapp-campaigns" className="btn-secondary py-1.5 text-xs">
+              <ArrowLeft size={13} /> Campagnes
+            </Link>
             <button
               onClick={() => {
                 doSave();
@@ -182,11 +243,98 @@ export function WhatsAppCampaignEditorClient({ campaign }: CampaignProps) {
             >
               <Save size={13} /> Sauvegarder
             </button>
-            <Link href="/whatsapp-campaigns" className="btn-primary py-1.5 text-xs">
-              <ArrowLeft size={13} /> Retour
-            </Link>
+            <button
+              onClick={() => setTestOpen(true)}
+              disabled={!selectedTemplateId}
+              className="btn-secondary py-1.5 text-xs disabled:opacity-50"
+              title="Envoyer un message de test à un numéro"
+            >
+              <Send size={13} /> Test
+            </button>
+            <button
+              onClick={() => setScheduleOpen(true)}
+              disabled={!selectedTemplateId || !selectedAudienceId}
+              className="btn-secondary py-1.5 text-xs disabled:opacity-50"
+              title="Programmer l'envoi à une date/heure"
+            >
+              <Clock size={13} /> Programmer
+            </button>
+            <button
+              onClick={handleSendNow}
+              disabled={sending || !selectedTemplateId || !selectedAudienceId}
+              className="btn-primary py-1.5 text-xs disabled:opacity-50"
+            >
+              {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Envoyer
+            </button>
           </div>
         </div>
+
+        {/* Modale : envoyer un test */}
+        {testOpen && (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={() => setTestOpen(false)} />
+            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-bold text-gray-900">Envoyer un test</h3>
+                <button onClick={() => setTestOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Le template sera envoyé à ce numéro avec des données d'exemple (un lead de l'audience si disponible).
+              </p>
+              <input
+                type="tel"
+                value={testNumber}
+                onChange={(e) => setTestNumber(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSendTest(); }}
+                placeholder="+221 77 000 00 00"
+                className="input text-sm w-full"
+                autoFocus
+              />
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button onClick={() => setTestOpen(false)} className="btn-secondary py-1.5 px-3 text-xs" disabled={sendingTest}>
+                  Annuler
+                </button>
+                <button onClick={handleSendTest} disabled={sendingTest} className="btn-primary py-1.5 px-3 text-xs">
+                  {sendingTest ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Envoyer le test
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Modale : programmer l'envoi */}
+        {scheduleOpen && (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={() => setScheduleOpen(false)} />
+            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-bold text-gray-900">Programmer l'envoi</h3>
+                <button onClick={() => setScheduleOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Les destinataires seront calculés à l'échéance, sur l'audience à jour ({recipientsCount} avec WhatsApp aujourd'hui).
+              </p>
+              <input
+                type="datetime-local"
+                value={scheduleValue}
+                onChange={(e) => setScheduleValue(e.target.value)}
+                className="input text-sm w-full"
+              />
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button onClick={() => setScheduleOpen(false)} className="btn-secondary py-1.5 px-3 text-xs" disabled={scheduling}>
+                  Annuler
+                </button>
+                <button onClick={handleSchedule} disabled={scheduling} className="btn-primary py-1.5 px-3 text-xs">
+                  {scheduling ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />} Programmer
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Panel tabs */}
         <div className="flex border-b border-gray-200 bg-white shrink-0">
