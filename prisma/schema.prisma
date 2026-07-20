@@ -1220,6 +1220,7 @@ model EmailCampaign {
   bouncedCount     Int                 @default(0)
   failedCount      Int                 @default(0)
   createdById      String?
+  sentById         String?             // utilisateur ayant DÉCLENCHÉ l'envoi (source de la signature) — peut différer du créateur
   organizationId   String
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt

@@ -123,9 +123,13 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      // Expéditeur réel = celui qui a DÉCLENCHÉ l'envoi (fallback : créateur).
+      // Sert à la fois au "De :" et à la signature → tout provient de l'expéditeur.
+      var senderId = campaign.sentById || campaign.createdById || null;
+
       // Compose l'expéditeur "Nom utilisateur — École"
-      var senderUser = campaign.createdById
-        ? await prisma.user.findUnique({ where: { id: campaign.createdById }, select: { name: true } })
+      var senderUser = senderId
+        ? await prisma.user.findUnique({ where: { id: senderId }, select: { name: true } })
         : null;
       var org = await prisma.organization.findUnique({
         where: { id: campaign.organizationId },
@@ -191,7 +195,8 @@ export async function GET(request: NextRequest) {
           isHtml: true,
           leadId: lead.id,
           organizationId: campaign.organizationId,
-          sentById: campaign.createdById || undefined,
+          // Tout provient de l'expéditeur réel : attribution ET signature (défaut = sentById)
+          sentById: senderId || undefined,
           fromName: campaignFromName,
           fromEmail: campaignFromEmail,
           isCampaign: true,

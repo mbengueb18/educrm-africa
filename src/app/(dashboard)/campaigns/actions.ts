@@ -370,16 +370,32 @@ export async function sendTestCampaignEmail(campaignId: string, to?: string): Pr
   }
 
   try {
+    // Pièces jointes de la campagne (identiques à l'envoi réel)
+    var testAttachments = ((campaign.attachments as any[]) || []).map(function(a) {
+      return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
+    });
+
+    // Expéditeur du test = l'utilisateur courant → mêmes "De :" et signature qu'à l'envoi réel
+    var testOrg = await prisma.organization.findUnique({
+      where: { id: campaign.organizationId },
+      select: { name: true },
+    });
+    var testFromName = [session.user.name, testOrg?.name].filter(Boolean).join(" — ") || "TalibCRM";
+
     var result = await sendEmail({
       to: recipient,
       subject: "[TEST] " + replaceVars(campaign.subject, sampleLead),
       body: htmlBody,
       organizationId: campaign.organizationId,
-      sentById: campaign.createdById || session.user.id,
+      // Expéditeur réel du test = utilisateur courant → attribution + signature
+      sentById: session.user.id,
+      fromName: testFromName,
+      fromEmail: process.env.EMAIL_FROM_CAMPAIGN || "admission@talibcrm.com",
       isHtml: true,
       includeSignature: (campaign as any).includeSignature !== false,
       cc: (campaign as any).cc || undefined,
       bcc: (campaign as any).bcc || undefined,
+      attachments: testAttachments.length > 0 ? testAttachments : undefined,
     });
     if (!result.success) return { ok: false, error: result.error || "Échec de l'envoi" };
     return { ok: true };
@@ -434,6 +450,7 @@ export async function sendCampaign(campaignId: string) {
       status: "SENDING",
       sentAt: new Date(),
       totalRecipients: leads.length,
+      sentById: session.user.id, // expéditeur réel → sa signature sera utilisée
     },
   });
 
@@ -442,6 +459,85 @@ export async function sendCampaign(campaignId: string) {
 
   // Retourne tout de suite : l'envoi se fait en arrière-plan
   return { queued: leads.length, total: leads.length };
+}
+
+// ─── Créer une campagne email à partir d'une SÉLECTION de leads (bouton pipeline) ───
+// Fige la sélection dans une audience STATIQUE, puis crée une campagne brouillon qui la
+// cible → l'utilisateur finalise dans l'éditeur complet et l'envoi passe par le cron par
+// lots (robuste à grande échelle, contrairement à l'ancien envoi synchrone).
+// Retourne { ok, error } (jamais de throw) pour éviter la redaction Next.js en prod.
+export async function createEmailCampaignFromLeads(
+  leadIds: string[]
+): Promise<{ ok: boolean; campaignId?: string; excludedNoEmail?: number; error?: string }> {
+  var session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+
+  var orgId = session.user.organizationId;
+  var userId = session.user.id; // capturé pour les closures (le narrowing ne s'y propage pas)
+  var uniqueIds = Array.from(new Set(leadIds || []));
+  if (uniqueIds.length === 0) return { ok: false, error: "Aucun lead sélectionné" };
+
+  // Ne garder que les leads valides de l'org, non convertis
+  var validLeads = await prisma.lead.findMany({
+    where: { id: { in: uniqueIds }, organizationId: orgId, isConverted: false },
+    select: { id: true, email: true },
+  });
+  // On ne cible QUE les leads avec email (comme l'ancien envoi en masse)
+  var emailLeads = validLeads.filter(function(l) { return !!l.email; });
+  if (emailLeads.length === 0) {
+    return { ok: false, error: "Aucun lead sélectionné n'a d'adresse email" };
+  }
+  var excludedNoEmail = validLeads.length - emailLeads.length;
+
+  // Nom d'audience unique (contrainte @@unique[organizationId, name]) → suffixe si collision
+  var now = new Date();
+  var baseName = "Sélection pipeline — " +
+    now.toLocaleDateString("fr-FR") + " " +
+    now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) +
+    " (" + emailLeads.length + ")";
+  var name = baseName;
+  var suffix = 1;
+  while (await prisma.audience.findFirst({ where: { organizationId: orgId, name: name }, select: { id: true } })) {
+    suffix++;
+    name = baseName + " #" + suffix;
+  }
+
+  // Audience statique figée depuis la sélection
+  var audience = await prisma.audience.create({
+    data: {
+      name: name,
+      description: "Créée depuis une sélection du pipeline",
+      type: "STATIC",
+      organizationId: orgId,
+      createdById: session.user.id,
+      memberCount: emailLeads.length,
+    },
+  });
+  await prisma.audienceMember.createMany({
+    data: emailLeads.map(function(l) {
+      return { audienceId: audience.id, leadId: l.id, addedById: userId };
+    }),
+    skipDuplicates: true,
+  });
+
+  // Campagne brouillon ciblant cette audience → éditeur complet
+  var campaign = await prisma.emailCampaign.create({
+    data: {
+      name: "Campagne — " + name,
+      subject: "",
+      body: "[]",
+      segmentRules: [],
+      audienceId: audience.id,
+      status: "DRAFT",
+      totalRecipients: emailLeads.length,
+      createdById: session.user.id,
+      organizationId: orgId,
+    },
+  });
+
+  revalidatePath("/campaigns");
+  revalidatePath("/audiences");
+  return { ok: true, campaignId: campaign.id, excludedNoEmail: excludedNoEmail };
 }
 
 // ─── Programmer l'envoi d'une campagne à une date/heure ultérieure ───
@@ -460,7 +556,7 @@ export async function scheduleCampaign(campaignId: string, scheduledAtISO: strin
   // Les destinataires seront calculés à l'échéance (par le cron), sur l'audience à jour.
   await prisma.emailCampaign.update({
     where: { id: campaignId },
-    data: { status: "SCHEDULED", scheduledAt: when },
+    data: { status: "SCHEDULED", scheduledAt: when, sentById: session.user.id },
   });
 
   revalidatePath("/campaigns");

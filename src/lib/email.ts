@@ -20,6 +20,7 @@ interface SendEmailParams {
   leadId?: string;
   organizationId: string;
   sentById?: string;
+  signatureUserId?: string; // dont la signature est ajoutée (défaut: sentById) — permet de dissocier signature et attribution
   replyTo?: string;
   attachments?: AttachmentInput[];
   isHtml?: boolean;
@@ -164,10 +165,13 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   // (Gmail / Resend) → l'image/mise en forme reste visible même en mode "texte".
   let signatureHtml = "";
   let signatureText = "";
-  if (params.includeSignature !== false && sentById) {
+  // La signature suit l'EXPÉDITEUR réel (signatureUserId), qui peut différer de
+  // sentById (attribution du message). Défaut : sentById si non précisé.
+  const signatureUserId = params.signatureUserId || sentById;
+  if (params.includeSignature !== false && signatureUserId) {
     try {
       const signer = await prisma.user.findUnique({
-        where: { id: sentById },
+        where: { id: signatureUserId },
         select: { emailSignature: true, emailSignatureEnabled: true },
       });
       if (signer?.emailSignatureEnabled && signer.emailSignature && signer.emailSignature.trim()) {

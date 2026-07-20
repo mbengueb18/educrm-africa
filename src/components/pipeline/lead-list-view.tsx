@@ -9,13 +9,8 @@ import {
   Download, Columns3, Check, Send, Trash2, Loader2, UserPlus,
   ArrowUpDown,
 } from "lucide-react";
-import dynamic from "next/dynamic";
-// Lazy : l'éditeur email (~1300 lignes) ne charge qu'au clic sur "Envoyer un email"
-const BulkEmailModal = dynamic(
-  () => import("@/components/messaging/bulk-email-modal").then((m) => m.BulkEmailModal),
-  { ssr: false }
-);
 import { deleteLeads, assignLeadsBulk } from "@/app/(dashboard)/pipeline/actions";
+import { createEmailCampaignFromLeads } from "@/app/(dashboard)/campaigns/actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -149,7 +144,7 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 50;
-  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
   var [deleting, setDeleting] = useState(false);
   var [assigning, setAssigning] = useState(false);
   var [showAssignMenu, setShowAssignMenu] = useState(false);
@@ -268,6 +263,29 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
       toast.error(err.message || "Erreur lors de la suppression");
     }
     setDeleting(false);
+  };
+
+  // « Envoyer un email » : la sélection devient une campagne (audience figée) et
+  // on ouvre l'éditeur complet. L'envoi passe ensuite par le cron par lots.
+  var handleBulkEmail = async function() {
+    var ids = leads.filter(function(l) { return selectedLeads.has(l.id); }).map(function(l) { return l.id; });
+    if (ids.length === 0) return;
+    setCreatingCampaign(true);
+    try {
+      var res = await createEmailCampaignFromLeads(ids);
+      if (!res.ok || !res.campaignId) {
+        toast.error(res.error || "Impossible de créer la campagne");
+        setCreatingCampaign(false);
+        return;
+      }
+      if (res.excludedNoEmail && res.excludedNoEmail > 0) {
+        toast.info(res.excludedNoEmail + " lead(s) sans email exclu(s)");
+      }
+      router.push("/campaigns/" + res.campaignId + "/edit");
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+      setCreatingCampaign(false);
+    }
   };
 
   var handleBulkAssign = async function(userId: string | null) {
@@ -449,11 +467,12 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
                 </button>
               )}
               <button
-                onClick={() => setBulkEmailOpen(true)}
+                onClick={handleBulkEmail}
+                disabled={creatingCampaign}
                 className="btn-primary py-1.5 px-3 text-xs"
               >
-                <Send size={13} />
-                Envoyer un email
+                {creatingCampaign ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                {creatingCampaign ? "Création…" : "Envoyer un email"}
               </button>
 
             {canAssign && (
@@ -779,18 +798,6 @@ export function LeadListView({ leads, stages, users, programs = [], campuses = [
         </div>
       )}
 
-      {bulkEmailOpen && (
-        <BulkEmailModal
-          open={bulkEmailOpen}
-          onClose={() => { setBulkEmailOpen(false); setSelectedLeads(new Set()); }}
-          selectedLeads={leads.filter((l) => selectedLeads.has(l.id)).map((l) => ({
-            id: l.id,
-            firstName: l.firstName,
-            lastName: l.lastName,
-            email: l.email,
-          }))}
-        />
-      )}
     </div>
   );
 }
