@@ -28,6 +28,25 @@ interface SendEmailParams {
   fromEmail?: string;
   isCampaign?: boolean;
   includeSignature?: boolean; // ajoute la signature de l'expéditeur (défaut: oui)
+  cc?: string | string[];  // copie visible (chaîne "a@x, b@y" ou tableau)
+  bcc?: string | string[]; // copie cachée (Cci)
+}
+
+// Normalise une liste d'emails (chaîne séparée par , ; ou retour ligne, ou tableau)
+// → tableau d'adresses valides, dédupliquées.
+export function parseEmailList(input?: string | string[] | null): string[] {
+  if (!input) return [];
+  const raw = Array.isArray(input) ? input : String(input).split(/[,;\n]+/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw) {
+    const e = (part || "").trim();
+    if (e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !seen.has(e.toLowerCase())) {
+      seen.add(e.toLowerCase());
+      out.push(e);
+    }
+  }
+  return out;
 }
 
 interface EmailResult {
@@ -88,6 +107,17 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   }
 
   const apiKey = process.env.RESEND_API_KEY;
+
+  // ─── CC / BCC (copies visible/cachée) ───
+  // On exclut l'adresse principale des copies pour éviter un doublon d'envoi.
+  const ccList = parseEmailList(params.cc).filter((e) => e.toLowerCase() !== to.toLowerCase());
+  const bccList = parseEmailList(params.bcc).filter((e) => e.toLowerCase() !== to.toLowerCase());
+  // Contenu stocké dans le Message (cc/bcc seulement s'ils existent → rétro-compatible).
+  const buildContent = () => JSON.stringify({
+    subject, body,
+    ...(ccList.length ? { cc: ccList } : {}),
+    ...(bccList.length ? { bcc: bccList } : {}),
+  });
 
   // ─── Expéditeur pour l'envoi Resend (repli quand pas d'envoi via Gmail) ───
   // Priorité : domaine vérifié de l'organisation → params → env → noreply.
@@ -165,6 +195,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       var gmailResult = await sendViaGmail({
         userId: sentById,
         to,
+        cc: ccList.length ? ccList.join(", ") : undefined,
+        bcc: bccList.length ? bccList.join(", ") : undefined,
         subject,
         htmlBody: gHtml,
         textBody: gText,
@@ -181,7 +213,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
             leadId: leadId || null,
             channel: "EMAIL",
             direction: "OUTBOUND",
-            content: JSON.stringify({ subject, body }),
+            content: buildContent(),
             status: "SENT",
             externalId: gmailResult.messageId,
             sentById: sentById || null,
@@ -224,7 +256,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
             leadId: leadId || null,
             channel: "EMAIL",
             direction: "OUTBOUND",
-            content: JSON.stringify({ subject, body }),
+            content: buildContent(),
             status: "FAILED",
             sentById: sentById || null,
             organizationId,
@@ -248,7 +280,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         leadId: leadId || null,
         channel: "EMAIL",
         direction: "OUTBOUND",
-        content: JSON.stringify({ subject, body }),
+        content: buildContent(),
         status: "QUEUED",
         sentById: sentById || null,
         organizationId,
@@ -303,6 +335,8 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
     const { data, error } = await resend.emails.send({
       from: senderName + " <" + senderEmail + ">",
       to: [to],
+      cc: ccList.length ? ccList : undefined,
+      bcc: bccList.length ? bccList : undefined,
       subject,
       html: finalHtml,
       text: finalText,
@@ -320,7 +354,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
           leadId: leadId || null,
           channel: "EMAIL",
           direction: "OUTBOUND",
-          content: JSON.stringify({ subject, body }),
+          content: buildContent(),
           status: "FAILED",
           sentById: sentById || null,
           organizationId,
@@ -336,7 +370,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         leadId: leadId || null,
         channel: "EMAIL",
         direction: "OUTBOUND",
-        content: JSON.stringify({ subject, body }),
+        content: buildContent(),
         status: "SENT",
         externalId: data.id,
         sentById: sentById || null,
@@ -380,7 +414,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
         leadId: leadId || null,
         channel: "EMAIL",
         direction: "OUTBOUND",
-        content: JSON.stringify({ subject, body }),
+        content: buildContent(),
         status: "FAILED",
         sentById: sentById || null,
         organizationId,

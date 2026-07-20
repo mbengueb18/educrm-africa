@@ -65,6 +65,9 @@ const QUICK_TEMPLATES = [
 export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSent, onClose, compact = false, fill = false }: ComposeEmailProps) {
   const [mode, setMode] = useState<"text" | "visual">("text");
   const [subject, setSubject] = useState(initialSubject || "");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showCc, setShowCc] = useState(false);
   const [body, setBody] = useState("");
   const [blocks, setBlocks] = useState<EmailBlock[]>([]);
   const [html, setHtml] = useState("");
@@ -239,7 +242,9 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             return { path: a.path, filename: a.filename, contentType: a.contentType, size: a.size };
           }) : undefined,
           isHtml,
-          addSignature
+          addSignature,
+          cc.trim() || undefined,
+          bcc.trim() || undefined
         );
         if (result.success) {
           toast.success(result.demoMode
@@ -247,6 +252,9 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             : "Email envoye a " + leadEmail
           );
           setSubject("");
+          setCc("");
+          setBcc("");
+          setShowCc(false);
           setBody("");
           setBlocks([]);
           setHtml("");
@@ -269,6 +277,25 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
           <span className="text-gray-400 w-8 shrink-0">A :</span>
           <span className="text-gray-700 font-medium">{leadName}</span>
           <span className="text-gray-400">&lt;{leadEmail}&gt;</span>
+          {!showCc && (
+            <button type="button" onClick={function() { setShowCc(true); }} className="ml-auto text-xs text-brand-600 hover:text-brand-700 font-medium">
+              Cc / Cci
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Cc / Cci — dépliables */}
+      {(showCc || cc || bcc) && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-400 w-8 shrink-0 text-xs">Cc :</span>
+            <input value={cc} onChange={function(e) { setCc(e.target.value); }} placeholder="copie visible — plusieurs séparées par des virgules" className="input text-sm py-1.5 flex-1" />
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-400 w-8 shrink-0 text-xs">Cci :</span>
+            <input value={bcc} onChange={function(e) { setBcc(e.target.value); }} placeholder="copie cachée" className="input text-sm py-1.5 flex-1" />
+          </div>
         </div>
       )}
 
@@ -294,6 +321,12 @@ export function ComposeEmail({ leadId, leadName, leadEmail, initialSubject, onSe
             <Layers size={12} /> Visuel
           </button>
         </div>
+
+        {compact && !showCc && !cc && !bcc && (
+          <button type="button" onClick={function() { setShowCc(true); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium px-1 shrink-0">
+            Cc / Cci
+          </button>
+        )}
 
         <div className="relative flex-1">
           <button

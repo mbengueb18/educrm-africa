@@ -1225,6 +1225,8 @@ model EmailCampaign {
   updatedAt        DateTime            @updatedAt
   audienceId       String?
   includeSignature Boolean             @default(true) // ajouter la signature de l'expéditeur en bas de chaque email
+  cc               String? // adresses en copie VISIBLE ajoutées à chaque email (séparées par des virgules)
+  bcc              String? // adresses en copie CACHÉE (Cci) ajoutées à chaque email
   audience         Audience?           @relation("CampaignAudience", fields: [audienceId], references: [id], onDelete: SetNull)
 
   createdBy    User?                    @relation("EmailCampaigns", fields: [createdById], references: [id])

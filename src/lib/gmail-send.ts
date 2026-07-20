@@ -62,6 +62,8 @@ export interface GmailAttachment {
 export interface GmailSendParams {
   userId: string;
   to: string;
+  cc?: string;   // copie visible (adresses séparées par des virgules)
+  bcc?: string;  // copie cachée (Cci)
   subject: string;
   htmlBody: string;
   textBody?: string;
@@ -131,6 +133,8 @@ export async function sendViaGmail(params: GmailSendParams): Promise<GmailSendRe
   var parts: string[] = [];
   parts.push("From: " + fromHeader);
   parts.push("To: " + params.to);
+  if (params.cc) parts.push("Cc: " + params.cc);
+  if (params.bcc) parts.push("Bcc: " + params.bcc);
   if (params.replyTo) parts.push("Reply-To: " + params.replyTo);
   parts.push("Subject: " + encodeSubject(params.subject));
   parts.push("MIME-Version: 1.0");

@@ -102,6 +102,10 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
   var [attachments, setAttachments] = useState<any[]>((campaign as any).attachments || []);
   var [uploadingAttachment, setUploadingAttachment] = useState(false);
   var [includeSignature, setIncludeSignature] = useState<boolean>((campaign as any).includeSignature !== false);
+  // Copies CC (visible) / CCI (cachée) ajoutées à CHAQUE email de la campagne
+  var [cc, setCc] = useState<string>((campaign as any).cc || "");
+  var [bcc, setBcc] = useState<string>((campaign as any).bcc || "");
+  var [showCc, setShowCc] = useState<boolean>(!!((campaign as any).cc || (campaign as any).bcc));
   // Bibliothèque de documents (pièce jointe sans ré-upload)
   var [libraryOpen, setLibraryOpen] = useState(false);
   var [libraryDocs, setLibraryDocs] = useState<any[]>([]);
@@ -163,13 +167,15 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
         audienceId: audienceMode === "audience" ? selectedAudienceId : null,
         attachments: attachments,
         includeSignature: includeSignature,
+        cc: cc,
+        bcc: bcc,
       });
       setLastSaved(new Date());
     } catch (e) {
       // silent fail for auto-save
     }
     setSaving(false);
-  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments, includeSignature]);
+  }, [campaign.id, name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, attachments, includeSignature, cc, bcc]);
 
   // ─── Envoi de la campagne depuis l'éditeur (même flow que la liste : modal + stats) ───
   var handleSend = function() {
@@ -283,7 +289,7 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
     return function() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments, includeSignature]);
+  }, [name, subject, blocks, filterGroup, audienceMode, selectedAudienceId, doSave, attachments, includeSignature, cc, bcc]);
 
   // Aperçu live des destinataires (debounce 600ms)
   useEffect(function() {
@@ -468,7 +474,14 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
 
             {/* Subject */}
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Objet de l'email</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-gray-500 block">Objet de l'email</label>
+                {!showCc && (
+                  <button type="button" onClick={function() { setShowCc(true); }} className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                    + Cc / Cci
+                  </button>
+                )}
+              </div>
               <input
                 value={subject}
                 onChange={function(e) { setSubject(e.target.value); }}
@@ -476,6 +489,31 @@ export function CampaignEditorClient({ campaign, stages, programs, audiences, us
                 placeholder="Objet de votre email..."
               />
             </div>
+
+            {/* Cc / Cci — adresses fixes ajoutées à CHAQUE email de la campagne */}
+            {showCc && (
+              <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Cc <span className="text-gray-400">(copie visible du destinataire)</span></label>
+                  <input
+                    value={cc}
+                    onChange={function(e) { setCc(e.target.value); }}
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                    placeholder="superviseur@ecole.com, archive@ecole.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Cci <span className="text-gray-400">(copie cachée)</span></label>
+                  <input
+                    value={bcc}
+                    onChange={function(e) { setBcc(e.target.value); }}
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                    placeholder="direction@ecole.com"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400">Ces adresses reçoivent une copie de <strong>chaque</strong> email envoyé. Séparez plusieurs adresses par des virgules.</p>
+              </div>
+            )}
 
             {/* Éditeur d'email avancé (composant partagé) */}
             <EmailEditor key={editorKey} initialBlocks={blocks} brandColor={BRAND_COLOR} orgInfo={orgInfo} onChange={function(b) { setBlocks(b); }} />

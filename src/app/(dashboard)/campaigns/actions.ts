@@ -115,6 +115,8 @@ export async function updateCampaignDraft(campaignId: string, data: {
   audienceId?: string | null;
   attachments?: any[];
   includeSignature?: boolean;
+  cc?: string | null;
+  bcc?: string | null;
 }) {
   var session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -132,6 +134,9 @@ export async function updateCampaignDraft(campaignId: string, data: {
   if (data.body !== undefined) updateData.body = data.body;
   if (data.attachments !== undefined) updateData.attachments = data.attachments;
   if (data.includeSignature !== undefined) updateData.includeSignature = data.includeSignature;
+  // Normalise cc/bcc : chaîne nettoyée ou null si vide
+  if (data.cc !== undefined) updateData.cc = (data.cc || "").trim() || null;
+  if (data.bcc !== undefined) updateData.bcc = (data.bcc || "").trim() || null;
 
   // Handle audienceId update (can be set or unset)
   var newAudienceId = data.audienceId !== undefined ? data.audienceId : currentCampaign.audienceId;
@@ -373,6 +378,8 @@ export async function sendTestCampaignEmail(campaignId: string, to?: string): Pr
       sentById: campaign.createdById || session.user.id,
       isHtml: true,
       includeSignature: (campaign as any).includeSignature !== false,
+      cc: (campaign as any).cc || undefined,
+      bcc: (campaign as any).bcc || undefined,
     });
     if (!result.success) return { ok: false, error: result.error || "Échec de l'envoi" };
     return { ok: true };
