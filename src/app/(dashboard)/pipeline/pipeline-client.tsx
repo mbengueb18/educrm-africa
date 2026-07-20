@@ -37,6 +37,15 @@ import { toast } from "sonner";
 import { detectDuplicates, mergeDuplicateLeads, recalculateOrgLeadScores } from "@/app/(dashboard)/pipeline/actions";
 import { FilterGroupBuilder, type FilterGroup } from "@/components/campaigns/filter-group-builder";
 import { evaluateLeadAgainstGroup } from "@/lib/lead-filters";
+import { Filter } from "lucide-react";
+
+// Libellés des sources (pour le panneau de filtres de base, partagé Liste + Kanban)
+const SOURCE_LABELS: Record<string, string> = {
+  WEBSITE: "Site web", FACEBOOK: "Facebook", INSTAGRAM: "Instagram",
+  WHATSAPP: "WhatsApp", PHONE_CALL: "Appel", WALK_IN: "Visite",
+  REFERRAL: "Parrainage", SALON: "Salon", RADIO: "Radio", TV: "TV",
+  PARTNER: "Partenaire", IMPORT: "Import", OTHER: "Autre",
+};
 
 interface PipelineClientProps {
   stages: any[];
@@ -282,16 +291,40 @@ export function PipelineClient({
     setMerging(false);
   };
 
+  // Nombre de filtres de base actifs (source/conseiller/filière/campus/étape)
+  var activeBasicFiltersCount = [
+    listState.filterStage, listState.filterSource, listState.filterAssigned,
+    listState.filterProgram, listState.filterCampus,
+  ].filter(Boolean).length;
+
+  var clearBasicFilters = function() {
+    onViewChange({ filterStage: "", filterSource: "", filterAssigned: "", filterProgram: "", filterCampus: "" });
+  };
+
   // Filter leads — memoïsé : le filtre avancé peut évaluer des milliers de leads,
   // inutile de le refaire à chaque frappe dans la recherche ou autre re-render.
+  // Les filtres de base (étape/source/conseiller/filière/campus) sont appliqués ICI,
+  // en un seul point, sur le jeu de leads transmis à la Liste ET au Kanban → filtres
+  // strictement identiques entre les deux vues (source de vérité unique = listState).
   var filteredLeads = useMemo(function() {
+    var fStage = listState.filterStage, fSource = listState.filterSource;
+    var fAssigned = listState.filterAssigned, fProgram = listState.filterProgram, fCampus = listState.filterCampus;
     return leads.filter(function(l: any) {
       if (filterMine && l.assignedToId !== currentUserId) return false;
       if (filterToQualify && l.programId) return false;
+      if (fStage && l.stageId !== fStage) return false;
+      if (fSource && l.source !== fSource) return false;
+      if (fAssigned) {
+        if (fAssigned === "unassigned" && l.assignedToId) return false;
+        if (fAssigned !== "unassigned" && l.assignedToId !== fAssigned) return false;
+      }
+      if (fProgram && l.programId !== fProgram) return false;
+      if (fCampus && l.campusId !== fCampus) return false;
       if (advancedFilter.rules.length > 0 && !evaluateLeadAgainstGroup(l, advancedFilter)) return false;
       return true;
     });
-  }, [leads, filterMine, filterToQualify, advancedFilter, currentUserId]);
+  }, [leads, filterMine, filterToQualify, advancedFilter, currentUserId,
+      listState.filterStage, listState.filterSource, listState.filterAssigned, listState.filterProgram, listState.filterCampus]);
 
   // Compteur leads à qualifier (sans filière)
   var leadsToQualifyCount = useMemo(function() {
@@ -480,6 +513,20 @@ export function PipelineClient({
               </span>
             )}
           </button>
+          {/* Filtres de base — partagés Liste + Kanban */}
+          <button onClick={function() { setShowFilters(!showFilters); }}
+            className={cn("btn-secondary py-1.5 text-xs",
+              activeBasicFiltersCount > 0 && "bg-brand-100 text-brand-700 border-brand-200"
+            )}>
+            <Filter size={13} />
+            Filtres
+            {activeBasicFiltersCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-200 text-brand-800">
+                {activeBasicFiltersCount}
+              </span>
+            )}
+          </button>
+
           {/* Filtre avancé */}
           <button onClick={function() { setShowAdvancedFilter(!showAdvancedFilter); }}
             className={cn("btn-secondary py-1.5 text-xs",
@@ -666,6 +713,66 @@ export function PipelineClient({
           </div>
         </div>
       )}
+      {/* Panneau de filtres de base — un seul, appliqué à la Liste ET au Kanban */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><Filter size={14} className="text-gray-400" /> Filtres</h4>
+            <div className="flex items-center gap-2">
+              {activeBasicFiltersCount > 0 && (
+                <button onClick={clearBasicFilters} className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                  Effacer tout
+                </button>
+              )}
+              <button onClick={function() { setShowFilters(false); }} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Étape</label>
+              <select value={listState.filterStage} onChange={function(e) { onViewChange({ filterStage: e.target.value }); }} className="input text-sm py-1.5">
+                <option value="">Toutes</option>
+                {stages.map(function(s: any) { return <option key={s.id} value={s.id}>{s.name}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Source</label>
+              <select value={listState.filterSource} onChange={function(e) { onViewChange({ filterSource: e.target.value }); }} className="input text-sm py-1.5">
+                <option value="">Toutes</option>
+                {Object.entries(SOURCE_LABELS).map(function(entry) { return <option key={entry[0]} value={entry[0]}>{entry[1]}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Conseiller</label>
+              <select value={listState.filterAssigned} onChange={function(e) { onViewChange({ filterAssigned: e.target.value }); }} className="input text-sm py-1.5">
+                <option value="">Tous</option>
+                <option value="unassigned">Non assigné</option>
+                {users.map(function(u: any) { return <option key={u.id} value={u.id}>{u.name}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Filière</label>
+              <select value={listState.filterProgram} onChange={function(e) { onViewChange({ filterProgram: e.target.value }); }} className="input text-sm py-1.5">
+                <option value="">Toutes</option>
+                {programs.map(function(p: any) { return <option key={p.id} value={p.id}>{p.name}</option>; })}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Campus</label>
+              <select value={listState.filterCampus} onChange={function(e) { onViewChange({ filterCampus: e.target.value }); }} className="input text-sm py-1.5">
+                <option value="">Tous</option>
+                {campuses.map(function(c: any) { return <option key={c.id} value={c.id}>{c.name} — {c.city}</option>; })}
+              </select>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-3">
+            Ces filtres s'appliquent à la fois à la Liste et au Kanban{activeViewId ? " et sont enregistrés dans la vue active." : "."}
+          </p>
+        </div>
+      )}
+
       {/* Bandeau d'aide quand filtre avancé actif */}
       {showAdvancedFilter && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 animate-scale-in">
