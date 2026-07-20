@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-storage";
+import { runExtraction } from "@/lib/documents/run-extraction";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false });
     if (error) return NextResponse.json({ error: "Téléversement échoué : " + error.message }, { status: 500 });
 
-    await prisma.libraryDocument.create({
+    const doc = await prisma.libraryDocument.create({
       data: {
         organizationId: session.user.organizationId,
         name: name || file.name || "Document",
@@ -52,8 +53,14 @@ export async function POST(request: NextRequest) {
         folderId,
         uploadedById: session.user.id,
         uploadedByName: session.user.name || "—",
+        // extractionStatus reste "PENDING" (défaut) → l'extraction tourne après la réponse.
       },
     });
+
+    // Extraction du texte (chatbot IA) en tâche de fond, après l'envoi de la réponse :
+    // l'upload reste rapide, et sur Vercel `after()` garantit l'exécution (contrairement
+    // à un fire-and-forget qui serait gelé à la fin de la requête).
+    after(() => runExtraction(doc.id));
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

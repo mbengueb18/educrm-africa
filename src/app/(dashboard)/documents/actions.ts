@@ -3,7 +3,9 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-storage";
+import { runExtraction } from "@/lib/documents/run-extraction";
 
 // Réutilise le bucket des pièces jointes → « Joindre depuis la bibliothèque » = simple
 // référence du path, sans ré-upload. (L'upload lui-même passe par /api/library/upload
@@ -16,6 +18,12 @@ export async function getLibraryDocuments() {
   return prisma.libraryDocument.findMany({
     where: { organizationId: session.user.organizationId },
     orderBy: { createdAt: "desc" },
+    // On exclut `extractedText` (potentiellement volumineux) du payload envoyé au client.
+    select: {
+      id: true, name: true, description: true, category: true, folderId: true,
+      path: true, mimeType: true, size: true, uploadedByName: true, createdAt: true,
+      botVisible: true, extractionStatus: true,
+    },
   });
 }
 
@@ -46,6 +54,29 @@ export async function updateLibraryDocument(id: string, data: { name?: string; c
   });
   revalidatePath("/documents");
   return { success: true };
+}
+
+// Active/désactive la visibilité d'un document pour le chatbot IA.
+// À l'activation, si le texte n'a pas encore été extrait (docs uploadés avant la
+// feature, ou extraction échouée), on relance l'extraction en tâche de fond → couvre
+// le backfill des documents existants sans batch séparé.
+export async function setDocumentBotVisible(id: string, visible: boolean) {
+  const session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  const doc = await prisma.libraryDocument.findUnique({ where: { id } });
+  if (!doc || doc.organizationId !== session.user.organizationId) {
+    return { ok: false, error: "Document introuvable" };
+  }
+
+  await prisma.libraryDocument.update({ where: { id }, data: { botVisible: visible } });
+
+  if (visible && doc.extractionStatus !== "DONE") {
+    await prisma.libraryDocument.update({ where: { id }, data: { extractionStatus: "PENDING" } });
+    after(() => runExtraction(id));
+  }
+
+  revalidatePath("/documents");
+  return { ok: true };
 }
 
 // ─── Dossiers (rangement des documents) ───

@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
 import { Search, Loader2, Check, History, Pencil } from "lucide-react";
-import { changePlan, setOrgReportingFeature } from "../actions";
+import { changePlan, setOrgReportingFeature, setOrgChatbotAi } from "../actions";
 
 type Org = {
   id: string; name: string; slug: string; plan: string; effectivePlan: string;
   trialUntil: string | Date | null; aiAddonEnabled: boolean; createdAt: string | Date;
-  reportingCustomEnabled: boolean; reportingAiEnabled: boolean;
+  reportingCustomEnabled: boolean; reportingAiEnabled: boolean; chatbotAiEnabled: boolean;
   users: number; maxUsers: number; leads: number;
 };
 type Log = {
@@ -164,6 +164,15 @@ function ReportingCell({ org }: { org: Org }) {
       } catch (e: any) { toast.error(e.message || "Erreur"); }
     });
   };
+  const toggleChatbot = (enabled: boolean) => {
+    start(async () => {
+      try {
+        await setOrgChatbotAi({ orgId: org.id, enabled });
+        toast.success(enabled ? "Chatbot IA activé" : "Chatbot IA désactivé");
+        router.refresh();
+      } catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
   const chip = (on: boolean, label: string, onClick: () => void) => (
     <button onClick={onClick} disabled={pending}
       className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 whitespace-nowrap",
@@ -175,6 +184,7 @@ function ReportingCell({ org }: { org: Org }) {
     <div className="flex gap-1.5">
       {chip(org.reportingCustomEnabled, "Rapports", () => toggle("custom", !org.reportingCustomEnabled))}
       {chip(org.reportingAiEnabled, "IA", () => toggle("ai", !org.reportingAiEnabled))}
+      {chip(org.chatbotAiEnabled, "Chatbot IA", () => toggleChatbot(!org.chatbotAiEnabled))}
     </div>
   );
 }

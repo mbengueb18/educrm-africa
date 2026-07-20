@@ -35,6 +35,7 @@ model Organization {
   webTrackingEnabled     Boolean       @default(false)
   reportingCustomEnabled Boolean       @default(false) // Rapports personnalisés activés (back-office)
   reportingAiEnabled     Boolean       @default(false) // Analyste IA activé (back-office)
+  chatbotAiEnabled       Boolean       @default(false) // Chatbot IA (réponses depuis les documents) activé (back-office)
 
   campuses             Campus[]
   users                User[]
@@ -1040,10 +1041,22 @@ model LibraryDocument {
   uploadedByName String
   createdAt      DateTime @default(now())
 
+  // ─── Chatbot IA (Phase 1) ───
+  // Le doc alimente-t-il le chatbot public ? Choix explicite de l'école (défaut off :
+  // évite d'exposer contrats/finances/docs internes sur le widget public).
+  botVisible       Boolean   @default(false)
+  // Texte extrait du fichier (injecté dans le prompt du chatbot). Rempli en tâche de fond.
+  extractedText    String?
+  // PENDING | DONE | FAILED | UNSUPPORTED (format non géré : pptx, xlsx, image seule…)
+  extractionStatus String?   @default("PENDING")
+  extractedAt      DateTime?
+
   folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([folderId])
+  // Récupération rapide des docs qui alimentent le bot, par org.
+  @@index([organizationId, botVisible])
   @@map("library_documents")
 }
 
@@ -1448,6 +1461,11 @@ model ChatbotConfig {
   primaryColor   String   @default("#1B4F72")
   position       String   @default("bottom-right") // bottom-right, bottom-left
   scenario       Json     @default("[]")
+  // ─── Chatbot IA (Phase 1) ───
+  // Active le mode « réponses IA à partir des documents » (branche « Autre question »).
+  knowledgeEnabled Boolean @default(false)
+  // Consignes additionnelles de l'école ajoutées au prompt système (ton, infos clés…).
+  systemPromptExtra String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

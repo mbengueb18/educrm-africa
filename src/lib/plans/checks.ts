@@ -30,6 +30,7 @@ async function getOrgPlanInfo(orgId: string) {
       plan: true,
       planLockedUntil: true,
       aiAddonEnabled: true,
+      chatbotAiEnabled: true,
       extraUsersCount: true,
     },
   });
@@ -44,6 +45,7 @@ async function getOrgPlanInfo(orgId: string) {
   return {
     plan: effectivePlan,
     aiAddonEnabled: org.aiAddonEnabled,
+    chatbotAiEnabled: org.chatbotAiEnabled,
     extraUsersCount: org.extraUsersCount,
   };
 }
@@ -326,6 +328,10 @@ export async function canAccessFeature(
     REPORTING_SCHEDULED_EXPORT: limits.reportingScheduledExport,
     REPORTING_PERIOD_COMPARISON: limits.reportingPeriodComparison,
     REPORTING_AI: limits.reportingAI,
+    // Chatbot site web : activation MANUELLE par org depuis le back-office
+    // (découplé du plan pour l'instant ; `limits.chatbotAI` reste en réserve
+    // si on en fait un jour un addon Performance auto).
+    CHATBOT_AI: org.chatbotAiEnabled,
     // Lead Scoring
     AUTO_LEAD_SCORING: limits.autoScoring,
     HOT_WARM_COLD_AUTO: limits.hotWarmColdAuto,

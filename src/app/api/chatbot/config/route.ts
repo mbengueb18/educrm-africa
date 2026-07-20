@@ -125,6 +125,8 @@ export async function GET(request: NextRequest) {
       primaryColor: config.primaryColor,
       position: config.position,
       scenario: scenario,
+      // Mode IA : le widget branche la saisie libre sur /api/chatbot/ask si vrai.
+      knowledgeEnabled: !!config.knowledgeEnabled,
     }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

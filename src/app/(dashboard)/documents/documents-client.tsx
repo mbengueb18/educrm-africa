@@ -3,12 +3,13 @@
 import { useState, useMemo, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, FileText, Download, Link2, Trash2, Search, Plus, Loader2, X, Check, FolderOpen, Folder as FolderIcon, FolderPlus, Image as ImageIcon, Pencil } from "lucide-react";
-import { deleteLibraryDocument, getLibraryDocumentUrl, updateLibraryDocument, createDocumentFolder, renameDocumentFolder, deleteDocumentFolder } from "./actions";
+import { Upload, FileText, Download, Link2, Trash2, Search, Plus, Loader2, X, Check, FolderOpen, Folder as FolderIcon, FolderPlus, Image as ImageIcon, Pencil, Bot } from "lucide-react";
+import { deleteLibraryDocument, getLibraryDocumentUrl, updateLibraryDocument, createDocumentFolder, renameDocumentFolder, deleteDocumentFolder, setDocumentBotVisible } from "./actions";
 
 type Doc = {
   id: string; name: string; description: string | null; category: string; folderId: string | null;
   path: string; mimeType: string; size: number; uploadedByName: string; createdAt: string | Date;
+  botVisible?: boolean; extractionStatus?: string | null;
 };
 type FolderT = { id: string; name: string };
 
@@ -101,6 +102,12 @@ export function DocumentsClient({ documents, folders }: { documents: Doc[]; fold
       catch (e: any) { toast.error(e.message || "Erreur"); }
     });
   };
+  const toggleBot = (id: string, next: boolean) => startTransition(async () => {
+    const res = await setDocumentBotVisible(id, next);
+    if (res?.ok === false) { toast.error(res.error || "Erreur"); return; }
+    toast.success(next ? "Document ajouté au chatbot" : "Document retiré du chatbot");
+    router.refresh();
+  });
 
   return (
     <div>
@@ -168,6 +175,22 @@ export function DocumentsClient({ documents, folders }: { documents: Doc[]; fold
                 </div>
                 {doc.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{doc.description}</p>}
                 <p className="text-[11px] text-gray-400 mt-2 mb-3">Ajouté par {doc.uploadedByName} · {new Date(doc.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</p>
+
+                {/* Visibilité chatbot */}
+                <label className="flex items-center justify-between gap-2 mb-3 rounded-lg bg-gray-50 px-2.5 py-2 cursor-pointer">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                    <Bot size={13} className={doc.botVisible ? "text-brand-600" : "text-gray-400"} /> Visible par le chatbot
+                    {doc.botVisible && doc.extractionStatus === "PENDING" && <span className="text-[10px] text-amber-600">· analyse…</span>}
+                    {doc.botVisible && doc.extractionStatus === "FAILED" && <span className="text-[10px] text-red-500">· échec lecture</span>}
+                    {doc.botVisible && doc.extractionStatus === "UNSUPPORTED" && <span className="text-[10px] text-gray-400">· format non lu</span>}
+                    {doc.botVisible && doc.extractionStatus === "DONE" && <span className="text-[10px] text-emerald-600">· prêt</span>}
+                  </span>
+                  <span className="relative inline-flex items-center shrink-0">
+                    <input type="checkbox" checked={!!doc.botVisible} disabled={pending} onChange={(e) => toggleBot(doc.id, e.target.checked)} className="sr-only peer" />
+                    <span className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></span>
+                  </span>
+                </label>
+
                 <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-gray-100">
                   <button onClick={() => download(doc.id)} disabled={pending} className="btn-secondary py-1.5 px-2.5 text-xs flex-1 justify-center"><Download size={13} /> Télécharger</button>
                   <button onClick={() => copyLink(doc.id)} disabled={pending} className="btn-secondary py-1.5 px-2.5 text-xs" title="Copier le lien de partage (30 jours)"><Link2 size={13} /></button>

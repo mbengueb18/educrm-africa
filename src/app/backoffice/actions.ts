@@ -56,7 +56,7 @@ export async function getOrganizations() {
     select: {
       id: true, name: true, slug: true, plan: true, planLockedUntil: true,
       aiAddonEnabled: true, createdAt: true,
-      reportingCustomEnabled: true, reportingAiEnabled: true,
+      reportingCustomEnabled: true, reportingAiEnabled: true, chatbotAiEnabled: true,
       _count: { select: { users: true, leads: true } },
     },
   });
@@ -69,6 +69,7 @@ export async function getOrganizations() {
       trialUntil: o.planLockedUntil && !expired && o.plan !== "ESSENTIEL" ? o.planLockedUntil : null,
       aiAddonEnabled: o.aiAddonEnabled, createdAt: o.createdAt,
       reportingCustomEnabled: o.reportingCustomEnabled, reportingAiEnabled: o.reportingAiEnabled,
+      chatbotAiEnabled: o.chatbotAiEnabled,
       users: o._count.users, maxUsers: getPlanLimits(effectivePlan).maxUsersTotal, leads: o._count.leads,
     };
   });
@@ -81,6 +82,17 @@ export async function setOrgReportingFeature(data: { orgId: string; feature: "cu
   await prisma.organization.update({
     where: { id: data.orgId },
     data: { [field]: data.enabled },
+  });
+  return { ok: true };
+}
+
+// Active/désactive le chatbot IA (réponses depuis les documents) pour une org.
+// Décision 100 % back-office : c'est ici qu'on choisit qui a droit à la feature.
+export async function setOrgChatbotAi(data: { orgId: string; enabled: boolean }) {
+  await requireBo();
+  await prisma.organization.update({
+    where: { id: data.orgId },
+    data: { chatbotAiEnabled: data.enabled },
   });
   return { ok: true };
 }

@@ -85,6 +85,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     reportingPeriodComparison: false,
     reportingAI: false,
 
+    // Chatbot site web
+    chatbotAI: false,
+
     // Lead Scoring
     manualScoring: true,
     autoScoring: false,
@@ -184,6 +187,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     reportingPeriodComparison: true,
     reportingAI: false,
 
+    // Chatbot site web
+    chatbotAI: false,
+
     // Lead Scoring
     manualScoring: true,
     autoScoring: true,
@@ -282,6 +288,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     reportingScheduledExport: true,
     reportingPeriodComparison: true,
     reportingAI: true,
+
+    // Chatbot site web
+    chatbotAI: true,
 
     // Lead Scoring
     manualScoring: true,

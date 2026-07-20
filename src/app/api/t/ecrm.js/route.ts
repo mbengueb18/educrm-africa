@@ -1087,6 +1087,81 @@ export async function GET(request: NextRequest) {
       return div.innerHTML;
     }
 
+    // ─── Mode IA : le chatbot répond à partir des documents de l'école ───
+    // Activé quand config.knowledgeEnabled : la saisie libre devient une vraie
+    // conversation (POST /api/chatbot/ask) au lieu d'une simple capture.
+    var aiCaptureNext = 'ask_name';
+
+    function showCaptureButton() {
+      var inputZone = document.getElementById('_ecrm_input_zone');
+      if (!inputZone || document.getElementById('_ecrm_capture_btn')) return;
+      var b = document.createElement('button');
+      b.id = '_ecrm_capture_btn';
+      b.textContent = 'Laisser mes coordonnées';
+      b.style.cssText = 'display:block;width:100%;margin:0 0 8px 0;padding:10px;background:' + primary + ';color:white;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;';
+      b.onclick = function() { goToStep(aiCaptureNext); };
+      inputZone.insertBefore(b, inputZone.firstChild);
+    }
+
+    function askAI(question, inputEl, sendEl) {
+      if (!question) return;
+      addUserMessage(question);
+      if (inputEl) inputEl.value = '';
+      var typing = document.createElement('div');
+      typing.id = '_ecrm_typing';
+      typing.style.cssText = 'margin-bottom:12px;font-size:12px;color:#9ca3af;padding-left:36px;';
+      typing.textContent = (config.agentName || 'Assistant') + ' écrit…';
+      document.getElementById('_ecrm_messages').appendChild(typing);
+      scrollToBottom();
+      if (inputEl) inputEl.disabled = true;
+      if (sendEl) sendEl.disabled = true;
+      var reenable = function() { if (inputEl) { inputEl.disabled = false; inputEl.focus(); } if (sendEl) sendEl.disabled = false; };
+      fetch('${baseUrl}/api/chatbot/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: ECRM.orgSlug, question: question, history: history.slice(-10) }),
+      }).then(function(r) { return r.json(); })
+        .then(function(res) {
+          var t = document.getElementById('_ecrm_typing'); if (t) t.remove();
+          addBotMessage((res && res.reply) ? res.reply : "Je préfère laisser un conseiller vous répondre.");
+          if (res && res.shouldCaptureLead) showCaptureButton();
+          reenable();
+        })
+        .catch(function() {
+          var t = document.getElementById('_ecrm_typing'); if (t) t.remove();
+          addBotMessage("Je rencontre un souci technique. Laissez-moi vos coordonnées.");
+          showCaptureButton();
+          reenable();
+        });
+    }
+
+    function enterAiMode(step) {
+      aiCaptureNext = step.next || 'ask_name';
+      var inputZone = document.getElementById('_ecrm_input_zone');
+      inputZone.innerHTML = '';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Posez votre question...';
+      input.style.cssText = 'flex:1;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;';
+      var sendBtn = document.createElement('button');
+      sendBtn.style.cssText = 'padding:10px 14px;background:' + primary + ';color:white;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;';
+      sendBtn.textContent = '→';
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;gap:6px;';
+      wrap.appendChild(input);
+      wrap.appendChild(sendBtn);
+      inputZone.appendChild(wrap);
+      var talk = document.createElement('button');
+      talk.textContent = 'Parler à un conseiller';
+      talk.style.cssText = 'display:block;width:100%;margin-top:8px;padding:8px;background:none;border:none;color:#6b7280;font-size:12px;cursor:pointer;text-decoration:underline;';
+      talk.onclick = function() { goToStep(aiCaptureNext); };
+      inputZone.appendChild(talk);
+      var send = function() { var v = input.value.trim(); if (v) askAI(v, input, sendBtn); };
+      sendBtn.onclick = send;
+      input.addEventListener('keypress', function(e) { if (e.key === 'Enter') send(); });
+      setTimeout(function() { input.focus(); }, 100);
+    }
+
     function goToStep(stepId) {
       var step = scenario.find(function(s) { return s.id === stepId; });
       if (!step) return;
@@ -1111,6 +1186,8 @@ export async function GET(request: NextRequest) {
           inputZone.appendChild(btn);
         });
       } else if (step.type === 'input') {
+        // Question libre + mode IA activé → conversation avec les documents de l'école.
+        if (config.knowledgeEnabled && step.field === 'message') { enterAiMode(step); return; }
         var input = document.createElement('input');
         input.type = step.field === 'email' ? 'email' : (step.field === 'phone' ? 'tel' : 'text');
         input.placeholder = 'Votre réponse...';

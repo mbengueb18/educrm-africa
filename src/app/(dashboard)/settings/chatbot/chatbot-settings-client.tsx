@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { updateChatbotConfig } from "./actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Bot, Check, Loader2, Palette, MessageCircle, Power } from "lucide-react";
+import { Bot, Check, Loader2, MessageCircle, Power, Sparkles, FileText, Lock } from "lucide-react";
 
 interface ChatbotConfig {
   id: string;
@@ -13,20 +14,42 @@ interface ChatbotConfig {
   welcomeMessage: string;
   primaryColor: string;
   position: string;
+  knowledgeEnabled: boolean;
+  systemPromptExtra: string | null;
 }
 
-export function ChatbotSettingsClient({ config }: { config: ChatbotConfig }) {
+export function ChatbotSettingsClient({
+  config,
+  chatbotAiAllowed,
+}: {
+  config: ChatbotConfig;
+  chatbotAiAllowed: boolean;
+}) {
   const [enabled, setEnabled] = useState(config.enabled);
   const [agentName, setAgentName] = useState(config.agentName);
   const [welcomeMessage, setWelcomeMessage] = useState(config.welcomeMessage);
   const [primaryColor, setPrimaryColor] = useState(config.primaryColor);
   const [position, setPosition] = useState(config.position);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(config.knowledgeEnabled);
+  const [systemPromptExtra, setSystemPromptExtra] = useState(config.systemPromptExtra || "");
   const [isPending, startTransition] = useTransition();
 
   const handleSave = () => {
     startTransition(async () => {
       try {
-        await updateChatbotConfig({ enabled, agentName, welcomeMessage, primaryColor, position });
+        const res = await updateChatbotConfig({
+          enabled,
+          agentName,
+          welcomeMessage,
+          primaryColor,
+          position,
+          knowledgeEnabled,
+          systemPromptExtra,
+        });
+        if (res?.ok === false) {
+          toast.error(res.error || "Erreur");
+          return;
+        }
         toast.success("Configuration sauvegardée");
       } catch (e: any) {
         toast.error(e.message || "Erreur");
@@ -100,6 +123,62 @@ export function ChatbotSettingsClient({ config }: { config: ChatbotConfig }) {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Réponses IA à partir des documents */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", knowledgeEnabled && chatbotAiAllowed ? "bg-brand-50" : "bg-gray-100")}>
+                <Sparkles size={20} className={knowledgeEnabled && chatbotAiAllowed ? "text-brand-600" : "text-gray-400"} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  Répondre avec l'IA à partir de mes documents
+                  {!chatbotAiAllowed && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                      <Lock size={10} /> Sur activation
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Le chatbot répond aux questions libres en s'appuyant sur les documents marqués « visible par le chatbot ».
+                </p>
+              </div>
+            </div>
+            <label className={cn("relative inline-flex items-center", chatbotAiAllowed ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
+              <input
+                type="checkbox"
+                checked={knowledgeEnabled && chatbotAiAllowed}
+                disabled={!chatbotAiAllowed}
+                onChange={(e) => setKnowledgeEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+            </label>
+          </div>
+
+          {chatbotAiAllowed ? (
+            <>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Consignes complémentaires (optionnel)</label>
+                <textarea
+                  value={systemPromptExtra}
+                  onChange={(e) => setSystemPromptExtra(e.target.value)}
+                  className="input min-h-[70px]"
+                  placeholder="Ex : Toujours proposer une visite du campus. Mettre en avant la filière Informatique."
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Ajoutées aux instructions de l'assistant (ton, infos à valoriser…).</p>
+              </div>
+              <Link href="/documents" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700">
+                <FileText size={14} /> Gérer les documents visibles par le chatbot
+              </Link>
+            </>
+          ) : (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              Cette fonctionnalité (le chatbot répond aux visiteurs à partir de vos brochures, règlements et fiches de filières) est activée sur demande par l'équipe TalibCRM. <strong>Contactez-nous pour l'activer.</strong>
+            </p>
+          )}
         </div>
 
         {/* Preview */}

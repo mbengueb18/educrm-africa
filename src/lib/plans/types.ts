@@ -42,6 +42,8 @@ export type Feature =
   | "REPORTING_SCHEDULED_EXPORT"
   | "REPORTING_PERIOD_COMPARISON"
   | "REPORTING_AI"
+  // Chatbot site web
+  | "CHATBOT_AI"
   // Lead Scoring
   | "AUTO_LEAD_SCORING"
   | "HOT_WARM_COLD_AUTO"
@@ -129,6 +131,9 @@ export interface PlanLimits {
   reportingScheduledExport: boolean;
   reportingPeriodComparison: boolean;
   reportingAI: boolean; // Analyste IA (langage naturel + insights auto)
+
+  // Chatbot site web
+  chatbotAI: boolean; // Le chatbot répond aux visiteurs à partir des documents de l'école
 
   // Lead Scoring
   manualScoring: boolean;
