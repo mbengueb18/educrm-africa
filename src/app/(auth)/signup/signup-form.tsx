@@ -10,6 +10,7 @@ import {
   Globe, BookOpen,
 } from "lucide-react";
 import { registerOrganization } from "./actions";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 
 var SCHOOL_TYPES = [
   { value: "university", label: "Université", icon: "🎓" },
@@ -61,9 +62,12 @@ export function SignupForm() {
   var [adminPassword, setAdminPassword] = useState("");
   var [confirmPassword, setConfirmPassword] = useState("");
   var [acceptedTerms, setAcceptedTerms] = useState(false);
+  var [captchaToken, setCaptchaToken] = useState("");
+  // Le CAPTCHA n'est requis que si la site key est configurée (dégradé sinon).
+  var captchaRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   var canStep1 = schoolName.trim() && schoolType && city.trim() && country;
-  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 8 && adminPassword === confirmPassword && acceptedTerms;
+  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 8 && adminPassword === confirmPassword && acceptedTerms && (!captchaRequired || !!captchaToken);
 
   var handleSubmit = async function() {
     setError("");
@@ -79,6 +83,7 @@ export function SignupForm() {
         adminEmail: adminEmail.trim(),
         adminPassword,
         acceptedTerms,
+        captchaToken,
       });
 
       if (!res.ok) {
@@ -351,6 +356,8 @@ export function SignupForm() {
                   <a href="/legal/confidentialite" target="_blank" rel="noopener" style={{ color: "#0E7C6B", textDecoration: "none", fontWeight: 600 }}>Politique de confidentialité</a>.
                 </span>
               </label>
+
+              <TurnstileWidget onToken={setCaptchaToken} />
 
               <div style={{ display: "flex", gap: 12 }}>
                 <button onClick={function() { setStep(1); setError(""); }}

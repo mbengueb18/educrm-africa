@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { sendVerificationEmail } from "@/lib/email-verification";
 import { isDisposableEmail, checkSignupThrottle } from "@/lib/signup-guard";
 import { validatePassword } from "@/lib/password-policy";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 // Récupère l'IP de l'appelant derrière les proxys Vercel.
 async function getClientIp(): Promise<string | null> {
@@ -59,6 +60,8 @@ export async function registerOrganization(data: {
   adminPassword: string;
   // Conditions
   acceptedTerms?: boolean;
+  // Anti-robot (Cloudflare Turnstile)
+  captchaToken?: string;
 }): Promise<RegisterResult> {
   // Validate
   if (!data.schoolName.trim()) return { ok: false, error: "Le nom de l'école est requis" };
@@ -78,8 +81,15 @@ export async function registerOrganization(data: {
     return { ok: false, error: "Merci d'utiliser une adresse email professionnelle ou personnelle valide (les adresses jetables ne sont pas acceptées)." };
   }
 
-  // Anti-abus : limite le nombre d'inscriptions par IP
   var ip = await getClientIp();
+
+  // Anti-robot : CAPTCHA Turnstile (dégradé propre si les clés ne sont pas configurées).
+  var captchaOk = await verifyTurnstile(data.captchaToken, ip);
+  if (!captchaOk) {
+    return { ok: false, error: "Vérification anti-robot échouée. Rechargez la page et réessayez." };
+  }
+
+  // Anti-abus : limite le nombre d'inscriptions par IP
   var throttle = await checkSignupThrottle(ip);
   if (!throttle.allowed) {
     return { ok: false, error: "Trop de tentatives d'inscription depuis votre réseau. Réessayez dans une heure." };
