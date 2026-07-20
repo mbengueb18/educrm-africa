@@ -76,8 +76,32 @@ model Organization {
   customReports        CustomReport[]
   aiReportQueries      AiReportQuery[]
   reportDashboards     ReportDashboard[]
+  folders              Folder[]
 
   @@map("organizations")
+}
+
+// Dossiers de rangement — partagés entre Documents et Templates email (discriminés
+// par `type`). Plats (pas d'imbrication). Supprimer un dossier ne supprime pas son
+// contenu : les documents/templates deviennent « sans dossier » (folderId = null).
+model Folder {
+  id             String     @id @default(cuid())
+  organizationId String
+  type           FolderType
+  name           String
+  createdAt      DateTime   @default(now())
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  libraryDocuments LibraryDocument[]
+  messageTemplates MessageTemplate[]
+
+  @@index([organizationId, type])
+  @@map("folders")
+}
+
+enum FolderType {
+  DOCUMENT // Bibliothèque de documents (/documents)
+  EMAIL_TEMPLATE // Templates email (settings/email-templates)
 }
 
 enum Plan {
@@ -917,14 +941,17 @@ model MessageTemplate {
   category       TemplateCategory
   isApproved     Boolean          @default(false) // WhatsApp template approval
   whatsappId     String? // WhatsApp Business template ID
+  folderId       String? // Dossier de rangement (optionnel)
   organizationId String
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  folder       Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   messages     Message[]
 
   @@index([organizationId])
+  @@index([folderId])
   @@map("message_templates")
 }
 
@@ -1008,11 +1035,15 @@ model LibraryDocument {
   path           String // chemin de stockage Supabase (bucket email-attachments, prefixe library/)
   mimeType       String
   size           Int // octets
+  folderId       String? // Dossier de rangement (optionnel)
   uploadedById   String
   uploadedByName String
   createdAt      DateTime @default(now())
 
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   @@index([organizationId])
+  @@index([folderId])
   @@map("library_documents")
 }
 

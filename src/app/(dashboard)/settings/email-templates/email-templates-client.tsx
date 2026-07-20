@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { blocksToHtml, type EmailBlock } from "@/components/messaging/email-editor";
-import { deleteEmailTemplate, duplicateEmailTemplate } from "./actions";
+import { deleteEmailTemplate, duplicateEmailTemplate, createTemplateFolder, renameTemplateFolder, deleteTemplateFolder, moveTemplateToFolder } from "./actions";
 import {
-  ArrowLeft, Plus, Mail, Copy, Trash2, Edit3, X, Loader2, Check, Search,
+  ArrowLeft, Plus, Mail, Copy, Trash2, Edit3, X, Loader2, Check, Search, Folder as FolderIcon, FolderPlus, FolderInput, Pencil,
 } from "lucide-react";
 
 interface Template {
@@ -19,9 +19,12 @@ interface Template {
   blocks: EmailBlock[] | null;
   brandColor: string | null;
   category: string;
+  folderId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+type FolderT = { id: string; name: string };
+const NO_FOLDER = "__none__";
 
 const CATEGORY_LABELS: Record<string, string> = {
   RECRUITMENT: "Recrutement",
@@ -97,15 +100,57 @@ const STARTER_TEMPLATES = [
   },
 ];
 
-export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
+export function EmailTemplatesClient({ templates, folders }: { templates: Template[]; folders: FolderT[] }) {
   const [search, setSearch] = useState("");
   const [showStarter, setShowStarter] = useState(false);
+  const [activeFolder, setActiveFolder] = useState<string>(""); // "" = tous | id | NO_FOLDER
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
-  const filtered = templates.filter((t) =>
-    !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.subject?.toLowerCase().includes(search.toLowerCase())
-  );
+  const counts = useMemo(() => {
+    const m: Record<string, number> = { "": templates.length, [NO_FOLDER]: 0 };
+    templates.forEach((t) => {
+      const k = t.folderId || NO_FOLDER;
+      m[k] = (m[k] || 0) + 1;
+    });
+    return m;
+  }, [templates]);
+
+  const activeFolderName = activeFolder && activeFolder !== NO_FOLDER ? folders.find((f) => f.id === activeFolder)?.name : null;
+
+  const filtered = templates.filter((t) => {
+    if (activeFolder === NO_FOLDER && t.folderId) return false;
+    if (activeFolder && activeFolder !== NO_FOLDER && t.folderId !== activeFolder) return false;
+    if (search && !(t.name.toLowerCase().includes(search.toLowerCase()) || t.subject?.toLowerCase().includes(search.toLowerCase()))) return false;
+    return true;
+  });
+
+  const createFolder = (name: string) => startTransition(async () => {
+    try { await createTemplateFolder(name); toast.success("Dossier créé"); setNewFolderOpen(false); router.refresh(); }
+    catch (e: any) { toast.error(e.message || "Erreur"); }
+  });
+  const renameFolder = (id: string) => {
+    const name = prompt("Renommer le dossier", activeFolderName || "");
+    if (name === null || !name.trim()) return;
+    startTransition(async () => {
+      try { await renameTemplateFolder(id, name); toast.success("Dossier renommé"); router.refresh(); }
+      catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
+  const removeFolder = (id: string) => {
+    if (!confirm("Supprimer ce dossier ? Les templates qu'il contient seront conservés (sans dossier).")) return;
+    startTransition(async () => {
+      try { await deleteTemplateFolder(id); toast.success("Dossier supprimé"); setActiveFolder(""); router.refresh(); }
+      catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
+  const moveTemplate = (id: string, folderId: string | null) => startTransition(async () => {
+    setMoveMenuId(null);
+    try { await moveTemplateToFolder(id, folderId); toast.success(folderId ? "Template déplacé" : "Retiré du dossier"); router.refresh(); }
+    catch (e: any) { toast.error(e.message || "Erreur"); }
+  });
 
   const handleDelete = async (id: string) => {
     if (!confirm("Supprimer ce template ?")) return;
@@ -171,6 +216,26 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un template..." className="input pl-9 text-sm" />
       </div>
 
+      {/* Dossiers */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <FolderChip label="Tous" count={counts[""] || 0} active={activeFolder === ""} onClick={() => setActiveFolder("")} />
+        {folders.map((f) => (
+          <FolderChip key={f.id} label={f.name} count={counts[f.id] || 0} active={activeFolder === f.id} onClick={() => setActiveFolder(f.id)} withIcon />
+        ))}
+        {(counts[NO_FOLDER] || 0) > 0 && (
+          <FolderChip label="Sans dossier" count={counts[NO_FOLDER] || 0} active={activeFolder === NO_FOLDER} onClick={() => setActiveFolder(NO_FOLDER)} />
+        )}
+        <button onClick={() => setNewFolderOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 px-2.5 py-1.5 rounded-full hover:bg-brand-50 transition-colors">
+          <FolderPlus size={14} /> Nouveau dossier
+        </button>
+        {activeFolderName && (
+          <span className="inline-flex items-center gap-1 ml-auto">
+            <button onClick={() => renameFolder(activeFolder)} disabled={pending} className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-gray-100" title="Renommer le dossier"><Pencil size={13} /></button>
+            <button onClick={() => removeFolder(activeFolder)} disabled={pending} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" title="Supprimer le dossier"><Trash2 size={13} /></button>
+          </span>
+        )}
+      </div>
+
       {/* List */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 py-12 sm:py-16 px-4 text-center">
@@ -182,10 +247,15 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {filtered.map((t) => (
+          {filtered.map((t) => {
+            const folderName = t.folderId ? folders.find((f) => f.id === t.folderId)?.name : null;
+            return (
             <div key={t.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-card-hover transition-shadow group">
               <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-br from-brand-50 to-violet-50">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{CATEGORY_LABELS[t.category] || t.category}</p>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">{CATEGORY_LABELS[t.category] || t.category}</p>
+                  {folderName && <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/70 text-brand-600"><FolderIcon size={9} /> {folderName}</span>}
+                </div>
                 <p className="text-sm font-semibold text-gray-900 truncate">{t.name}</p>
                 {t.subject && <p className="text-xs text-gray-500 truncate mt-0.5">{t.subject}</p>}
               </div>
@@ -193,6 +263,29 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
                 <Link href={"/settings/email-templates/" + t.id} className="btn-secondary py-1.5 px-2 text-xs flex-1">
                   <Edit3 size={12} /> Modifier
                 </Link>
+                <div className="relative shrink-0">
+                  <button onClick={() => setMoveMenuId(moveMenuId === t.id ? null : t.id)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400" title="Déplacer vers un dossier">
+                    <FolderInput size={14} />
+                  </button>
+                  {moveMenuId === t.id && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setMoveMenuId(null)} />
+                      <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl border border-gray-200 shadow-lg py-1.5 z-30 max-h-64 overflow-auto">
+                        <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-400">Déplacer vers</p>
+                        <button onClick={() => moveTemplate(t.id, null)} disabled={pending} className={cn("w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between gap-2", !t.folderId && "text-brand-600 font-medium")}>
+                          Sans dossier {!t.folderId && <Check size={13} />}
+                        </button>
+                        {folders.length === 0 && <p className="px-3 py-1.5 text-[11px] text-gray-400">Aucun dossier — créez-en un</p>}
+                        {folders.map((f) => (
+                          <button key={f.id} onClick={() => moveTemplate(t.id, f.id)} disabled={pending} className={cn("w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between gap-2", t.folderId === f.id && "text-brand-600 font-medium")}>
+                            <span className="inline-flex items-center gap-1.5 truncate"><FolderIcon size={12} className="shrink-0" /> <span className="truncate">{f.name}</span></span>
+                            {t.folderId === f.id && <Check size={13} className="shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
                 <button onClick={() => handleDuplicate(t.id)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 shrink-0" title="Dupliquer">
                   <Copy size={14} />
                 </button>
@@ -201,7 +294,8 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -213,6 +307,47 @@ export function EmailTemplatesClient({ templates }: { templates: Template[] }) {
           onClose={() => setShowStarter(false)}
         />
       )}
+
+      {newFolderOpen && <NewFolderModal onSubmit={createFolder} onClose={() => setNewFolderOpen(false)} pending={pending} />}
+    </div>
+  );
+}
+
+function FolderChip({ label, count, active, onClick, withIcon }: { label: string; count: number; active: boolean; onClick: () => void; withIcon?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border transition-colors " +
+        (active ? "bg-brand-600 text-white border-brand-600" : "bg-white text-gray-600 border-gray-200 hover:border-brand-300 hover:text-brand-600")
+      }
+    >
+      {withIcon && <FolderIcon size={13} />}
+      {label}
+      <span className={"text-[10px] " + (active ? "text-white/70" : "text-gray-400")}>{count}</span>
+    </button>
+  );
+}
+
+function NewFolderModal({ onSubmit, onClose, pending }: { onSubmit: (name: string) => void; onClose: () => void; pending: boolean }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-900">Nouveau dossier</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+        </div>
+        <div className="p-5">
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Nom du dossier</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onSubmit(name); }} className="input text-sm" placeholder="Ex: Relances" />
+        </div>
+        <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary py-2 px-3 text-xs" disabled={pending}>Annuler</button>
+          <button onClick={() => name.trim() && onSubmit(name)} className="btn-primary py-2 px-4 text-xs" disabled={pending || !name.trim()}>{pending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Créer</button>
+        </div>
+      </div>
     </div>
   );
 }

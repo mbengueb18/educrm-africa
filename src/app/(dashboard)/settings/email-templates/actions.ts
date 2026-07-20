@@ -45,6 +45,15 @@ export async function sendTestEmailTemplate(data: {
   }
 }
 
+// Valide qu'un dossier appartient à l'org et au type EMAIL_TEMPLATE. Renvoie
+// l'id validé, ou null si vide, ou throw si l'id est fourni mais invalide.
+async function assertTemplateFolder(organizationId: string, folderId?: string | null): Promise<string | null> {
+  if (!folderId) return null;
+  const folder = await prisma.folder.findFirst({ where: { id: folderId, organizationId, type: "EMAIL_TEMPLATE" } });
+  if (!folder) throw new Error("Dossier introuvable");
+  return folder.id;
+}
+
 export async function createEmailTemplate(data: {
   name: string;
   subject: string;
@@ -52,9 +61,12 @@ export async function createEmailTemplate(data: {
   blocks: any;
   brandColor?: string;
   category?: string;
+  folderId?: string | null;
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
+
+  const folderId = await assertTemplateFolder(session.user.organizationId, data.folderId);
 
   const template = await prisma.messageTemplate.create({
     data: {
@@ -65,6 +77,7 @@ export async function createEmailTemplate(data: {
       brandColor: data.brandColor || "#1B4F72",
       channel: "EMAIL" as any,
       category: (data.category || "RECRUITMENT") as any,
+      folderId,
       organizationId: session.user.organizationId,
     },
   });
@@ -80,6 +93,7 @@ export async function updateEmailTemplate(id: string, data: {
   blocks?: any;
   brandColor?: string;
   category?: string;
+  folderId?: string | null;
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
@@ -91,6 +105,7 @@ export async function updateEmailTemplate(id: string, data: {
   if (data.blocks !== undefined) updateData.blocks = data.blocks;
   if (data.brandColor !== undefined) updateData.brandColor = data.brandColor;
   if (data.category !== undefined) updateData.category = data.category;
+  if (data.folderId !== undefined) updateData.folderId = await assertTemplateFolder(session.user.organizationId, data.folderId);
 
   const template = await prisma.messageTemplate.update({
     where: { id, organizationId: session.user.organizationId },
@@ -99,6 +114,66 @@ export async function updateEmailTemplate(id: string, data: {
 
   revalidatePath("/settings/email-templates");
   return { success: true, template };
+}
+
+// ─── Dossiers (rangement des templates email) ───
+
+export async function getTemplateFolders() {
+  const session = await auth();
+  if (!session?.user) return [];
+  return prisma.folder.findMany({
+    where: { organizationId: session.user.organizationId, type: "EMAIL_TEMPLATE" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+export async function createTemplateFolder(name: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const clean = name.trim();
+  if (!clean) throw new Error("Nom du dossier requis");
+  const folder = await prisma.folder.create({
+    data: { organizationId: session.user.organizationId, type: "EMAIL_TEMPLATE", name: clean },
+    select: { id: true, name: true },
+  });
+  revalidatePath("/settings/email-templates");
+  return { success: true, folder };
+}
+
+export async function renameTemplateFolder(id: string, name: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const clean = name.trim();
+  if (!clean) throw new Error("Nom du dossier requis");
+  const folder = await prisma.folder.findFirst({ where: { id, organizationId: session.user.organizationId, type: "EMAIL_TEMPLATE" } });
+  if (!folder) throw new Error("Dossier introuvable");
+  await prisma.folder.update({ where: { id }, data: { name: clean } });
+  revalidatePath("/settings/email-templates");
+  return { success: true };
+}
+
+// Supprime le dossier ; les templates qu'il contenait deviennent « sans dossier ».
+export async function deleteTemplateFolder(id: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const folder = await prisma.folder.findFirst({ where: { id, organizationId: session.user.organizationId, type: "EMAIL_TEMPLATE" } });
+  if (!folder) throw new Error("Dossier introuvable");
+  await prisma.folder.delete({ where: { id } });
+  revalidatePath("/settings/email-templates");
+  return { success: true };
+}
+
+// Déplace un template vers un dossier (ou l'en retire si folderId vide/null).
+export async function moveTemplateToFolder(id: string, folderId: string | null) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const template = await prisma.messageTemplate.findFirst({ where: { id, organizationId: session.user.organizationId } });
+  if (!template) throw new Error("Template introuvable");
+  const validFolderId = await assertTemplateFolder(session.user.organizationId, folderId);
+  await prisma.messageTemplate.update({ where: { id }, data: { folderId: validFolderId } });
+  revalidatePath("/settings/email-templates");
+  return { success: true };
 }
 
 export async function deleteEmailTemplate(id: string) {
@@ -168,7 +243,7 @@ export async function getEmailTemplate(id: string) {
     where: { id, organizationId: session.user.organizationId, channel: "EMAIL" as any },
     select: {
       id: true, name: true, subject: true, body: true, blocks: true,
-      brandColor: true, category: true, createdAt: true, updatedAt: true,
+      brandColor: true, category: true, folderId: true, createdAt: true, updatedAt: true,
     },
   });
   return template;

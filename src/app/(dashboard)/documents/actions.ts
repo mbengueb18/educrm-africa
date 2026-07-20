@@ -19,11 +19,21 @@ export async function getLibraryDocuments() {
   });
 }
 
-export async function updateLibraryDocument(id: string, data: { name?: string; category?: string; description?: string | null }) {
+export async function updateLibraryDocument(id: string, data: { name?: string; category?: string; description?: string | null; folderId?: string | null }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   const doc = await prisma.libraryDocument.findUnique({ where: { id } });
   if (!doc || doc.organizationId !== session.user.organizationId) throw new Error("Document introuvable");
+
+  // Vérifie que le dossier appartient bien à l'org et au bon type
+  let folderId: string | null | undefined = undefined;
+  if (data.folderId !== undefined) {
+    folderId = data.folderId || null;
+    if (folderId) {
+      const folder = await prisma.folder.findFirst({ where: { id: folderId, organizationId: session.user.organizationId, type: "DOCUMENT" } });
+      if (!folder) throw new Error("Dossier introuvable");
+    }
+  }
 
   await prisma.libraryDocument.update({
     where: { id },
@@ -31,8 +41,57 @@ export async function updateLibraryDocument(id: string, data: { name?: string; c
       ...(data.name !== undefined ? { name: data.name.trim() || doc.name } : {}),
       ...(data.category !== undefined ? { category: data.category.trim() || "Autre" } : {}),
       ...(data.description !== undefined ? { description: (data.description || "").trim() || null } : {}),
+      ...(folderId !== undefined ? { folderId } : {}),
     },
   });
+  revalidatePath("/documents");
+  return { success: true };
+}
+
+// ─── Dossiers (rangement des documents) ───
+
+export async function getDocumentFolders() {
+  const session = await auth();
+  if (!session?.user) return [];
+  return prisma.folder.findMany({
+    where: { organizationId: session.user.organizationId, type: "DOCUMENT" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+export async function createDocumentFolder(name: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const clean = name.trim();
+  if (!clean) throw new Error("Nom du dossier requis");
+  const folder = await prisma.folder.create({
+    data: { organizationId: session.user.organizationId, type: "DOCUMENT", name: clean },
+    select: { id: true, name: true },
+  });
+  revalidatePath("/documents");
+  return { success: true, folder };
+}
+
+export async function renameDocumentFolder(id: string, name: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const clean = name.trim();
+  if (!clean) throw new Error("Nom du dossier requis");
+  const folder = await prisma.folder.findFirst({ where: { id, organizationId: session.user.organizationId, type: "DOCUMENT" } });
+  if (!folder) throw new Error("Dossier introuvable");
+  await prisma.folder.update({ where: { id }, data: { name: clean } });
+  revalidatePath("/documents");
+  return { success: true };
+}
+
+// Supprime le dossier ; les documents qu'il contenait deviennent « sans dossier ».
+export async function deleteDocumentFolder(id: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  const folder = await prisma.folder.findFirst({ where: { id, organizationId: session.user.organizationId, type: "DOCUMENT" } });
+  if (!folder) throw new Error("Dossier introuvable");
+  await prisma.folder.delete({ where: { id } });
   revalidatePath("/documents");
   return { success: true };
 }

@@ -24,13 +24,17 @@ interface TemplateInput {
   blocks: EmailBlock[] | null;
   brandColor: string | null;
   category: string;
+  folderId: string | null;
 }
 
-export function TemplateEditorForm({ template, orgInfo }: { template: TemplateInput | null; orgInfo?: OrgInfo }) {
+type FolderT = { id: string; name: string };
+
+export function TemplateEditorForm({ template, orgInfo, folders = [] }: { template: TemplateInput | null; orgInfo?: OrgInfo; folders?: FolderT[] }) {
   const router = useRouter();
   const [name, setName] = useState(template?.name || "");
   const [subject, setSubject] = useState(template?.subject || "");
   const [category, setCategory] = useState(template?.category || "RECRUITMENT");
+  const [folderId, setFolderId] = useState(template?.folderId || "");
   const [brandColor, setBrandColor] = useState(template?.brandColor || "#1B4F72");
   const [blocks, setBlocks] = useState<EmailBlock[]>(template?.blocks || []);
   const [html, setHtml] = useState(template?.body || "");
@@ -77,10 +81,10 @@ export function TemplateEditorForm({ template, orgInfo }: { template: TemplateIn
     if (silent) setSaveStatus("saving"); else setSaving(true);
     try {
       if (templateId) {
-        await updateEmailTemplate(templateId, { name, subject, body: html, blocks, brandColor, category });
+        await updateEmailTemplate(templateId, { name, subject, body: html, blocks, brandColor, category, folderId: folderId || null });
       } else {
         creatingRef.current = true;
-        const res = await createEmailTemplate({ name, subject, body: html, blocks, brandColor, category });
+        const res = await createEmailTemplate({ name, subject, body: html, blocks, brandColor, category, folderId: folderId || null });
         if (res?.template?.id) setTemplateId(res.template.id);
         creatingRef.current = false;
       }
@@ -118,7 +122,7 @@ export function TemplateEditorForm({ template, orgInfo }: { template: TemplateIn
     const t = setTimeout(function() { save(true); }, 1500);
     return function() { clearTimeout(t); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, subject, category, brandColor, html]);
+  }, [name, subject, category, folderId, brandColor, html]);
 
   const handleSendTest = async () => {
     if (!subject.trim()) { toast.error("Renseignez l'objet avant d'envoyer un test"); return; }
@@ -214,18 +218,25 @@ export function TemplateEditorForm({ template, orgInfo }: { template: TemplateIn
       <div className="hidden lg:block">
         {/* Form fields */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className="md:col-span-5">
+          <div className="md:col-span-4">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nom du template</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input text-sm" placeholder="Ex: Bienvenue nouveau lead" />
           </div>
-          <div className="md:col-span-4">
+          <div className="md:col-span-3">
             <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Catégorie</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="input text-sm">
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div className="md:col-span-3">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Couleur principale</label>
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Dossier</label>
+            <select value={folderId} onChange={(e) => setFolderId(e.target.value)} className="input text-sm">
+              <option value="">Sans dossier</option>
+              {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Couleur</label>
             <div className="flex items-center gap-2">
               <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="w-9 h-9 rounded border border-gray-200 cursor-pointer shrink-0" />
               <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="input text-xs font-mono flex-1 min-w-0" />

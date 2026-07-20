@@ -19,9 +19,20 @@ export async function POST(request: NextRequest) {
     const name = ((formData.get("name") as string) || "").trim();
     const category = (((formData.get("category") as string) || "Autre").trim()) || "Autre";
     const description = ((formData.get("description") as string) || "").trim() || null;
+    const folderIdRaw = ((formData.get("folderId") as string) || "").trim();
 
     if (!file || file.size === 0) return NextResponse.json({ error: "Aucun fichier" }, { status: 400 });
     if (file.size > MAX_SIZE) return NextResponse.json({ error: "Fichier trop volumineux (max 15 Mo)" }, { status: 400 });
+
+    // Valide le dossier (appartenance à l'org + bon type) si fourni
+    let folderId: string | null = null;
+    if (folderIdRaw) {
+      const folder = await prisma.folder.findFirst({
+        where: { id: folderIdRaw, organizationId: session.user.organizationId, type: "DOCUMENT" },
+        select: { id: true },
+      });
+      folderId = folder?.id ?? null;
+    }
 
     const cleanName = (file.name || "document").replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${session.user.organizationId}/library/${Date.now()}-${cleanName}`;
@@ -38,6 +49,7 @@ export async function POST(request: NextRequest) {
         path,
         mimeType: file.type || "application/octet-stream",
         size: file.size,
+        folderId,
         uploadedById: session.user.id,
         uploadedByName: session.user.name || "—",
       },

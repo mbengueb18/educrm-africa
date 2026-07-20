@@ -1,10 +1,10 @@
 import { Metadata } from "next";
-import { getLibraryDocuments } from "./actions";
+import { getLibraryDocuments, getDocumentFolders } from "./actions";
 import { DocumentsClient } from "./documents-client";
 
 export const metadata: Metadata = { title: "Documents" };
 
 export default async function DocumentsPage() {
-  const documents = await getLibraryDocuments();
-  return <DocumentsClient documents={documents as any} />;
+  const [documents, folders] = await Promise.all([getLibraryDocuments(), getDocumentFolders()]);
+  return <DocumentsClient documents={documents as any} folders={folders as any} />;
 }

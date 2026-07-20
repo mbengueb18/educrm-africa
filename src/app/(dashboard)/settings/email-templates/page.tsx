@@ -13,24 +13,32 @@ export default async function EmailTemplatesPage() {
   const session = await auth();
   if (!session?.user) return null;
 
-  const templates = await prisma.messageTemplate.findMany({
-    where: {
-      organizationId: session.user.organizationId,
-      channel: "EMAIL",
-    },
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      subject: true,
-      body: true,
-      blocks: true,
-      brandColor: true,
-      category: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  const [templates, folders] = await Promise.all([
+    prisma.messageTemplate.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        channel: "EMAIL",
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        subject: true,
+        body: true,
+        blocks: true,
+        brandColor: true,
+        category: true,
+        folderId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.folder.findMany({
+      where: { organizationId: session.user.organizationId, type: "EMAIL_TEMPLATE" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
-  return <EmailTemplatesClient templates={templates as any} />;
+  return <EmailTemplatesClient templates={templates as any} folders={folders as any} />;
 }

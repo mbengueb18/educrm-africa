@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getEmailTemplate } from "../actions";
+import { getEmailTemplate, getTemplateFolders } from "../actions";
 import { TemplateEditorForm } from "../template-editor-form";
 
 export const metadata: Metadata = {
@@ -15,11 +15,11 @@ export default async function EditEmailTemplatePage({ params }: { params: Promis
   if (!session?.user) return null;
 
   const { id } = await params;
-  const template = await getEmailTemplate(id);
+  const [template, folders] = await Promise.all([getEmailTemplate(id), getTemplateFolders()]);
 
   if (!template) {
     redirect("/settings/email-templates");
   }
 
-  return <TemplateEditorForm template={template as any} />;
+  return <TemplateEditorForm template={template as any} folders={folders as any} />;
 }
