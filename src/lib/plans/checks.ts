@@ -1,7 +1,7 @@
 // src/lib/plans/checks.ts
 
-import { PrismaClient } from "@prisma/client";
 import type { Plan } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { PLAN_LIMITS, getNextPlan } from "./config";
 import type { Feature, LimitCheckResult } from "./types";
 import {
@@ -18,8 +18,6 @@ import {
   countEmailsSentThisMonth,
   getAIActionsUsedThisMonth,
 } from "./usage";
-
-const prisma = new PrismaClient();
 
 /**
  * Récupère le plan et les flags d'add-on d'une org
