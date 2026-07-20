@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -9,6 +8,7 @@ import { CallReturnPrompt } from "@/components/calls/call-return-prompt";
 import { VerifyEmailBanner } from "@/components/onboarding/verify-email-banner";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { getOnboardingProgress } from "@/lib/onboarding-progress";
+import { SessionEndedGate } from "@/components/auth/session-ended-gate";
 
 export default async function DashboardLayout({
   children,
@@ -17,8 +17,11 @@ export default async function DashboardLayout({
 }) {
   var session = await auth();
 
+  // Session invalide alors qu'un cookie est présent (compte désactivé/supprimé via la
+  // révocation du callback jwt, ou session expirée) → gate qui fait un signOut propre.
+  // Un simple redirect("/login") bouclerait (le middleware ne teste que la présence du cookie).
   if (!session?.user) {
-    redirect("/login");
+    return <SessionEndedGate />;
   }
 
   var now = new Date();

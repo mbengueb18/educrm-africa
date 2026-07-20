@@ -80,22 +80,41 @@ export function SignupForm() {
         adminPassword,
         acceptedTerms,
       });
-      setResult(res);
+
+      if (!res.ok) {
+        // Message métier réel (l'action retourne { ok, error } → pas caviardé en prod)
+        setError(res.error || "Erreur lors de la création du compte");
+        setSaving(false);
+        return;
+      }
+
+      var loginEmail = res.email; // capturé pour la closure (narrowing perdu dans setTimeout)
+      setResult({ slug: res.slug, email: res.email });
       setStep(3);
 
-      // Auto-login
+      // Auto-login puis redirection ; si le signIn échoue, on bascule vers /login
+      // avec un message plutôt que de rediriger dans le vide.
       setTimeout(async function() {
-        await signIn("credentials", {
-          email: res.email,
-          password: adminPassword,
-          redirect: false,
-        });
-        router.push("/pipeline");
-      }, 2500);
+        try {
+          var signInRes = await signIn("credentials", {
+            email: loginEmail,
+            password: adminPassword,
+            redirect: false,
+          });
+          if (signInRes && (signInRes as any).error) {
+            router.push("/login");
+            return;
+          }
+          router.push("/pipeline");
+        } catch {
+          router.push("/login");
+        }
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || "Erreur lors de la création du compte");
+      // Filet de sécurité : erreur inattendue (réseau, etc.)
+      setError(err?.message || "Erreur lors de la création du compte");
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (

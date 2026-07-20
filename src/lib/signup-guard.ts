@@ -74,3 +74,58 @@ export async function checkSignupThrottle(ip: string | null): Promise<{ allowed:
 export async function checkResetThrottle(ip: string | null): Promise<{ allowed: boolean }> {
   return checkRateLimit(ip ? "pwreset:" + ip : null, 5, HOUR_MS);
 }
+
+// ─── Anti-bruteforce de connexion (comptage d'ÉCHECS par IP) ───
+// Clé sur l'IP seule (pas l'email) : un lockout par email permettrait à un
+// attaquant de bloquer volontairement la connexion d'une victime.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
+// Seuil volontairement large : les écoles partagent souvent une IP (NAT bureau).
+// Le reset au succès (clearLoginAttempts) efface le compteur dès qu'un utilisateur
+// de l'IP se connecte → un vrai bruteforce (des milliers d'essais sans succès) est
+// stoppé, sans bloquer un bureau où quelques personnes se trompent.
+const MAX_LOGIN_FAILURES = 20; // au-delà : connexions refusées jusqu'à la fin de la fenêtre
+
+/** Vrai si trop d'échecs de connexion récents pour cette IP. Fail-open en cas d'erreur. */
+export async function isLoginThrottled(ip: string | null): Promise<boolean> {
+  if (!ip) return false;
+  try {
+    const existing = await prisma.signupThrottle.findUnique({ where: { ip: "login:" + ip } });
+    if (!existing) return false;
+    if (Date.now() - existing.windowStart.getTime() > LOGIN_WINDOW_MS) return false; // fenêtre expirée
+    return existing.count >= MAX_LOGIN_FAILURES;
+  } catch (err) {
+    console.error("[signup-guard] vérif throttle login indisponible, on laisse passer:", err);
+    return false;
+  }
+}
+
+/** Incrémente le compteur d'échecs de connexion (fenêtre glissante de 15 min). */
+export async function recordLoginFailure(ip: string | null): Promise<void> {
+  if (!ip) return;
+  const key = "login:" + ip;
+  try {
+    const now = new Date();
+    const existing = await prisma.signupThrottle.findUnique({ where: { ip: key } });
+    if (!existing || now.getTime() - existing.windowStart.getTime() > LOGIN_WINDOW_MS) {
+      await prisma.signupThrottle.upsert({
+        where: { ip: key },
+        create: { ip: key, count: 1, windowStart: now },
+        update: { count: 1, windowStart: now },
+      });
+    } else {
+      await prisma.signupThrottle.update({ where: { ip: key }, data: { count: { increment: 1 } } });
+    }
+  } catch (err) {
+    console.error("[signup-guard] enregistrement échec login impossible:", err);
+  }
+}
+
+/** Réinitialise le compteur d'échecs après une connexion réussie. */
+export async function clearLoginAttempts(ip: string | null): Promise<void> {
+  if (!ip) return;
+  try {
+    await prisma.signupThrottle.deleteMany({ where: { ip: "login:" + ip } });
+  } catch {
+    // non bloquant
+  }
+}
