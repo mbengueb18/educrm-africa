@@ -9,6 +9,13 @@ function appBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://app.talibcrm.com";
 }
 
+// On ne stocke QUE le hash du token en base (comme les tokens de reset) : une fuite de
+// la table ne donne pas de lien de vérification exploitable. Le token en clair ne vit
+// que dans l'URL envoyée par email.
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 /**
  * Génère (et persiste) un token de vérification à usage unique pour un user,
  * en invalidant les précédents. Retourne l'URL de vérification complète.
@@ -17,17 +24,18 @@ export async function createVerificationToken(userId: string, email: string): Pr
   // Un seul token actif à la fois : on supprime les anciens.
   await prisma.emailVerificationToken.deleteMany({ where: { userId } });
 
-  const token = crypto.randomBytes(32).toString("hex");
+  // Token en clair envoyé par email ; seul son hash est persisté.
+  const rawToken = crypto.randomBytes(32).toString("hex");
   await prisma.emailVerificationToken.create({
     data: {
-      token,
+      token: hashToken(rawToken),
       userId,
       email: email.toLowerCase().trim(),
       expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
     },
   });
 
-  return `${appBaseUrl()}/verify?token=${token}`;
+  return `${appBaseUrl()}/verify?token=${rawToken}`;
 }
 
 /**
@@ -67,7 +75,7 @@ export async function consumeVerificationToken(
   if (!token) return { status: "invalid" };
 
   const record = await prisma.emailVerificationToken.findUnique({
-    where: { token },
+    where: { token: hashToken(token) },
     include: { user: { select: { id: true, email: true, emailVerified: true } } },
   });
 

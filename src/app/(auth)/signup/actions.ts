@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { sendVerificationEmail } from "@/lib/email-verification";
 import { isDisposableEmail, checkSignupThrottle } from "@/lib/signup-guard";
+import { validatePassword } from "@/lib/password-policy";
 
 // Récupère l'IP de l'appelant derrière les proxys Vercel.
 async function getClientIp(): Promise<string | null> {
@@ -63,7 +64,8 @@ export async function registerOrganization(data: {
   if (!data.schoolName.trim()) return { ok: false, error: "Le nom de l'école est requis" };
   if (!data.adminName.trim()) return { ok: false, error: "Votre nom est requis" };
   if (!data.adminEmail.trim()) return { ok: false, error: "L'email est requis" };
-  if (data.adminPassword.length < 6) return { ok: false, error: "Le mot de passe doit contenir au moins 6 caractères" };
+  var pwCheck = validatePassword(data.adminPassword);
+  if (!pwCheck.ok) return { ok: false, error: pwCheck.error };
   if (!data.acceptedTerms) return { ok: false, error: "Vous devez accepter les conditions d'utilisation" };
 
   var email = data.adminEmail.toLowerCase().trim();

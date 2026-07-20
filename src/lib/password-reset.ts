@@ -2,10 +2,10 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/transactional-email";
+import { validatePassword } from "@/lib/password-policy";
 
 // TTL court : un lien de reset est sensible.
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
-const MIN_PASSWORD_LENGTH = 6; // aligné sur l'inscription
 
 function appBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://app.talibcrm.com";
@@ -82,9 +82,10 @@ export async function isResetTokenValid(token: string): Promise<boolean> {
 export async function resetPasswordWithToken(
   token: string,
   newPassword: string
-): Promise<{ status: "ok" } | { status: "invalid" | "expired" | "weak" }> {
+): Promise<{ status: "ok" } | { status: "invalid" | "expired" } | { status: "weak"; error: string }> {
   if (!token) return { status: "invalid" };
-  if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) return { status: "weak" };
+  var pwCheck = validatePassword(newPassword);
+  if (!pwCheck.ok) return { status: "weak", error: pwCheck.error };
 
   const record = await prisma.passwordResetToken.findUnique({
     where: { tokenHash: hashToken(token) },

@@ -15,7 +15,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  const canSubmit = password.length >= 6 && password === confirm && !saving;
+  const canSubmit = password.length >= 8 && password === confirm && !saving;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -65,7 +65,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
       <form onSubmit={submit}>
         <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>
-          Nouveau mot de passe <span style={{ fontWeight: 400, color: "#94a3b8" }}>(min. 6 caractères)</span>
+          Nouveau mot de passe <span style={{ fontWeight: 400, color: "#94a3b8" }}>(min. 8 caractères)</span>
         </label>
         <div style={{ position: "relative", marginBottom: 20 }}>
           <Lock size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />

@@ -63,7 +63,7 @@ export function SignupForm() {
   var [acceptedTerms, setAcceptedTerms] = useState(false);
 
   var canStep1 = schoolName.trim() && schoolType && city.trim() && country;
-  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 6 && adminPassword === confirmPassword && acceptedTerms;
+  var canStep2 = adminName.trim() && adminEmail.trim() && adminPassword.length >= 8 && adminPassword === confirmPassword && acceptedTerms;
 
   var handleSubmit = async function() {
     setError("");
@@ -305,7 +305,7 @@ export function SignupForm() {
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Mot de passe * <span style={{ fontWeight: 400, color: "#94a3b8" }}>(min. 6 caractères)</span></label>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#334155", display: "block", marginBottom: 6 }}>Mot de passe * <span style={{ fontWeight: 400, color: "#94a3b8" }}>(min. 8 caractères)</span></label>
                 <div style={{ position: "relative" }}>
                   <Lock size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
                   <input type={showPassword ? "text" : "password"} value={adminPassword} onChange={function(e) { setAdminPassword(e.target.value); }}
