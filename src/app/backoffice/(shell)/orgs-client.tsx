@@ -4,8 +4,8 @@ import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
-import { Search, Loader2, Check, History, Pencil } from "lucide-react";
-import { changePlan, setOrgReportingFeature, setOrgChatbotAi } from "../actions";
+import { Search, Loader2, Check, History, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { changePlan, setOrgReportingFeature, setOrgChatbotAi, deleteOrganization } from "../actions";
 
 type Org = {
   id: string; name: string; slug: string; plan: string; effectivePlan: string;
@@ -38,6 +38,7 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("");
   const [editOrg, setEditOrg] = useState<Org | null>(null);
+  const [deleteOrg, setDeleteOrg] = useState<Org | null>(null);
 
   const filtered = useMemo(() => orgs.filter((o) => {
     if (search) {
@@ -114,8 +115,12 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
                     <td className="px-4 py-3 text-xs text-gray-500 tabular-nums">{o.leads.toLocaleString("fr-FR")}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(o.createdAt)}</td>
                     <td className="px-4 py-3"><ReportingCell org={o} /></td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => setEditOrg(o)} className="btn-secondary py-1.5 px-3 text-xs"><Pencil size={12} /> Changer le plan</button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => setEditOrg(o)} className="btn-secondary py-1.5 px-3 text-xs"><Pencil size={12} /> Changer le plan</button>
+                        <button onClick={() => setDeleteOrg(o)} title="Supprimer l'organisation"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -148,7 +153,70 @@ export function OrgsClient({ orgs, logs }: { orgs: Org[]; logs: Log[] }) {
       )}
 
       {editOrg && <ChangePlanModal org={editOrg} onClose={(saved) => { setEditOrg(null); if (saved) router.refresh(); }} />}
+      {deleteOrg && <DeleteOrgModal org={deleteOrg} onClose={(deleted) => { setDeleteOrg(null); if (deleted) router.refresh(); }} />}
     </div>
+  );
+}
+
+function DeleteOrgModal({ org, onClose }: { org: Org; onClose: (deleted?: boolean) => void }) {
+  const [confirmName, setConfirmName] = useState("");
+  const [pending, startTransition] = useTransition();
+  const matches = confirmName.trim() === org.name;
+
+  const doDelete = () => {
+    if (!matches) return;
+    startTransition(async () => {
+      try {
+        const res = await deleteOrganization({ orgId: org.id, confirmName });
+        if (!res.success) { toast.error(res.error || "Erreur"); return; }
+        if (res.warning) toast.warning(res.warning);
+        else toast.success(`« ${org.name} » supprimée définitivement`);
+        onClose(true);
+      } catch (e: any) { toast.error(e.message || "Erreur"); }
+    });
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={() => !pending && onClose()} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl animate-scale-in overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0"><AlertTriangle size={18} /></div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">Supprimer l'organisation</p>
+              <p className="text-xs text-gray-500 mt-0.5">{org.name} · <span className="font-mono">/{org.slug}</span></p>
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3">
+              <p className="text-xs text-red-700 leading-relaxed">
+                Action <b>irréversible</b>. Toutes les données de cette école seront définitivement effacées :
+                <b> {org.users} utilisateur{org.users > 1 ? "s" : ""}</b>, <b>{org.leads.toLocaleString("fr-FR")} lead{org.leads > 1 ? "s" : ""}</b>,
+                et l'intégralité des étudiants, paiements, messages, campagnes, tâches, formulaires et documents associés.
+              </p>
+            </div>
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              Note : les documents étudiants stockés hors Supabase (cartes d'identité, diplômes) ne sont pas supprimés automatiquement par cette action.
+            </p>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1.5 block">
+                Pour confirmer, tapez le nom exact : <span className="font-semibold text-gray-900">{org.name}</span>
+              </label>
+              <input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} autoFocus
+                className="input text-sm" placeholder={org.name} />
+            </div>
+          </div>
+          <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+            <button onClick={() => onClose()} className="btn-secondary py-2 px-3 text-xs" disabled={pending}>Annuler</button>
+            <button onClick={doDelete} disabled={!matches || pending}
+              className="btn py-2 px-4 text-xs bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed">
+              {pending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Supprimer définitivement
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

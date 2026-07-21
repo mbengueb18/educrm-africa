@@ -127,6 +127,91 @@ export async function getPlanChangeLogs(limit = 15) {
   });
 }
 
+// ─── Suppression d'une organisation (OWNER uniquement) — IRRÉVERSIBLE ───
+
+const EMAIL_BUCKET = "email-attachments"; // pièces jointes leads, bibliothèque, PJ messages
+
+// Supprime une liste de chemins d'un bucket, par lots. Best-effort : logge, ne throw pas.
+async function removeStoragePaths(bucket: string, paths: (string | null | undefined)[]) {
+  const clean = Array.from(new Set(paths.filter((p): p is string => !!p)));
+  for (let i = 0; i < clean.length; i += 900) {
+    const { error } = await supabaseAdmin.storage.from(bucket).remove(clean.slice(i, i + 900));
+    if (error) console.error(`[delete-org] remove ${bucket} échoué:`, error.message);
+  }
+}
+
+// Supprime récursivement tout ce qui est sous un préfixe (ex. les PJ leads sous {orgId}/…).
+async function removeStoragePrefix(bucket: string, prefix: string, depth = 0) {
+  if (depth > 4) return; // garde-fou anti-récursion
+  const { data, error } = await supabaseAdmin.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (error || !data) return;
+  const files: string[] = [];
+  for (const entry of data) {
+    const full = prefix ? `${prefix}/${entry.name}` : entry.name;
+    // Un "dossier" Supabase n'a pas d'id/metadata → on descend ; sinon c'est un fichier.
+    if (entry.id === null) await removeStoragePrefix(bucket, full, depth + 1);
+    else files.push(full);
+  }
+  await removeStoragePaths(bucket, files);
+}
+
+/**
+ * Supprime définitivement une organisation et TOUTES ses données.
+ * - Base : transaction (documents étudiants/leads, formulaires, bibliothèque, notifications
+ *   n'ont pas de cascade FK → suppression explicite ; l'org.delete() cascade tout le reste).
+ * - Stockage Supabase : best-effort (contrats, bibliothèque, PJ messages, préfixe {orgId}).
+ * - NON couvert : les documents étudiants (cartes/diplômes) sont sur Vercel Blob/R2.
+ *
+ * Sécurité : OWNER uniquement + confirmation par saisie du nom exact de l'org.
+ * Retourne { success, error?, warning? } (pas de throw → messages lisibles en prod).
+ */
+export async function deleteOrganization(data: { orgId: string; confirmName: string }): Promise<{ success: boolean; error?: string; warning?: string }> {
+  const s = await getBoSession();
+  if (!s) return { success: false, error: "Non authentifié" };
+  if (s.role !== "OWNER") return { success: false, error: "Seul le propriétaire du back-office peut supprimer une organisation" };
+
+  const org = await prisma.organization.findUnique({ where: { id: data.orgId }, select: { id: true, name: true } });
+  if (!org) return { success: false, error: "Organisation introuvable" };
+  if ((data.confirmName || "").trim() !== org.name) {
+    return { success: false, error: "Le nom saisi ne correspond pas — suppression annulée" };
+  }
+
+  // 1) Collecte des chemins de stockage AVANT de supprimer les lignes qui les portent.
+  const [contracts, libDocs, msgAtts] = await Promise.all([
+    prisma.contract.findMany({ where: { organizationId: org.id, signedPath: { not: null } }, select: { signedPath: true } }),
+    prisma.libraryDocument.findMany({ where: { organizationId: org.id }, select: { path: true } }),
+    prisma.messageAttachment.findMany({ where: { storagePath: { not: null }, message: { organizationId: org.id } }, select: { storagePath: true } }),
+  ]);
+
+  // 2) Base — transaction. Les 4 modèles sans cascade FK d'abord, puis l'org (cascade le reste).
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.document.deleteMany({ where: { OR: [{ lead: { organizationId: org.id } }, { student: { organizationId: org.id } }] } });
+      await tx.form.deleteMany({ where: { organizationId: org.id } }); // cascade FormSubmission
+      await tx.libraryDocument.deleteMany({ where: { organizationId: org.id } });
+      await tx.notification.deleteMany({ where: { organizationId: org.id } });
+      await tx.organization.delete({ where: { id: org.id } });
+    }, { timeout: 30_000, maxWait: 10_000 });
+  } catch (err: any) {
+    console.error("[delete-org] échec suppression base:", err?.message);
+    return { success: false, error: "La suppression a échoué. Aucune donnée n'a été supprimée." };
+  }
+
+  // 3) Stockage Supabase — best-effort, hors transaction, jamais bloquant.
+  let warning: string | undefined;
+  try {
+    await removeStoragePaths(CONTRACTS_BUCKET, contracts.map((c) => c.signedPath));
+    await removeStoragePaths(EMAIL_BUCKET, [...libDocs.map((d) => d.path), ...msgAtts.map((a) => a.storagePath)]);
+    await removeStoragePrefix(EMAIL_BUCKET, org.id); // PJ leads sous {orgId}/{leadId}/…
+  } catch (err: any) {
+    console.error("[delete-org] nettoyage stockage:", err?.message);
+    warning = "Organisation supprimée, mais le nettoyage de certains fichiers a échoué (voir logs).";
+  }
+
+  revalidatePath("/backoffice");
+  return { success: true, warning };
+}
+
 // ─── Gestion des admins du back-office (OWNER uniquement) ───
 export async function getPlatformAdmins() {
   await requireBo();
