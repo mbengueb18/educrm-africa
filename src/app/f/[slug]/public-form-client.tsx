@@ -121,7 +121,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
       const res = await fetch("/api/forms/" + form.slug + "/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values: cleanValues, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs }),
+        body: JSON.stringify({ values: cleanValues, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs, restored }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur");

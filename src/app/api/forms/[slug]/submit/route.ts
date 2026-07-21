@@ -43,8 +43,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const values: Record<string, any> = body.values || {};
     if (body.hp) return cors({ success: true }, 200); // honeypot rempli → bot, ignoré silencieusement
     // Time-trap : soumission en moins de 2s après ouverture → probablement un bot.
+    // Exception : saisie restaurée d'un brouillon (formulaire multi-étapes). Dans ce cas mountTs
+    // est réinitialisé au rechargement alors que l'utilisateur a déjà passé du temps sur une visite
+    // précédente ; sans cette exception un envoi légitime « instantané » serait jeté silencieusement.
     const elapsed = Number(body._t);
-    if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 2000) return cors({ success: true }, 200);
+    if (!body.restored && Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 2000) return cors({ success: true }, 200);
 
     const form = await prisma.form.findFirst({
       where: { slug, status: "PUBLISHED" },
