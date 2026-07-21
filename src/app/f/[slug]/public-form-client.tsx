@@ -21,8 +21,6 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
   const [values, setValues] = useState<Record<string, any>>(hiddenDefaults);
   const [step, setStep] = useState(0);
   const [restored, setRestored] = useState(false);
-  const [hp, setHp] = useState(""); // honeypot anti-spam
-  const [mountTs] = useState(() => Date.now()); // time-trap anti-bot
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -121,7 +119,7 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
       const res = await fetch("/api/forms/" + form.slug + "/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values: cleanValues, hp, utm, referrer: document.referrer || "", _t: Date.now() - mountTs, restored }),
+        body: JSON.stringify({ values: cleanValues, utm, referrer: document.referrer || "" }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur");
@@ -182,9 +180,6 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
                 ) : (
                   <FormFieldView key={row[0].id} field={row[0]} value={values[row[0].name]} onChange={set} slug={form.slug} />
                 ))}
-
-                {/* honeypot */}
-                <input type="text" value={hp} onChange={(e) => setHp(e.target.value)} tabIndex={-1} autoComplete="off" style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }} aria-hidden="true" />
 
                 {error && <p style={{ color: "#ef4444", fontSize: 12, margin: "0 0 10px" }}>{error}</p>}
 

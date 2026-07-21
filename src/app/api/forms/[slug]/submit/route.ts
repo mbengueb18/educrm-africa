@@ -24,14 +24,16 @@ export async function OPTIONS() { return cors({}, 204); }
 
 const STD = new Set(["firstName", "lastName", "email", "phone", "whatsapp", "city", "message"]);
 
-// Rate-limit basique en mémoire (par IP) : max 6 soumissions / minute.
+// Rate-limit basique en mémoire (par IP) : protection du serveur contre les rafales
+// automatisées uniquement — volontairement large pour ne jamais bloquer un groupe
+// d'utilisateurs réels derrière la même IP (wifi campus, cybercafé).
 const RL = new Map<string, number[]>();
 function rateLimited(ip: string): boolean {
   const now = Date.now();
   const arr = (RL.get(ip) || []).filter((t) => now - t < 60000);
   arr.push(now);
   RL.set(ip, arr);
-  return arr.length > 6;
+  return arr.length > 30;
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
@@ -42,13 +44,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const body = await request.json().catch(() => ({}));
     const values: Record<string, any> = body.values || {};
-    if (body.hp) return cors({ success: true }, 200); // honeypot rempli → bot, ignoré silencieusement
-    // Time-trap : soumission en moins de 2s après ouverture → probablement un bot.
-    // Exception : saisie restaurée d'un brouillon (formulaire multi-étapes). Dans ce cas mountTs
-    // est réinitialisé au rechargement alors que l'utilisateur a déjà passé du temps sur une visite
-    // précédente ; sans cette exception un envoi légitime « instantané » serait jeté silencieusement.
-    const elapsed = Number(body._t);
-    if (!body.restored && Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 2000) return cors({ success: true }, 200);
+    // Pas de filtre anti-bot (honeypot/time-trap supprimés volontairement) : ces formulaires
+    // sont diffusés à des demandeurs identifiés — on capture TOUT, les conseillers trient.
+    // Perdre un vrai candidat coûte bien plus cher qu'un spam à supprimer.
 
     const form = await prisma.form.findFirst({
       where: { slug, status: "PUBLISHED" },
