@@ -1,23 +1,23 @@
 "use client";
 
 import { useEffect } from "react";
-import { signOut } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
 /**
  * Affiché quand la session serveur est invalide alors qu'un cookie est encore présent
- * (compte désactivé/supprimé, ou session expirée). Fait un signOut() PROPRE — qui efface
- * le cookie via la route /api/auth/signout — puis redirige vers /login.
+ * (compte désactivé/supprimé, ou session expirée).
  *
- * Sans ce gate, un simple redirect("/login") côté serveur boucle : le middleware ne teste
- * que la PRÉSENCE du cookie et renverrait aussitôt vers le dashboard.
+ * On redirige vers /api/auth/force-signout : une route SERVEUR qui efface le cookie de
+ * session (Set-Cookie expiré) puis 302 vers /login. Le middleware exclut /api, donc aucun
+ * rebond possible.
+ *
+ * ⚠️ On n'utilise PLUS le signOut() client de next-auth ici : quand le JWT est déjà invalide,
+ * son POST CSRF échoue, le cookie n'est pas effacé, et le middleware (qui ne teste que la
+ * présence du cookie) renvoie /login → /pipeline → BOUCLE DE REDIRECTION INFINIE.
  */
 export function SessionEndedGate() {
   useEffect(function () {
-    signOut({ callbackUrl: "/login", redirect: true }).catch(function () {
-      // En dernier recours, on force la navigation.
-      window.location.href = "/login";
-    });
+    window.location.replace("/api/auth/force-signout");
   }, []);
 
   return (
