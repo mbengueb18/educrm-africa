@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Lock, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { resetPasswordAction } from "./actions";
 
-export function ResetPasswordForm({ token }: { token: string }) {
+export function ResetPasswordForm({ token, mode = "reset" }: { token: string; mode?: "reset" | "invite" }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -14,6 +14,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+
+  const isInvite = mode === "invite";
 
   const canSubmit = password.length >= 8 && password === confirm && !saving;
 
@@ -42,9 +44,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
           <CheckCircle2 size={32} color="#10B981" />
         </div>
-        <h1 style={{ fontSize: 21, fontWeight: 700, color: "#0F1923", marginBottom: 10 }}>Mot de passe modifié ✓</h1>
+        <h1 style={{ fontSize: 21, fontWeight: 700, color: "#0F1923", marginBottom: 10 }}>{isInvite ? "Compte activé ✓" : "Mot de passe modifié ✓"}</h1>
         <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.7 }}>
-          Votre mot de passe a bien été mis à jour. Redirection vers la connexion...
+          {isInvite
+            ? "Votre compte est prêt. Redirection vers la connexion..."
+            : "Votre mot de passe a bien été mis à jour. Redirection vers la connexion..."}
         </p>
       </div>
     );
@@ -52,9 +56,11 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
   return (
     <>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#0F1923", marginBottom: 8 }}>Nouveau mot de passe</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#0F1923", marginBottom: 8 }}>{isInvite ? "Bienvenue sur TalibCRM 👋" : "Nouveau mot de passe"}</h1>
       <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.6, marginBottom: 24 }}>
-        Choisissez un nouveau mot de passe pour votre compte.
+        {isInvite
+          ? "Créez votre mot de passe pour activer votre compte et vous connecter."
+          : "Choisissez un nouveau mot de passe pour votre compte."}
       </p>
 
       {error && (
@@ -73,7 +79,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
             type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
             required autoComplete="new-password" placeholder="••••••••"
             style={{ width: "100%", padding: "12px 40px 12px 40px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 14, outline: "none", boxSizing: "border-box" }}
-            onFocus={(e) => { e.target.style.borderColor = "#0E7C6B"; }}
+            onFocus={(e) => { e.target.style.borderColor = "#2E86C1"; }}
             onBlur={(e) => { e.target.style.borderColor = "#e2e8f0"; }}
           />
           <button type="button" onClick={() => setShow(!show)}
@@ -93,7 +99,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
               border: confirm && confirm !== password ? "1.5px solid #EF4444" : "1.5px solid #e2e8f0",
               fontSize: 14, outline: "none", boxSizing: "border-box",
             }}
-            onFocus={(e) => { e.target.style.borderColor = "#0E7C6B"; }}
+            onFocus={(e) => { e.target.style.borderColor = "#2E86C1"; }}
             onBlur={(e) => { e.target.style.borderColor = confirm && confirm !== password ? "#EF4444" : "#e2e8f0"; }}
           />
         </div>
@@ -104,12 +110,12 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <button type="submit" disabled={!canSubmit}
           style={{
             width: "100%", marginTop: 16, padding: "13px 24px", borderRadius: 12, border: "none",
-            background: canSubmit ? "#0E7C6B" : "#e2e8f0", color: canSubmit ? "#fff" : "#94a3b8",
+            background: canSubmit ? "#2471A3" : "#e2e8f0", color: canSubmit ? "#fff" : "#94a3b8",
             fontSize: 15, fontWeight: 600, cursor: canSubmit ? "pointer" : "not-allowed",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}>
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
-          {saving ? "Enregistrement..." : "Réinitialiser le mot de passe"}
+          {saving ? "Enregistrement..." : isInvite ? "Activer mon compte" : "Réinitialiser le mot de passe"}
         </button>
       </form>
 

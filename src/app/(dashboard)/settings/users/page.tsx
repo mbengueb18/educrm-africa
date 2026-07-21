@@ -5,11 +5,11 @@ import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
-  ArrowLeft, Search, Plus, Users, Eye, EyeOff,
+  ArrowLeft, Search, Plus, Users,
   Pencil, Trash2, X, Loader2, Check, MoreHorizontal,
-  Mail, Phone, Key, Building2, ToggleLeft, ToggleRight,
+  Mail, Phone, Key, Building2, ToggleLeft, ToggleRight, Send,
 } from "lucide-react";
-import { getUsers, getUserStats, createUser, updateUser, deleteUser, resetUserPassword } from "./actions";
+import { getUsers, getUserStats, createUser, updateUser, deleteUser, resetUserPassword, resendInvitation } from "./actions";
 
 type User = {
   id: string; name: string; email: string; phone: string | null;
@@ -159,27 +159,42 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
   var [email, setEmail] = useState(user?.email || "");
   var [phone, setPhone] = useState(user?.phone || "");
   var [role, setRole] = useState(user?.role || "COMMERCIAL");
-  var [password, setPassword] = useState("");
-  var [showPwd, setShowPwd] = useState(false);
   var [isActive, setIsActive] = useState(user?.isActive ?? true);
   var [saving, setSaving] = useState(false);
   var [showResetPwd, setShowResetPwd] = useState(false);
   var [newPwd, setNewPwd] = useState("");
   var [resetting, setResetting] = useState(false);
+  var [resending, setResending] = useState(false);
 
   var handleSubmit = async function() {
     if (!name.trim() || !email.trim()) { toast.error("Nom et email requis"); return; }
-    if (mode === "create" && password.length < 6) { toast.error("Mot de passe min. 6 caractères"); return; }
     setSaving(true);
     try {
       var res = mode === "create"
-        ? await createUser({ name, email, password, phone: phone || undefined, role })
+        ? await createUser({ name, email, phone: phone || undefined, role })
         : user ? await updateUser(user.id, { name, email, phone, role, isActive }) : null;
       if (res && res.ok === false) { toast.error(res.error || "Erreur"); setSaving(false); return; }
-      toast.success(mode === "create" ? "Utilisateur créé" : "Utilisateur mis à jour");
+      if (mode === "create") {
+        // res.ok === true ici ; un warning signale un compte créé mais email non parti.
+        if (res && "warning" in res && res.warning) { toast.warning(res.warning); }
+        else { toast.success("Utilisateur créé — invitation envoyée par email"); }
+      } else {
+        toast.success("Utilisateur mis à jour");
+      }
       onClose(true);
     } catch (err: any) { toast.error(err.message || "Erreur"); }
     setSaving(false);
+  };
+
+  var handleResend = async function() {
+    if (!user) return;
+    setResending(true);
+    try {
+      var res = await resendInvitation(user.id);
+      if (res.ok === false) { toast.error(res.error || "Erreur"); setResending(false); return; }
+      toast.success("Invitation renvoyée à " + user.email);
+    } catch (err: any) { toast.error(err.message || "Erreur"); }
+    setResending(false);
   };
 
   var handleResetPwd = async function() {
@@ -220,12 +235,12 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
           <div><label className="text-xs font-medium text-gray-600 mb-1 block">Téléphone</label>
             <input type="tel" value={phone} onChange={function(e) { setPhone(e.target.value); }} className="input text-sm" placeholder="+221 7X XXX XX XX" /></div>
           {mode === "create" && (
-            <div><label className="text-xs font-medium text-gray-600 mb-1 block">Mot de passe *</label>
-              <div className="relative">
-                <input type={showPwd ? "text" : "password"} value={password} onChange={function(e) { setPassword(e.target.value); }} className="input text-sm pr-10" />
-                <button type="button" onClick={function() { setShowPwd(!showPwd); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-              </div></div>
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-brand-50 border border-brand-100">
+              <Mail size={16} className="text-brand-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-brand-800 leading-relaxed">
+                Un email d'invitation sera envoyé à l'utilisateur pour qu'il crée son mot de passe et active son compte. Pas besoin de définir un mot de passe ici.
+              </p>
+            </div>
           )}
           <div>
             <label className="text-xs font-medium text-gray-600 mb-2 block">Rôle *</label>
@@ -269,6 +284,9 @@ function UserModal({ mode, user, onClose }: { mode: "create" | "edit"; user?: Us
                   </div>
                 )}
               </div>
+              <button onClick={handleResend} disabled={resending} className="btn-secondary py-2 text-xs w-full">
+                {resending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Renvoyer l'invitation
+              </button>
               <button onClick={handleDelete} className="btn-secondary py-2 text-xs w-full text-red-600 border-red-200 hover:bg-red-50"><Trash2 size={13} /> Supprimer</button>
             </>
           )}

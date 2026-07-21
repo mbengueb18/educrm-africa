@@ -47,6 +47,7 @@ export function middleware(request: NextRequest) {
       pathname.startsWith("/login") ||
       pathname.startsWith("/forgot-password") ||
       pathname.startsWith("/reset-password") ||
+      pathname.startsWith("/activate") ||
       pathname.startsWith("/legal") ||
       pathname.startsWith("/verify") ||
       pathname.startsWith("/orientation/") ||
@@ -87,6 +88,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/signup") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/activate") ||
     pathname.startsWith("/legal") ||
     pathname.startsWith("/verify") ||
     pathname.startsWith("/orientation/") ||

@@ -4,15 +4,18 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 
 import { assertCanAddUser } from "@/lib/plans/checks";
 import { PlanLimitError } from "@/lib/plans/errors";
+import { sendUserInvitation } from "@/lib/user-invitation";
 
 // Résultat standard des actions d'écriture : on RENVOIE l'erreur métier au lieu
 // de la throw. En prod, Next.js masque le message des erreurs throw des Server
 // Actions ("An error occurred in the Server Components render...") ; un retour
 // permet d'afficher un message clair côté client.
-type ActionResult = { ok: true } | { ok: false; error: string };
+// `warning` : succès de l'opération mais effet secondaire non bloquant échoué (ex. email).
+type ActionResult = { ok: true; warning?: string } | { ok: false; error: string };
 
 export async function getUsers() {
   var session = await auth();
@@ -41,7 +44,7 @@ export async function getUserStats() {
 }
 
 export async function createUser(data: {
-  name: string; email: string; password: string; phone?: string; role: string; campusId?: string;
+  name: string; email: string; phone?: string; role: string; campusId?: string;
 }): Promise<ActionResult> {
   var session = await auth();
   if (!session?.user) return { ok: false, error: "Non authentifié" };
@@ -62,8 +65,12 @@ export async function createUser(data: {
 
   var existing = await prisma.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
   if (existing) return { ok: false, error: "Cet email est déjà utilisé" };
-  var passwordHash = await bcrypt.hash(data.password, 12);
-  await prisma.user.create({
+
+  // Mode invitation : l'utilisateur définira son mot de passe via l'email d'activation.
+  // En attendant, on stocke un hash ALÉATOIRE inutilisable (aucun mot de passe connu
+  // ne permet de se connecter tant que le compte n'est pas activé).
+  var passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
+  var created = await prisma.user.create({
     data: {
       name: data.name.trim(), email: data.email.toLowerCase().trim(),
       phone: data.phone?.trim() || null, passwordHash,
@@ -71,8 +78,35 @@ export async function createUser(data: {
       campusId: data.campusId || null,
       organizationId: session.user.organizationId,
     },
+    select: { id: true },
   });
+
+  // Email d'invitation (crée le token + envoie). Non bloquant : si l'envoi échoue, le
+  // compte existe déjà — l'admin pourra renvoyer l'invitation.
+  var invite = await sendUserInvitation(created.id);
+
   revalidatePath("/settings/users");
+  if (!invite.success) {
+    return { ok: true, warning: "Compte créé, mais l'email d'invitation n'a pas pu être envoyé. Renvoyez-le depuis la fiche de l'utilisateur." };
+  }
+  return { ok: true };
+}
+
+/**
+ * (Re)envoie l'email d'invitation à un utilisateur (créer son mot de passe / activer).
+ * Utile pour les comptes créés avant l'envoi automatique, ou si l'email s'est perdu.
+ */
+export async function resendInvitation(userId: string): Promise<ActionResult> {
+  var session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") return { ok: false, error: "Réservé aux administrateurs" };
+
+  // Isolation tenant : on ne renvoie une invitation qu'à un membre de SA propre organisation.
+  var target = await prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
+  if (!target || target.organizationId !== session.user.organizationId) return { ok: false, error: "Utilisateur introuvable" };
+
+  var invite = await sendUserInvitation(userId);
+  if (!invite.success) return { ok: false, error: invite.error || "L'envoi de l'invitation a échoué" };
   return { ok: true };
 }
 

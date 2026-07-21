@@ -11,8 +11,33 @@ function appBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://app.talibcrm.com";
 }
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Crée (et persiste, haché) un token pour un user donné, en invalidant les précédents
+ * (un seul token actif à la fois). Retourne le token EN CLAIR (à mettre dans l'URL).
+ *
+ * Partagé entre le reset de mot de passe (TTL court) et l'invitation d'un nouvel
+ * utilisateur (TTL long) — le même mécanisme de consommation `resetPasswordWithToken`
+ * définit le mot de passe ET marque l'email vérifié.
+ */
+export async function createPasswordResetTokenFor(
+  userId: string,
+  ttlMs: number = TOKEN_TTL_MS
+): Promise<string> {
+  await prisma.passwordResetToken.deleteMany({ where: { userId } });
+
+  const token = crypto.randomBytes(32).toString("hex");
+  await prisma.passwordResetToken.create({
+    data: {
+      tokenHash: hashToken(token),
+      userId,
+      expiresAt: new Date(Date.now() + ttlMs),
+    },
+  });
+  return token;
 }
 
 /**
@@ -31,18 +56,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   // Compte inexistant ou désactivé → on s'arrête silencieusement.
   if (!user || !user.isActive) return;
 
-  // Un seul token actif à la fois.
-  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
-
-  const token = crypto.randomBytes(32).toString("hex");
-  await prisma.passwordResetToken.create({
-    data: {
-      tokenHash: hashToken(token),
-      userId: user.id,
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-    },
-  });
-
+  const token = await createPasswordResetTokenFor(user.id, TOKEN_TTL_MS);
   const resetUrl = `${appBaseUrl()}/reset-password?token=${token}`;
   const firstName = (user.name || "").trim().split(/\s+/)[0] || "";
 
