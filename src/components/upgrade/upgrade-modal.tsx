@@ -19,7 +19,7 @@ interface Props {
   // Plan actuel et cible
   currentPlanName: string; // ex: "Croissance"
   targetPlanName: string; // ex: "Performance"
-  targetPlanPrice: string; // ex: "100 000 FCFA/mois"
+  targetPlanPrice?: string; // (non affiché — prix gérés sur la page tarifs)
   // Action immédiate disponible (optionnelle)
   immediateAction?: {
     label: string;
@@ -109,7 +109,6 @@ export function UpgradeModal({
                   </div>
                   <p className="text-xs font-bold text-blue-900">Plan {targetPlanName}</p>
                 </div>
-                <p className="text-sm font-bold text-blue-900 mb-1">{targetPlanPrice}</p>
                 <ul className="space-y-1 mb-3">
                   {targetBenefits.slice(0, 4).map((benefit, idx) => (
                     <li key={idx} className="flex items-start gap-1.5 text-xs text-blue-800">

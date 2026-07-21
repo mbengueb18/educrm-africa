@@ -38,7 +38,6 @@ export function WhatsAppUpgradeModal({
       description={`Contactez ${leadName} via WhatsApp. Selon votre plan, vous avez deux options.`}
       currentPlanName={currentPlanName}
       targetPlanName="Performance"
-      targetPlanPrice="100 000 FCFA/mois"
       immediateAction={{
         label: "Ouvrir WhatsApp",
         description: "Ouvre WhatsApp Web ou l'app pour écrire manuellement. Sortie du CRM, pas d'historique, pas de tracking.",

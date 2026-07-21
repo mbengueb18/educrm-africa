@@ -96,13 +96,6 @@ export default function PipelinesClient({ initialPipelines, plan, limit }: Props
             <p className={cn("text-sm font-semibold", canCreateMore ? "text-blue-900" : "text-amber-900")}>
               Plan {PLAN_LABELS[plan] || plan}
             </p>
-            <span className={cn(
-              "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-              PLAN_BADGES[plan]?.bg || "bg-gray-100",
-              PLAN_BADGES[plan]?.text || "text-gray-700"
-            )}>
-              {plan === "ESSENTIEL" ? "Gratuit" : plan === "CROISSANCE" ? "45k FCFA/mois" : "100k FCFA/mois"}
-            </span>
           </div>
           <p className={cn("text-xs mt-1", canCreateMore ? "text-blue-700" : "text-amber-700")}>
             {initialPipelines.length} / {limit} pipeline{limit > 1 ? "s" : ""} utilisé{initialPipelines.length > 1 ? "s" : ""}.
