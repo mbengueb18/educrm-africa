@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/email";
 import { isInputField, type FormField, type FormRouting, type FormSettings } from "@/lib/forms";
 import { computeLeadScore } from "@/lib/lead-score";
 import { triggerFormSubmittedWorkflows } from "@/lib/workflows/engine";
+import { normalizePhoneNumber } from "@/lib/whatsapp-webhook";
 
 export const runtime = "nodejs";
 
@@ -91,29 +92,85 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!stageId) { const r = await getLeadRouting(form.organizationId, null); pipelineId = r.pipelineId; stageId = r.stageId; }
     if (!stageId) return cors({ error: "Aucun pipeline configuré pour cette organisation." }, 500);
 
-    const lead = await prisma.lead.create({
-      data: {
-        firstName, lastName,
-        phone, whatsapp, email, city, message,
-        source: "WEBSITE" as any,
-        sourceDetail: form.name,
-        stageId: stageId,
-        pipelineId: pipelineId ?? undefined,
-        assignedToId: routing.assignToId ?? undefined,
-        organizationId: form.organizationId,
-        score: computeLeadScore({ source: "WEBSITE", email, whatsapp }),
-        customFields: Object.keys(customFields).length ? customFields : undefined,
-      },
-      select: { id: true },
-    });
+    // ── Déduplication : rapprocher un prospect existant (même email ou téléphone) ──
+    // Match par email (insensible à la casse) puis, à défaut, par les 9 derniers chiffres
+    // du téléphone/WhatsApp (indicatif ignoré : « +221 77 532 03 55 » == « 775320355 »).
+    // Sur match : on enrichit la fiche existante (on ne dégrade jamais un champ déjà rempli
+    // ni l'étape), l'intégralité de la soumission restant conservée dans FormSubmission.
+    const emailKey = email ? String(email).toLowerCase().trim() : "";
+    const phoneSuffix = phone && phone !== "N/A" ? normalizePhoneNumber(phone).slice(-9) : "";
+    const waSuffix = whatsapp ? normalizePhoneNumber(whatsapp).slice(-9) : "";
+
+    type ExistingLead = { id: string; email: string | null; phone: string; whatsapp: string | null; city: string | null; message: string | null; customFields: any };
+    let existing: ExistingLead | null = null;
+    if (emailKey) {
+      existing = await prisma.lead.findFirst({
+        where: { organizationId: form.organizationId, email: { equals: emailKey, mode: "insensitive" } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, phone: true, whatsapp: true, city: true, message: true, customFields: true },
+      });
+    }
+    if (!existing) {
+      const suffixes = [phoneSuffix, waSuffix].filter((s) => s && s.length >= 8);
+      if (suffixes.length) {
+        existing = await prisma.lead.findFirst({
+          where: {
+            organizationId: form.organizationId,
+            OR: suffixes.flatMap((s) => [{ phone: { contains: s } }, { whatsapp: { contains: s } }]),
+          },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, email: true, phone: true, whatsapp: true, city: true, message: true, customFields: true },
+        });
+      }
+    }
+
+    const isDuplicate = !!existing;
+    let leadId: string;
+
+    if (existing) {
+      const existingCustom = (existing.customFields as Record<string, any>) || {};
+      const mergedCustom: Record<string, any> = { ...customFields, ...existingCustom }; // l'existant l'emporte
+      const prevNotes = Array.isArray(existingCustom._notes) ? existingCustom._notes : [];
+      mergedCustom._notes = [...prevNotes, { at: new Date().toISOString(), text: "Nouvelle soumission via « " + form.name + " »" }];
+      const emptyNative = (v: string | null | undefined) => !v || v === "N/A";
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: {
+          email: existing.email || email || undefined,
+          phone: emptyNative(existing.phone) && phone !== "N/A" ? phone : undefined,
+          whatsapp: existing.whatsapp || whatsapp || undefined,
+          city: existing.city || city || undefined,
+          message: existing.message || message || undefined,
+          customFields: mergedCustom,
+        },
+      });
+      leadId = existing.id;
+    } else {
+      const lead = await prisma.lead.create({
+        data: {
+          firstName, lastName,
+          phone, whatsapp, email, city, message,
+          source: "WEBSITE" as any,
+          sourceDetail: form.name,
+          stageId: stageId,
+          pipelineId: pipelineId ?? undefined,
+          assignedToId: routing.assignToId ?? undefined,
+          organizationId: form.organizationId,
+          score: computeLeadScore({ source: "WEBSITE", email, whatsapp }),
+          customFields: Object.keys(customFields).length ? customFields : undefined,
+        },
+        select: { id: true },
+      });
+      leadId = lead.id;
+    }
 
     await prisma.formSubmission.create({
-      data: { formId: form.id, organizationId: form.organizationId, leadId: lead.id, data: values as any },
+      data: { formId: form.id, organizationId: form.organizationId, leadId: leadId, data: values as any },
     });
     await prisma.form.update({ where: { id: form.id }, data: { submissionsCount: { increment: 1 } } });
 
     // Déclencher les workflows « soumission de formulaire » (sans bloquer la réponse)
-    triggerFormSubmittedWorkflows(form.organizationId, lead.id, form.id).catch((e) =>
+    triggerFormSubmittedWorkflows(form.organizationId, leadId, form.id).catch((e) =>
       console.error("[FORM_SUBMITTED workflow]", e),
     );
 
@@ -127,13 +184,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .join("");
       const html =
         '<div style="font-family:Arial,sans-serif;font-size:14px;color:#2C3E50">' +
-        "<p>Nouvelle soumission du formulaire <b>" + form.name + "</b> :</p>" +
+        "<p>" + (isDuplicate ? "Nouvelle soumission d'un prospect existant" : "Nouvelle soumission") + " du formulaire <b>" + form.name + "</b> :</p>" +
         '<ul style="padding-left:18px">' + rows + "</ul>" +
-        '<p><a href="' + appUrl + "/leads/" + lead.id + '" style="color:#2471A3">Voir la fiche du prospect →</a></p>' +
+        '<p><a href="' + appUrl + "/leads/" + leadId + '" style="color:#2471A3">Voir la fiche du prospect →</a></p>' +
         "</div>";
       sendEmail({
         to: notify,
-        subject: "Nouvelle soumission — " + form.name,
+        subject: (isDuplicate ? "Nouvelle soumission (prospect existant) — " : "Nouvelle soumission — ") + form.name,
         body: html,
         isHtml: true,
         organizationId: form.organizationId,
@@ -143,11 +200,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await prisma.activity.create({
       data: {
-        type: "LEAD_CREATED",
-        description: "Lead capturé via le formulaire « " + form.name + " » : " + firstName + " " + lastName,
-        leadId: lead.id,
+        type: isDuplicate ? "NOTE_ADDED" : "LEAD_CREATED",
+        description: (isDuplicate ? "Nouvelle soumission via le formulaire « " : "Lead capturé via le formulaire « ") + form.name + " » : " + firstName + " " + lastName,
+        leadId: leadId,
         organizationId: form.organizationId,
-        metadata: { source: "form", formSlug: slug } as any,
+        metadata: { source: "form", formSlug: slug, duplicate: isDuplicate } as any,
       },
     }).catch(() => {});
 
