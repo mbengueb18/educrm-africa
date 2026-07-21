@@ -6,8 +6,6 @@ import { SupportBubble } from "@/components/support/support-bubble";
 import { AnalyticsPageView } from "@/components/analytics/analytics-page-view";
 import { CallReturnPrompt } from "@/components/calls/call-return-prompt";
 import { VerifyEmailBanner } from "@/components/onboarding/verify-email-banner";
-import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
-import { getOnboardingProgress } from "@/lib/onboarding-progress";
 import { SessionEndedGate } from "@/components/auth/session-ended-gate";
 
 export default async function DashboardLayout({
@@ -32,7 +30,9 @@ export default async function DashboardLayout({
   var isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN";
   var assigneeFilter = isAdmin ? {} : { assignedToId: session.user.id };
 
-  var [overdueTasks, dueTodayTasks] = await Promise.all([
+  // Tout le chemin partagé traversé à CHAQUE chargement de page tient en une seule
+  // vague de requêtes parallèles (tâches du bell + org + utilisateur courant).
+  var [overdueTasks, dueTodayTasks, org, currentUser] = await Promise.all([
     prisma.task.findMany({
       where: {
         organizationId: session.user.organizationId,
@@ -61,22 +61,18 @@ export default async function DashboardLayout({
       orderBy: { dueDate: "asc" },
       take: 20,
     }),
+    prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { plan: true },
+    }),
+    // Blocage souple : bannière tant que l'email de l'utilisateur n'est pas vérifié.
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { emailVerified: true, email: true },
+    }),
   ]);
 
-  var org = await prisma.organization.findUnique({
-    where: { id: session.user.organizationId },
-    select: { plan: true },
-  });
-
-  // Blocage souple : bannière tant que l'email de l'utilisateur n'est pas vérifié.
-  var currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { emailVerified: true, email: true },
-  });
   var needsEmailVerification = currentUser != null && currentUser.emailVerified == null;
-
-  // Checklist de premier démarrage (progression déduite des vraies données).
-  var onboardingProgress = await getOnboardingProgress(session.user.organizationId, session.user.id);
 
   return (
     <PermissionProvider role={session.user.role} userId={session.user.id}>
@@ -103,7 +99,6 @@ export default async function DashboardLayout({
       </DashboardShell>
       <SupportBubble />
       <CallReturnPrompt />
-      <OnboardingChecklist progress={onboardingProgress} />
     </PermissionProvider>
   );
 }
