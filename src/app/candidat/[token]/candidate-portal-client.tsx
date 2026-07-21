@@ -141,7 +141,7 @@ export function CandidatePortalClient({ token, data }: { token: string; data: Po
                 const isCompleted = i < progressIndex;
                 const isCurrent = i === progressIndex;
                 return (
-                  <div key={stage} className="flex flex-col items-center text-center" style={{ width: "20%" }}>
+                  <div key={stage} className="flex flex-col items-center text-center px-0.5" style={{ width: "20%" }}>
                     <div className={cn(
                       "w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all",
                       isCompleted ? "bg-emerald-500 text-white" :
@@ -151,7 +151,7 @@ export function CandidatePortalClient({ token, data }: { token: string; data: Po
                       {isCompleted ? <CheckCircle2 size={18} /> : <span className="text-sm font-bold">{i + 1}</span>}
                     </div>
                     <span className={cn(
-                      "text-xs font-medium",
+                      "text-[10px] sm:text-xs font-medium leading-tight break-words",
                       isCompleted ? "text-emerald-600" : isCurrent ? "text-brand-600" : "text-gray-400"
                     )}>
                       {stage}

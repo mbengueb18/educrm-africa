@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Check, Clock, Share2, Eye, Trash2, ChevronUp, ChevronDown, Plus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Clock, Share2, Eye, Trash2, ChevronUp, ChevronDown, Plus, X, Monitor } from "lucide-react";
 import { newField, DEFAULT_SETTINGS, hasOptions, isInputField, type FormField, type FieldType, type FormSettings, type FormRouting } from "@/lib/forms";
 import { COUNTRIES, NATIONALITIES } from "@/lib/countries";
 import { formBaseCss } from "@/lib/form-styles";
@@ -89,7 +89,23 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
   };
 
   return (
-    <div className="hidden lg:flex flex-col h-[calc(100vh-var(--header-height))]">
+    <>
+      {/* Repli mobile — l'éditeur de formulaire nécessite un grand écran (comme les éditeurs email/WhatsApp/workflow) */}
+      <div className="lg:hidden fixed inset-0 z-50 bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-brand-50 flex items-center justify-center mb-5">
+          <Monitor size={40} className="text-brand-500" />
+        </div>
+        <h1 className="text-lg font-bold text-gray-900 mb-2">Éditeur réservé au desktop</h1>
+        <p className="text-sm text-gray-600 max-w-xs mb-6">
+          L'éditeur de formulaire nécessite un grand écran. Ouvrez cette page depuis un ordinateur.
+        </p>
+        <Link href="/forms" className="btn-primary text-sm">
+          <ArrowLeft size={14} /> Retour aux formulaires
+        </Link>
+      </div>
+
+      {/* Éditeur desktop */}
+      <div className="hidden lg:flex flex-col h-[calc(100vh-var(--header-height))]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-gray-200 shrink-0 gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -161,7 +177,8 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
       </div>
 
       {share && <ShareModal slug={form.slug} published={status === "PUBLISHED"} onClose={() => setShare(false)} />}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -248,7 +265,7 @@ function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: F
           </div>
         </>
       )}
-    </div>
+      </div>
   );
 }
 

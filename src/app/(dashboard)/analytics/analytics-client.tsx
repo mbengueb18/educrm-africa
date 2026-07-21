@@ -283,7 +283,7 @@ function ActivityRow({ title, items }: { title: string; items: { label: string; 
     <div className="bg-white rounded-xl border border-gray-200 p-3">
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <span className="text-xs font-semibold text-gray-500 sm:w-28 shrink-0">{title}</span>
-        <div className="grid grid-cols-5 gap-2 flex-1">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 flex-1">
           {items.map(function(it, i) {
             return (
               <div key={i} className={cn("text-center rounded-lg py-1", it.alert && "bg-red-50/60")}>
@@ -1234,7 +1234,7 @@ function ReportBuilder({ report, onClose, onSaved }: { report: CustomReportItem 
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Visualisation</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {VIZ_TYPES.map(function(v) {
                   return (
                     <button key={v.key} onClick={function() { setVizType(v.key); }}

@@ -140,7 +140,7 @@ export function ContratsClient({ orgName, contract, view, content }: { orgName: 
                 <div className="bg-brand-50 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-brand-700 border-b border-gray-200">
                   Conditions Particulières — Offre « {view.planName} »
                 </div>
-                <table className="w-full text-[12.5px]">
+                <div className="overflow-x-auto"><table className="w-full text-[12.5px]">
                   <tbody>
                     <tr className="border-b border-gray-100">
                       <th className="text-left align-top font-medium text-gray-500 px-4 py-2.5 w-[44%]">Prix de l'abonnement</th>
@@ -160,7 +160,7 @@ export function ContratsClient({ orgName, contract, view, content }: { orgName: 
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
 
@@ -169,25 +169,25 @@ export function ContratsClient({ orgName, contract, view, content }: { orgName: 
               <div className="mt-3 space-y-3">
                 <div>
                   <p className="font-sans text-[12px] font-bold text-gray-900 mb-1">Crédits IA supplémentaires</p>
-                  <table className="w-full text-[12px] border-collapse">
+                  <div className="overflow-x-auto"><table className="w-full text-[12px] border-collapse">
                     <thead><tr className="bg-brand-50 text-brand-700"><Th>Pack</Th><Th>Actions IA</Th><Th>Prix (FCFA HT)</Th></tr></thead>
                     <tbody>
                       <tr><Td>Pack 1</Td><Td right>1 000</Td><Td right>10 000</Td></tr>
                       <tr><Td>Pack 2</Td><Td right>5 000</Td><Td right>40 000</Td></tr>
                       <tr><Td>Pack 3</Td><Td right>20 000</Td><Td right>120 000</Td></tr>
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
                 <div>
                   <p className="font-sans text-[12px] font-bold text-gray-900 mb-1">Services ponctuels (one-shot)</p>
-                  <table className="w-full text-[12px] border-collapse">
+                  <div className="overflow-x-auto"><table className="w-full text-[12px] border-collapse">
                     <thead><tr className="bg-brand-50 text-brand-700"><Th>Prestation</Th><Th>Prix (FCFA HT)</Th></tr></thead>
                     <tbody>
                       <tr><Td>Formation de l'équipe sur site à Dakar (1 journée)</Td><Td right>250 000</Td></tr>
                       <tr><Td>Formation de l'équipe en ligne (1 journée)</Td><Td right>200 000</Td></tr>
                       <tr><Td>Migration depuis HubSpot / Pipedrive / Salesforce</Td><Td right>150 000</Td></tr>
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               </div>
             )}
