@@ -1051,7 +1051,12 @@ export async function GET(request: NextRequest) {
       chat.style.display = open ? 'flex' : 'none';
       if (open && history.length === 0) {
         addBotMessage(config.welcomeMessage || 'Bonjour !');
-        setTimeout(function() { goToStep(currentStepId); }, 600);
+        // Chatbot IA actif → conversation d'emblée (champ + raccourcis) ; sinon menu scripté.
+        if (config.knowledgeEnabled) {
+          setTimeout(function() { enterAiHome(); }, 600);
+        } else {
+          setTimeout(function() { goToStep(currentStepId); }, 600);
+        }
       }
     }
 
@@ -1135,8 +1140,8 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    function enterAiMode(step) {
-      aiCaptureNext = step.next || 'ask_name';
+    function enterAiMode(captureNext, suggestions) {
+      aiCaptureNext = captureNext || 'ask_name';
       var inputZone = document.getElementById('_ecrm_input_zone');
       inputZone.innerHTML = '';
       var input = document.createElement('input');
@@ -1146,6 +1151,15 @@ export async function GET(request: NextRequest) {
       var sendBtn = document.createElement('button');
       sendBtn.style.cssText = 'padding:10px 14px;background:' + primary + ';color:white;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;';
       sendBtn.textContent = '→';
+      var send = function() { var v = input.value.trim(); if (v) askAI(v, input, sendBtn); };
+      // Raccourcis : chaque bouton envoie une question à l'IA (ou bascule en capture pour le RDV).
+      (suggestions || []).forEach(function(sug) {
+        var b = document.createElement('button');
+        b.style.cssText = 'display:block;width:100%;margin:0 0 6px 0;padding:9px 10px;background:white;border:1px solid ' + primary + ';color:' + primary + ';border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;text-align:left;';
+        b.textContent = sug.label;
+        b.onclick = function() { sug.onClick(input, sendBtn); };
+        inputZone.appendChild(b);
+      });
       var wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;gap:6px;';
       wrap.appendChild(input);
@@ -1156,10 +1170,41 @@ export async function GET(request: NextRequest) {
       talk.style.cssText = 'display:block;width:100%;margin-top:8px;padding:8px;background:none;border:none;color:#6b7280;font-size:12px;cursor:pointer;text-decoration:underline;';
       talk.onclick = function() { goToStep(aiCaptureNext); };
       inputZone.appendChild(talk);
-      var send = function() { var v = input.value.trim(); if (v) askAI(v, input, sendBtn); };
+      // Transparence : mention que les réponses sont générées par IA.
+      var aiNote = document.createElement('div');
+      aiNote.textContent = '✨ Réponses générées par IA — peuvent contenir des erreurs.';
+      aiNote.style.cssText = 'margin-top:6px;font-size:10px;color:#9ca3af;text-align:center;line-height:1.4;';
+      inputZone.appendChild(aiNote);
       sendBtn.onclick = send;
       input.addEventListener('keypress', function(e) { if (e.key === 'Enter') send(); });
       setTimeout(function() { input.focus(); }, 100);
+    }
+
+    // Entrée « IA d'emblée » : dès l'ouverture, champ de saisie + raccourcis.
+    // Priorité aux suggestions dynamiques generées par l'IA depuis les documents ;
+    // sinon repli sur les options du scénario. La prise de RDV reste un raccourci de capture.
+    function enterAiHome() {
+      var suggestions = [];
+      var dyn = config.suggestedQuestions;
+      if (dyn && dyn.length) {
+        dyn.forEach(function(q) {
+          suggestions.push({ label: q, onClick: function(inputEl, sendEl) { askAI(q, inputEl, sendEl); } });
+        });
+      } else {
+        var start = scenario[0];
+        var opts = (start && start.options) ? start.options : [];
+        opts.forEach(function(opt) {
+          var target = scenario.find(function(s) { return s.id === opt.next; });
+          if (target && target.type === 'input' && target.field === 'message') return; // saisie libre = champ
+          if (/rdv|rendez.?vous/i.test(opt.label)) return; // RDV ajouté à part ci-dessous
+          suggestions.push({ label: opt.label, onClick: function(inputEl, sendEl) { askAI(opt.label, inputEl, sendEl); } });
+        });
+      }
+      // Toujours proposer la prise de RDV (capture de lead) si le scénario la prévoit.
+      var startOpts = (scenario[0] && scenario[0].options) ? scenario[0].options : [];
+      var rdvOpt = startOpts.filter(function(o) { return /rdv|rendez.?vous/i.test(o.label); })[0];
+      if (rdvOpt) suggestions.push({ label: rdvOpt.label, onClick: function() { goToStep(rdvOpt.next); } });
+      enterAiMode('ask_name', suggestions);
     }
 
     function goToStep(stepId) {
@@ -1187,7 +1232,7 @@ export async function GET(request: NextRequest) {
         });
       } else if (step.type === 'input') {
         // Question libre + mode IA activé → conversation avec les documents de l'école.
-        if (config.knowledgeEnabled && step.field === 'message') { enterAiMode(step); return; }
+        if (config.knowledgeEnabled && step.field === 'message') { enterAiMode(step.next); return; }
         var input = document.createElement('input');
         input.type = step.field === 'email' ? 'email' : (step.field === 'phone' ? 'tel' : 'text');
         input.placeholder = 'Votre réponse...';

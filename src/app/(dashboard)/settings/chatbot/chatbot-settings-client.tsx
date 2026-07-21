@@ -98,7 +98,7 @@ export function ChatbotSettingsClient({
 
           <div>
             <label className="text-xs font-medium text-gray-700 mb-1 block">Nom du conseiller</label>
-            <input value={agentName} onChange={(e) => setAgentName(e.target.value)} className="input" placeholder="Aïcha" />
+            <input value={agentName} onChange={(e) => setAgentName(e.target.value)} className="input" placeholder="TalibBot" />
             <p className="text-[10px] text-gray-400 mt-1">Affiché dans l'en-tête du chatbot</p>
           </div>
 

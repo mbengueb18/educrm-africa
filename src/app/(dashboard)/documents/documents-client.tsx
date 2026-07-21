@@ -25,7 +25,7 @@ function fileIcon(mime: string) {
   return (mime || "").startsWith("image/") ? ImageIcon : FileText;
 }
 
-export function DocumentsClient({ documents, folders }: { documents: Doc[]; folders: FolderT[] }) {
+export function DocumentsClient({ documents, folders, chatbotAiEnabled = false }: { documents: Doc[]; folders: FolderT[]; chatbotAiEnabled?: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -176,7 +176,8 @@ export function DocumentsClient({ documents, folders }: { documents: Doc[]; fold
                 {doc.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{doc.description}</p>}
                 <p className="text-[11px] text-gray-400 mt-2 mb-3">Ajouté par {doc.uploadedByName} · {new Date(doc.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</p>
 
-                {/* Visibilité chatbot */}
+                {/* Visibilité chatbot — seulement si l'org a le chatbot IA activé (BO) */}
+                {chatbotAiEnabled && (
                 <label className="flex items-center justify-between gap-2 mb-3 rounded-lg bg-gray-50 px-2.5 py-2 cursor-pointer">
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
                     <Bot size={13} className={doc.botVisible ? "text-brand-600" : "text-gray-400"} /> Visible par le chatbot
@@ -190,6 +191,7 @@ export function DocumentsClient({ documents, folders }: { documents: Doc[]; fold
                     <span className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></span>
                   </span>
                 </label>
+                )}
 
                 <div className="flex items-center gap-1.5 mt-auto pt-3 border-t border-gray-100">
                   <button onClick={() => download(doc.id)} disabled={pending} className="btn-secondary py-1.5 px-2.5 text-xs flex-1 justify-center"><Download size={13} /> Télécharger</button>

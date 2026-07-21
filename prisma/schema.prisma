@@ -1456,7 +1456,7 @@ model ChatbotConfig {
   id             String   @id @default(cuid())
   organizationId String   @unique
   enabled        Boolean  @default(false)
-  agentName      String   @default("Aïcha")
+  agentName      String   @default("TalibBot")
   welcomeMessage String   @default("Bonjour ! Comment puis-je vous aider ?")
   primaryColor   String   @default("#1B4F72")
   position       String   @default("bottom-right") // bottom-right, bottom-left
@@ -1466,6 +1466,10 @@ model ChatbotConfig {
   knowledgeEnabled Boolean @default(false)
   // Consignes additionnelles de l'école ajoutées au prompt système (ton, infos clés…).
   systemPromptExtra String?
+  // Raccourcis dynamiques : questions suggérées générées par l'IA depuis les documents
+  // de l'école (mises en cache, régénérées quand les docs changent). Ex: ["Vos filières ?", …]
+  suggestedQuestions   Json      @default("[]")
+  suggestionsUpdatedAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

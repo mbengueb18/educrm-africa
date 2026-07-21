@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-storage";
 import { runExtraction } from "@/lib/documents/run-extraction";
+import { canAccessFeature } from "@/lib/plans/checks";
 
 // Réutilise le bucket des pièces jointes → « Joindre depuis la bibliothèque » = simple
 // référence du path, sans ré-upload. (L'upload lui-même passe par /api/library/upload
@@ -68,12 +69,28 @@ export async function setDocumentBotVisible(id: string, visible: boolean) {
     return { ok: false, error: "Document introuvable" };
   }
 
+  // Garde d'accès : on ne marque un doc « visible » (et surtout on ne déclenche pas
+  // l'extraction, coûteuse en OCR) que si l'org a le chatbot IA activé (Back Office).
+  if (visible) {
+    const feature = await canAccessFeature(session.user.organizationId, "CHATBOT_AI");
+    if (!feature.allowed) {
+      return { ok: false, error: "Le chatbot IA n'est pas activé pour votre organisation." };
+    }
+  }
+
   await prisma.libraryDocument.update({ where: { id }, data: { botVisible: visible } });
 
   if (visible && doc.extractionStatus !== "DONE") {
     await prisma.libraryDocument.update({ where: { id }, data: { extractionStatus: "PENDING" } });
     after(() => runExtraction(id));
   }
+
+  // Le jeu de documents du bot a changé → invalide les raccourcis suggérés
+  // (régénérés au prochain chargement du widget, une fois l'extraction faite).
+  await prisma.chatbotConfig.updateMany({
+    where: { organizationId: session.user.organizationId },
+    data: { suggestionsUpdatedAt: null },
+  });
 
   revalidatePath("/documents");
   return { ok: true };

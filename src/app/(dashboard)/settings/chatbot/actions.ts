@@ -3,7 +3,9 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { canAccessFeature } from "@/lib/plans/checks";
+import { generateSuggestions } from "@/lib/documents/generate-suggestions";
 
 export async function updateChatbotConfig(data: {
   enabled: boolean;
@@ -50,6 +52,11 @@ export async function updateChatbotConfig(data: {
       systemPromptExtra: (data.systemPromptExtra || "").trim() || null,
     },
   });
+
+  // Mode IA activé → (re)génère les raccourcis suggérés depuis les documents, en tâche de fond.
+  if (knowledgeEnabled) {
+    after(() => generateSuggestions(session.user.organizationId));
+  }
 
   revalidatePath("/settings/chatbot");
   return { ok: true };

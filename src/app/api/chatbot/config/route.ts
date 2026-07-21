@@ -1,5 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { generateSuggestions } from "@/lib/documents/generate-suggestions";
+
+// Régénère les suggestions si absentes ou trop anciennes (7 j) — best-effort.
+const SUGGESTIONS_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_SCENARIO = [
   {
@@ -97,6 +101,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         name: true,
+        chatbotAiEnabled: true, // gate BO : le mode IA n'est effectif que si activé au back-office
         chatbotConfig: true,
       },
     });
@@ -117,6 +122,18 @@ export async function GET(request: NextRequest) {
       scenario = DEFAULT_SCENARIO;
     }
 
+    const suggestedQuestions = Array.isArray(config.suggestedQuestions) ? config.suggestedQuestions : [];
+    // Mode IA effectif = activé par l'école ET habilité au back-office.
+    const aiActive = !!config.knowledgeEnabled && !!org.chatbotAiEnabled;
+
+    // Régénération paresseuse des suggestions (après la réponse, ne bloque pas le widget).
+    if (aiActive) {
+      const updatedAt = config.suggestionsUpdatedAt ? new Date(config.suggestionsUpdatedAt).getTime() : 0;
+      if (!updatedAt || Date.now() - updatedAt > SUGGESTIONS_STALE_MS) {
+        after(() => generateSuggestions(org.id));
+      }
+    }
+
     return NextResponse.json({
       enabled: true,
       organizationName: org.name,
@@ -126,7 +143,9 @@ export async function GET(request: NextRequest) {
       position: config.position,
       scenario: scenario,
       // Mode IA : le widget branche la saisie libre sur /api/chatbot/ask si vrai.
-      knowledgeEnabled: !!config.knowledgeEnabled,
+      knowledgeEnabled: aiActive,
+      // Raccourcis dynamiques générés par l'IA depuis les documents de l'école.
+      suggestedQuestions: aiActive ? suggestedQuestions : [],
     }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
