@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 import { getCustomFields } from "@/lib/custom-fields";
-import { buildDossierSections } from "@/lib/candidature";
+import { buildDossierSections, buildChecklist, type DossierChecklist } from "@/lib/candidature";
 import { isInputField, type FormField } from "@/lib/forms";
 import { LeadDetailClient } from "./lead-detail-client";
 
@@ -55,7 +55,7 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
     prisma.formSubmission.findFirst({
       where: { leadId, organizationId: session.user.organizationId },
       orderBy: { createdAt: "desc" },
-      select: { data: true, createdAt: true, form: { select: { name: true, fields: true } } },
+      select: { data: true, checklist: true, createdAt: true, form: { select: { name: true, fields: true } } },
     }),
   ]);
 
@@ -77,12 +77,16 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
       });
       progs.forEach((p) => { programNames[p.id] = p.name; });
     }
-    const sections = buildDossierSections(formFields, data, programNames);
-    if (sections.length) {
+    // Checklist des pièces : snapshot de la soumission, ou recalcul pour les anciennes soumissions.
+    const checklist: DossierChecklist = (submission.checklist as DossierChecklist | null) ?? buildChecklist(formFields, data);
+    // Les fichiers sont portés par la carte checklist → exclus des sections (pas de doublon).
+    const sections = buildDossierSections(formFields, data, programNames, { excludeFiles: checklist.items.length > 0 });
+    if (sections.length || checklist.items.length) {
       candidature = {
         formName: submission.form.name,
         submittedAt: submission.createdAt.toISOString(),
         sections,
+        checklist: checklist.items.length ? checklist : null,
         // Libellés des champs du formulaire : masqués de « Informations complémentaires »
         // (ils sont désormais présentés, structurés, dans l'onglet Candidature).
         fieldLabels: formFields.filter((f) => isInputField(f.type)).map((f) => f.label || f.name),

@@ -6,6 +6,7 @@ import { isInputField, type FormField, type FormRouting, type FormSettings } fro
 import { computeLeadScore } from "@/lib/lead-score";
 import { triggerFormSubmittedWorkflows } from "@/lib/workflows/engine";
 import { normalizePhoneNumber } from "@/lib/whatsapp-webhook";
+import { buildChecklist } from "@/lib/candidature";
 
 export const runtime = "nodejs";
 
@@ -213,8 +214,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       leadId = lead.id;
     }
 
+    // Snapshot des pièces du dossier (champs fichier applicables : fourni / manquant).
+    // Figé à la soumission — base du dépôt cadré sur le portail candidat.
+    const checklist = buildChecklist(fields, values);
     await prisma.formSubmission.create({
-      data: { formId: form.id, organizationId: form.organizationId, leadId: leadId, data: values as any },
+      data: {
+        formId: form.id, organizationId: form.organizationId, leadId: leadId, data: values as any,
+        checklist: checklist.items.length ? (checklist as any) : undefined,
+      },
     });
     await prisma.form.update({ where: { id: form.id }, data: { submissionsCount: { increment: 1 } } });
 

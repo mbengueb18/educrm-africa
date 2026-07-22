@@ -26,13 +26,14 @@ import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
 import { formatCFA } from "@/lib/utils";
-import { DossierSectionsView } from "@/components/forms/dossier-view";
-import { type DossierSection } from "@/lib/candidature";
+import { DossierSectionsView, ChecklistCard } from "@/components/forms/dossier-view";
+import { type DossierSection, type DossierChecklist } from "@/lib/candidature";
 
 type Candidature = {
   formName: string;
   submittedAt: string;
   sections: DossierSection[];
+  checklist?: DossierChecklist | null;
   fieldLabels: string[];
 };
 
@@ -286,7 +287,9 @@ function StageSelector({ leadId, currentStage, stages }: {
 // Dossier de candidature : sections rejouées depuis le formulaire d'origine (socle partagé
 // avec le portail candidat via DossierSectionsView).
 function ApplicationTab({ candidature }: { candidature: Candidature }) {
-  const nFiles = candidature.sections.reduce((n, s) => n + s.items.filter((i) => i.kind === "file").length, 0);
+  const cl = candidature.checklist;
+  const nProvided = cl ? cl.items.filter((i) => i.status === "PROVIDED").length : 0;
+  const nMissing = cl ? cl.items.length - nProvided : 0;
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
@@ -295,11 +298,17 @@ function ApplicationTab({ candidature }: { candidature: Candidature }) {
           <h3 className="text-sm font-semibold text-gray-900">{candidature.formName}</h3>
           <p className="text-xs text-gray-500">
             Soumis le {new Date(candidature.submittedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
-            {nFiles > 0 && <> · {nFiles} pièce{nFiles > 1 ? "s" : ""} jointe{nFiles > 1 ? "s" : ""}</>}
+            {cl && cl.items.length > 0 && <> · {nProvided}/{cl.items.length} pièce{cl.items.length > 1 ? "s" : ""}</>}
           </p>
         </div>
+        {cl && cl.items.length > 0 && (
+          nMissing > 0
+            ? <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 shrink-0">{nMissing} manquante{nMissing > 1 ? "s" : ""}</span>
+            : <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 shrink-0">Dossier complet</span>
+        )}
       </div>
-      <DossierSectionsView sections={candidature.sections} />
+      {cl && <ChecklistCard checklist={cl} />}
+      {candidature.sections.length > 0 && <DossierSectionsView sections={candidature.sections} />}
     </div>
   );
 }

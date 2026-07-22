@@ -1088,6 +1088,7 @@ model FormSubmission {
   organizationId String
   leadId         String? // lead créé à partir de cette soumission
   data           Json // valeurs brutes soumises
+  checklist      Json? // snapshot des pièces du dossier { items: [{name,label,status,url?,updatedAt?}], locked, lockedAt? }
   createdAt      DateTime @default(now())
 
   form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
