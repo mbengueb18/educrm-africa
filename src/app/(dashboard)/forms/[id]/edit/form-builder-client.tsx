@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Check, Clock, Share2, Eye, Trash2, ChevronUp, ChevronDown, Plus, X, Monitor } from "lucide-react";
-import { newField, DEFAULT_SETTINGS, hasOptions, isInputField, type FormField, type FieldType, type FormSettings, type FormRouting } from "@/lib/forms";
+import { newField, DEFAULT_SETTINGS, hasOptions, isInputField, type FormField, type FieldType, type FormSettings, type FormRouting, type ProgramOption } from "@/lib/forms";
 import { COUNTRIES, NATIONALITIES } from "@/lib/countries";
 import { formBaseCss } from "@/lib/form-styles";
 import { FormFieldView } from "@/components/forms/form-field";
@@ -13,6 +13,7 @@ import { ShareModal } from "../../share-modal";
 
 type Stage = { id: string; name: string; pipelineId: string };
 type UserOpt = { id: string; name: string };
+type RoutingData = { stages: Stage[]; users: UserOpt[]; programs: ProgramOption[] };
 
 const PALETTE: { cat: string; items: { t: FieldType; k: string; lbl: string }[] }[] = [
   { cat: "Saisie", items: [
@@ -25,6 +26,7 @@ const PALETTE: { cat: string; items: { t: FieldType; k: string; lbl: string }[] 
     { t: "select", k: "🔽", lbl: "Liste déroulante" }, { t: "radio", k: "🔘", lbl: "Choix unique" },
     { t: "checkboxes", k: "☑️", lbl: "Cases à cocher" }, { t: "boolean", k: "🔀", lbl: "Oui / Non" },
     { t: "country", k: "🌍", lbl: "Pays" }, { t: "nationality", k: "🏳️", lbl: "Nationalité" },
+    { t: "program", k: "🎓", lbl: "Filière" },
   ]},
   { cat: "Avancé", items: [
     { t: "file", k: "📎", lbl: "Fichier joint" }, { t: "consent", k: "✅", lbl: "Consentement" }, { t: "hidden", k: "🙈", lbl: "Champ caché" },
@@ -34,7 +36,7 @@ const PALETTE: { cat: string; items: { t: FieldType; k: string; lbl: string }[] 
   ]},
 ];
 
-export function FormBuilderClient({ form, routingData }: { form: any; routingData: { stages: Stage[]; users: UserOpt[] } }) {
+export function FormBuilderClient({ form, routingData }: { form: any; routingData: RoutingData }) {
   const [name, setName] = useState<string>(form.name || "");
   const [fields, setFields] = useState<FormField[]>((form.fields as FormField[]) || []);
   const [settings, setSettings] = useState<FormSettings>({ ...DEFAULT_SETTINGS, ...(form.settings || {}) });
@@ -138,6 +140,12 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
 
         {/* Canvas */}
         <div className="overflow-y-auto p-6 bg-gray-100">
+          {/candidature/i.test(name) && !fields.some((f) => f.type === "program") && (
+            <div className="max-w-[620px] mx-auto mb-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2.5">
+              <span>⚠️</span>
+              <span>Ce formulaire de candidature ne contient pas de champ <b>Filière</b>. Ajoutez-le depuis la palette (Choix › Filière) pour qualifier automatiquement les candidats et router vers le bon pipeline.</span>
+            </div>
+          )}
           <div className="max-w-[620px] mx-auto bg-white rounded-2xl border border-gray-200 p-7 sm:p-8">
             <style>{formBaseCss(settings)}</style>
             {settings.showLogo !== false && settings.logo && <img src={settings.logo} alt="" style={{ height: 40, marginBottom: 10 }} />}
@@ -146,7 +154,7 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
               {fields.map((f) => (
                 <div key={f.id} onClick={() => { setSelId(f.id); setTab("champ"); }}
                   className={"relative rounded-lg -mx-1 px-1 mb-1 cursor-pointer border " + (selId === f.id ? "border-brand-400 bg-brand-50/40" : "border-transparent hover:bg-gray-50")}>
-                  <div className="pointer-events-none"><FormFieldView field={f} preview /></div>
+                  <div className="pointer-events-none"><FormFieldView field={f} preview programs={routingData.programs} /></div>
                   <div className="absolute -right-1 top-1 flex gap-0.5 opacity-0 hover:opacity-100" style={{ opacity: selId === f.id ? 1 : undefined }}>
                     <button onClick={(e) => { e.stopPropagation(); move(f.id, -1); }} className="p-1 rounded bg-white border border-gray-200 text-gray-400 hover:text-gray-700"><ChevronUp size={12} /></button>
                     <button onClick={(e) => { e.stopPropagation(); move(f.id, 1); }} className="p-1 rounded bg-white border border-gray-200 text-gray-400 hover:text-gray-700"><ChevronDown size={12} /></button>
@@ -168,7 +176,7 @@ export function FormBuilderClient({ form, routingData }: { form: any; routingDat
             ))}
           </div>
           <div className="p-4">
-            {tab === "champ" && (sel ? <FieldSettings field={sel} fields={fields} onPatch={(p) => patchField(sel.id, p)} /> : <p className="text-xs text-gray-400 py-6 text-center">Sélectionnez un champ dans l'aperçu pour l'éditer.</p>)}
+            {tab === "champ" && (sel ? <FieldSettings field={sel} fields={fields} programs={routingData.programs} onPatch={(p) => patchField(sel.id, p)} /> : <p className="text-xs text-gray-400 py-6 text-center">Sélectionnez un champ dans l'aperçu pour l'éditer.</p>)}
             {tab === "reglages" && <GeneralSettings settings={settings} onPatch={(p) => setSettings((s) => ({ ...s, ...p }))} />}
             {tab === "design" && <DesignSettings settings={settings} onPatch={(p) => setSettings((s) => ({ ...s, ...p }))} />}
             {tab === "routage" && <RoutingSettings routing={routing} onPatch={(p) => setRouting((r) => ({ ...r, ...p }))} stages={routingData.stages} users={routingData.users} />}
@@ -194,7 +202,7 @@ function condValueOptions(f: FormField): string[] | null {
   return null;
 }
 
-function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: FormField[]; onPatch: (p: Partial<FormField>) => void }) {
+function FieldSettings({ field, fields, programs, onPatch }: { field: FormField; fields: FormField[]; programs: ProgramOption[]; onPatch: (p: Partial<FormField>) => void }) {
   const isLayout = !isInputField(field.type);
   const selfIdx = fields.findIndex((f) => f.id === field.id);
   // Champs pouvant contrôler l'affichage : champs de saisie situés AVANT celui-ci.
@@ -232,6 +240,7 @@ function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: F
             <><Lbl>Options (une par ligne)</Lbl>
               <textarea className="input text-sm mb-3" rows={4} value={(field.options || []).join("\n")} onChange={(e) => onPatch({ options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })} /></>
           )}
+          {field.type === "program" && <ProgramPicker field={field} programs={programs} onPatch={onPatch} />}
           {field.type === "hidden" && <><Lbl>Valeur par défaut</Lbl><Inp value={field.defaultValue || ""} onChange={(e: any) => onPatch({ defaultValue: e.target.value })} /></>}
           <label className="flex items-center justify-between text-sm py-1.5"><span>Champ requis</span>
             <button onClick={() => onPatch({ required: !field.required })} className={"w-9 h-5 rounded-full relative " + (field.required ? "bg-brand-600" : "bg-gray-300")}><span className={"absolute top-0.5 w-4 h-4 rounded-full bg-white " + (field.required ? "left-4" : "left-0.5")} /></button>
@@ -266,6 +275,44 @@ function FieldSettings({ field, fields, onPatch }: { field: FormField; fields: F
         </>
       )}
       </div>
+  );
+}
+
+// Sélecteur de filières : la liste vient des programmes de l'organisation (jamais saisie à la main).
+// Le créateur coche le sous-ensemble à proposer sur CE formulaire (ex. uniquement les licences).
+function ProgramPicker({ field, programs, onPatch }: { field: FormField; programs: ProgramOption[]; onPatch: (p: Partial<FormField>) => void }) {
+  const selected = field.programIds || [];
+  const toggle = (id: string) => onPatch({ programIds: selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id] });
+  const groups = new Map<string, ProgramOption[]>();
+  programs.forEach((p) => { const g = p.diploma || p.level || "Autres"; if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(p); });
+  return (
+    <div className="mb-3">
+      <Lbl>Filières proposées</Lbl>
+      <p className="text-[10px] text-gray-400 mb-2">La liste provient des filières de votre organisation (Réglages › Programmes). Cochez celles à proposer sur ce formulaire — le candidat choisira parmi elles.</p>
+      {programs.length === 0 ? (
+        <p className="text-xs text-amber-600">Aucune filière active. Créez d'abord vos programmes dans les réglages de l'organisation.</p>
+      ) : (
+        <>
+          <div className="flex gap-3 mb-1.5">
+            <button onClick={() => onPatch({ programIds: programs.map((p) => p.id) })} className="text-[11px] text-brand-600 font-semibold hover:underline">Tout cocher</button>
+            <button onClick={() => onPatch({ programIds: [] })} className="text-[11px] text-gray-400 hover:underline">Tout décocher</button>
+          </div>
+          <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-2">
+            {[...groups.entries()].map(([g, items]) => (
+              <div key={g}>
+                {groups.size > 1 && <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{g}</p>}
+                {items.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs text-gray-700 py-0.5 cursor-pointer">
+                    <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} /> {p.name}
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">{selected.length ? selected.length + " filière(s) proposée(s)." : "Aucune filière cochée — le champ n'affichera rien."}</p>
+        </>
+      )}
+    </div>
   );
 }
 

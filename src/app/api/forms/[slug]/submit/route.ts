@@ -68,10 +68,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const city = g("city") || null;
     const message = g("message") || null;
 
+    // ── Filière : résout la valeur soumise vers un Program de l'organisation ──
+    // Champ natif « program » → valeur = id du Program. Rétro-compat : ancien champ
+    // select/radio nommé « programId »/« filiere » (ou libellé « Programme(s) ») → match
+    // exact par nom. Résultat : qualification native (Lead.programId) + routage pipeline.
+    let programResolved: { id: string; name: string } | null = null;
+    const programField = fields.find((f) => f.type === "program");
+    const legacyProgramField = !programField
+      ? fields.find((f) => (f.type === "select" || f.type === "radio") &&
+          (/^(programid|program|filiere)s?$/i.test(f.name) || /programme|fili[eè]re/i.test(f.label || "")))
+      : null;
+    const rawProgram = (programField && values[programField.name]) || (legacyProgramField && values[legacyProgramField.name]) || null;
+    if (typeof rawProgram === "string" && rawProgram.trim()) {
+      const v = rawProgram.trim();
+      programResolved = programField
+        ? await prisma.program.findFirst({ where: { id: v, organizationId: form.organizationId }, select: { id: true, name: true } })
+        : await prisma.program.findFirst({ where: { organizationId: form.organizationId, name: { equals: v, mode: "insensitive" } }, select: { id: true, name: true } });
+    }
+
     const customFields: Record<string, any> = {};
     for (const f of fields) {
       if (!isInputField(f.type)) continue;
       if (STD.has(f.name)) continue;
+      if (f.type === "program" && programResolved) continue; // porté nativement par Lead.programId
       const v = values[f.name];
       if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) continue;
       customFields[f.label || f.name] = Array.isArray(v) ? v.join(", ") : (f.type === "consent" ? "Oui" : String(v));
@@ -83,29 +102,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Routage : étape/pipeline
     let pipelineId: string | null = null;
     let stageId: string | null = null;
+    let targetStage: { id: string; pipelineId: string | null; order: number; name: string } | null = null;
     if (routing.pipelineStageId) {
-      const st = await prisma.pipelineStage.findFirst({ where: { id: routing.pipelineStageId, organizationId: form.organizationId }, select: { id: true, pipelineId: true } });
-      if (st) { stageId = st.id; pipelineId = st.pipelineId; }
+      const st = await prisma.pipelineStage.findFirst({ where: { id: routing.pipelineStageId, organizationId: form.organizationId }, select: { id: true, pipelineId: true, order: true, name: true } });
+      if (st) { stageId = st.id; pipelineId = st.pipelineId; targetStage = st; }
     }
-    if (!stageId) { const r = await getLeadRouting(form.organizationId, null); pipelineId = r.pipelineId; stageId = r.stageId; }
+    if (!stageId) { const r = await getLeadRouting(form.organizationId, programResolved?.id ?? null); pipelineId = r.pipelineId; stageId = r.stageId; }
     if (!stageId) return cors({ error: "Aucun pipeline configuré pour cette organisation." }, 500);
 
     // ── Déduplication : rapprocher un prospect existant (même email ou téléphone) ──
     // Match par email (insensible à la casse) puis, à défaut, par les 9 derniers chiffres
     // du téléphone/WhatsApp (indicatif ignoré : « +221 77 532 03 55 » == « 775320355 »).
-    // Sur match : on enrichit la fiche existante (on ne dégrade jamais un champ déjà rempli
-    // ni l'étape), l'intégralité de la soumission restant conservée dans FormSubmission.
+    // Sur match : on enrichit la fiche existante (on ne dégrade jamais un champ déjà rempli),
+    // l'intégralité de la soumission restant conservée dans FormSubmission.
     const emailKey = email ? String(email).toLowerCase().trim() : "";
     const phoneSuffix = phone && phone !== "N/A" ? normalizePhoneNumber(phone).slice(-9) : "";
     const waSuffix = whatsapp ? normalizePhoneNumber(whatsapp).slice(-9) : "";
 
-    type ExistingLead = { id: string; email: string | null; phone: string; whatsapp: string | null; city: string | null; message: string | null; customFields: any };
+    const EXISTING_SELECT = {
+      id: true, email: true, phone: true, whatsapp: true, city: true, message: true, customFields: true,
+      stageId: true, stage: { select: { order: true, pipelineId: true, name: true } },
+    } as const;
+    type ExistingLead = {
+      id: string; email: string | null; phone: string; whatsapp: string | null; city: string | null; message: string | null; customFields: any;
+      stageId: string; stage: { order: number; pipelineId: string | null; name: string } | null;
+    };
     let existing: ExistingLead | null = null;
     if (emailKey) {
       existing = await prisma.lead.findFirst({
         where: { organizationId: form.organizationId, email: { equals: emailKey, mode: "insensitive" } },
         orderBy: { createdAt: "asc" },
-        select: { id: true, email: true, phone: true, whatsapp: true, city: true, message: true, customFields: true },
+        select: EXISTING_SELECT,
       });
     }
     if (!existing) {
@@ -117,7 +144,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             OR: suffixes.flatMap((s) => [{ phone: { contains: s } }, { whatsapp: { contains: s } }]),
           },
           orderBy: { createdAt: "asc" },
-          select: { id: true, email: true, phone: true, whatsapp: true, city: true, message: true, customFields: true },
+          select: EXISTING_SELECT,
         });
       }
     }
@@ -131,6 +158,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const prevNotes = Array.isArray(existingCustom._notes) ? existingCustom._notes : [];
       mergedCustom._notes = [...prevNotes, { at: new Date().toISOString(), text: "Nouvelle soumission via « " + form.name + " »" }];
       const emptyNative = (v: string | null | undefined) => !v || v === "N/A";
+
+      // Progression d'étape : si le formulaire cible explicitement une étape (ex. « Dossier reçu »),
+      // on y déplace le prospect existant — uniquement vers l'avant, jamais de retour en arrière
+      // (un lead déjà « Entretien » ou « Admis » n'est pas rétrogradé).
+      const cur = existing.stage;
+      const moveStage = !!targetStage && existing.stageId !== targetStage.id &&
+        (!cur || cur.pipelineId !== targetStage.pipelineId || targetStage.order > cur.order);
+
       await prisma.lead.update({
         where: { id: existing.id },
         data: {
@@ -139,10 +174,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           whatsapp: existing.whatsapp || whatsapp || undefined,
           city: existing.city || city || undefined,
           message: existing.message || message || undefined,
+          // La filière choisie dans la candidature reflète le souhait actuel du candidat → on la met à jour.
+          programId: programResolved?.id ?? undefined,
           customFields: mergedCustom,
+          ...(moveStage && targetStage ? { stageId: targetStage.id, pipelineId: targetStage.pipelineId } : {}),
         },
       });
       leadId = existing.id;
+
+      if (moveStage && targetStage) {
+        await prisma.activity.create({
+          data: {
+            type: "LEAD_STAGE_CHANGED",
+            description: "Lead déplacé vers « " + targetStage.name + " » suite à la soumission du formulaire « " + form.name + " »",
+            leadId: existing.id,
+            organizationId: form.organizationId,
+            metadata: { source: "form", formSlug: slug, fromStage: cur?.name || null, toStage: targetStage.name } as any,
+          },
+        }).catch(() => {});
+      }
     } else {
       const lead = await prisma.lead.create({
         data: {
@@ -150,6 +200,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           phone, whatsapp, email, city, message,
           source: "WEBSITE" as any,
           sourceDetail: form.name,
+          programId: programResolved?.id ?? undefined,
           stageId: stageId,
           pipelineId: pipelineId ?? undefined,
           assignedToId: routing.assignToId ?? undefined,
@@ -176,9 +227,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const notify = (settings.notifyEmail || "").trim();
     if (notify && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(notify)) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.talibcrm.com";
+      const displayValue = (f: FormField) => {
+        if (f.type === "program" && programResolved) return programResolved.name; // nom lisible, pas l'id
+        const v = values[f.name];
+        return Array.isArray(v) ? v.join(", ") : String(v);
+      };
       const rows = fields
         .filter((f) => isInputField(f.type) && f.type !== "hidden" && values[f.name] != null && values[f.name] !== "")
-        .map((f) => "<li style=\"margin:2px 0\"><b>" + f.label + "</b> : " + (Array.isArray(values[f.name]) ? values[f.name].join(", ") : String(values[f.name])) + "</li>")
+        .map((f) => "<li style=\"margin:2px 0\"><b>" + f.label + "</b> : " + displayValue(f) + "</li>")
         .join("");
       const html =
         '<div style="font-family:Arial,sans-serif;font-size:14px;color:#2C3E50">' +

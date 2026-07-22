@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useRef } from "react";
-import type { FormField } from "@/lib/forms";
+import type { FormField, ProgramOption } from "@/lib/forms";
 import { COUNTRIES, NATIONALITIES } from "@/lib/countries";
 
 // Rendu d'un champ de formulaire (utilisé par le constructeur en aperçu ET par la page publique).
 // preview=true → champs non interactifs (constructeur). Sinon interactif (valeurs contrôlées).
-export function FormFieldView({ field, value, onChange, preview, slug }: {
+export function FormFieldView({ field, value, onChange, preview, slug, programs }: {
   field: FormField;
   value?: any;
   onChange?: (name: string, value: any) => void;
   preview?: boolean;
   slug?: string;
+  programs?: ProgramOption[];
 }) {
   const f = field;
   const set = (v: any) => { if (onChange) onChange(f.name, v); };
@@ -56,6 +57,21 @@ export function FormFieldView({ field, value, onChange, preview, slug }: {
       <select value={value || ""} onChange={(e) => set(e.target.value)} {...common}>
         <option value="">{f.placeholder || "Sélectionner…"}</option>
         {geoOpts.map((o, i) => <option key={i} value={o}>{o}</option>)}
+      </select>
+    );
+  } else if (f.type === "program") {
+    // Filière : options issues des programmes de l'organisation (jamais saisies à la main).
+    // Le créateur du formulaire choisit un sous-ensemble (field.programIds) ; la valeur soumise est l'id.
+    const pool = programs || [];
+    const opts = f.programIds && f.programIds.length ? pool.filter((p) => f.programIds!.includes(p.id)) : pool;
+    control = opts.length === 0 ? (
+      <div className="tf-help" style={{ border: "1px dashed #cbd2d9", borderRadius: 8, padding: "10px 12px" }}>
+        {preview ? "Sélectionnez les filières à proposer dans les réglages du champ →" : "Aucune filière disponible."}
+      </div>
+    ) : (
+      <select value={value || ""} onChange={(e) => set(e.target.value)} {...common}>
+        <option value="">{f.placeholder || "Sélectionner…"}</option>
+        {opts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     );
   } else if (f.type === "radio") {

@@ -3,8 +3,12 @@
 export type FieldType =
   | "text" | "textarea" | "email" | "tel" | "whatsapp" | "number" | "url" | "date" | "time"
   | "select" | "radio" | "checkboxes" | "boolean" | "consent" | "file"
-  | "country" | "nationality"
+  | "country" | "nationality" | "program"
   | "hidden" | "heading" | "paragraph" | "divider";
+
+// Option de filière : la liste vient des programmes (Program) de l'organisation.
+// La valeur soumise est l'`id` du Program (stable au renommage), l'affichage est le nom courant.
+export type ProgramOption = { id: string; name: string; diploma?: string | null; level?: string | null };
 
 // Condition d'affichage : le champ n'est visible que si un autre champ vérifie la règle.
 export type FieldCondition = {
@@ -26,6 +30,7 @@ export type FormField = {
   content?: string;          // heading / paragraph / consent (texte)
   defaultValue?: string;     // hidden
   showIf?: FieldCondition;   // affichage conditionnel (optionnel)
+  programIds?: string[];     // filières proposées (type "program") — sous-ensemble choisi par le créateur
 };
 
 export type FormSettings = {
@@ -76,7 +81,7 @@ export function slugify(input: string): string {
 const DEFAULT_NAMES: Partial<Record<FieldType, string>> = {
   email: "email", tel: "phone", whatsapp: "whatsapp", text: "firstName",
   textarea: "message", date: "date", number: "number", url: "url",
-  country: "country", nationality: "nationality",
+  country: "country", nationality: "nationality", program: "programId",
 };
 
 let counter = 0;
@@ -94,6 +99,7 @@ export function newField(type: FieldType): FormField {
   if (type === "consent") base.content = "J'accepte d'être recontacté(e).";
   if (type === "heading") base.content = "Titre de section";
   if (type === "paragraph") base.content = "Texte d'information.";
+  if (type === "program") { base.programIds = []; base.required = true; }
   return base;
 }
 
@@ -102,7 +108,7 @@ export const DEFAULT_LABELS: Record<FieldType, string> = {
   whatsapp: "WhatsApp", number: "Nombre", url: "Lien", date: "Date", time: "Heure",
   select: "Liste déroulante", radio: "Choix unique", checkboxes: "Cases à cocher",
   boolean: "Oui / Non", consent: "Consentement", file: "Fichier joint",
-  country: "Pays", nationality: "Nationalité", hidden: "Champ caché",
+  country: "Pays", nationality: "Nationalité", program: "Filière", hidden: "Champ caché",
   heading: "Titre", paragraph: "Paragraphe", divider: "Séparateur",
 };
 
@@ -212,6 +218,14 @@ function detectGeoType(label: string, name: string): "country" | "nationality" |
   return null;
 }
 
+// Détecte un champ « programme / filière » (à options) : converti en champ Filière natif —
+// les options extraites du document sont ignorées, la liste vient des programmes de l'org
+// (le créateur coche le sous-ensemble à proposer dans le builder).
+function detectProgramType(label: string, name: string): boolean {
+  const s = (label + " " + name).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return /programme|filiere/.test(s);
+}
+
 // Dérive une clé technique camelCase à partir d'un libellé.
 function nameFromLabel(label: string): string {
   const words = (label || "")
@@ -259,7 +273,9 @@ export function normalizeImportedFields(raw: unknown): FormField[] {
       : rawOptions.length > 0 ? "select" : "text";
     // Détection pays/nationalité (prioritaire sur les champs de saisie).
     const geo = detectGeoType(labelStr, aiNameRaw);
-    const type: FieldType = geo && baseType !== "heading" && baseType !== "paragraph" ? geo : baseType;
+    // Détection filière : uniquement sur les champs à options (select/radio/checkboxes).
+    const isProgram = !geo && (baseType === "select" || baseType === "radio" || baseType === "checkboxes") && detectProgramType(labelStr, aiNameRaw);
+    const type: FieldType = geo && baseType !== "heading" && baseType !== "paragraph" ? geo : isProgram ? "program" : baseType;
 
     const field: FormField = { ...newField(type) };
 

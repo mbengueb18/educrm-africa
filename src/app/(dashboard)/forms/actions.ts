@@ -145,7 +145,7 @@ export async function deleteForm(id: string) {
 // Données pour les listes de routage (étapes de pipeline + utilisateurs).
 export async function getFormRoutingData() {
   const session = await requireOrg();
-  const [stages, users] = await Promise.all([
+  const [stages, users, programs] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: { organizationId: session.user.organizationId },
       orderBy: { order: "asc" },
@@ -156,8 +156,14 @@ export async function getFormRoutingData() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    // Filières de l'org : source du champ « Filière » (le créateur coche celles à proposer).
+    prisma.program.findMany({
+      where: { organizationId: session.user.organizationId, isActive: true },
+      select: { id: true, name: true, diploma: true, level: true },
+      orderBy: [{ diploma: "asc" }, { name: "asc" }],
+    }),
   ]);
-  return { stages, users };
+  return { stages, users, programs };
 }
 
 export async function getFormSubmissions(id: string) {

@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { formBaseCss } from "@/lib/form-styles";
 import { FormFieldView } from "@/components/forms/form-field";
-import { groupIntoRows, isInputField, isFieldVisible, splitIntoSteps, type FormField, type FormSettings } from "@/lib/forms";
+import { groupIntoRows, isInputField, isFieldVisible, splitIntoSteps, type FormField, type FormSettings, type ProgramOption } from "@/lib/forms";
 
-export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
+export function PublicFormClient({ form, orgName, orgLogo, embed, preview, programs }: {
   form: { id: string; name: string; description: string | null; fields: FormField[]; settings: FormSettings; slug: string };
-  orgName: string; orgLogo: string | null; embed?: boolean; preview?: boolean;
+  orgName: string; orgLogo: string | null; embed?: boolean; preview?: boolean; programs?: ProgramOption[];
 }) {
   const s: FormSettings = form.settings || {};
   const fields = form.fields || [];
@@ -175,10 +175,10 @@ export function PublicFormClient({ form, orgName, orgLogo, embed, preview }: {
 
                 {rows.map((row, ri) => row.length === 2 ? (
                   <div className="tf-row" key={ri}>
-                    {row.map((f) => <FormFieldView key={f.id} field={f} value={values[f.name]} onChange={set} slug={form.slug} />)}
+                    {row.map((f) => <FormFieldView key={f.id} field={f} value={values[f.name]} onChange={set} slug={form.slug} programs={programs} />)}
                   </div>
                 ) : (
-                  <FormFieldView key={row[0].id} field={row[0]} value={values[row[0].name]} onChange={set} slug={form.slug} />
+                  <FormFieldView key={row[0].id} field={row[0]} value={values[row[0].name]} onChange={set} slug={form.slug} programs={programs} />
                 ))}
 
                 {error && <p style={{ color: "#ef4444", fontSize: 12, margin: "0 0 10px" }}>{error}</p>}
