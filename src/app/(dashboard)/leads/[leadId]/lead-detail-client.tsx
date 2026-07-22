@@ -20,6 +20,7 @@ import { moveLeadToStage } from "@/app/(dashboard)/pipeline/actions";
 import { updateLeadNotes } from "@/app/(dashboard)/pipeline/lead-actions";
 import { type CustomFieldConfig } from "@/lib/custom-fields";
 import { getDocumentSignedUrl, deleteDocument } from "./document-actions";
+import { reopenDossier } from "./dossier-actions";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/app/(dashboard)/appointments/actions";
 import { startCallTracking } from "@/lib/call-tracking";
 import { stripHtml } from "@/lib/email-blocks";
@@ -327,9 +328,27 @@ function ApplicationTab({ candidature, leadId }: { candidature: Candidature; lea
           {generating ? "Génération…" : "Dossier PDF"}
         </button>
       </div>
-      {cl && <ChecklistCard checklist={cl} />}
+      {cl && <ChecklistCard checklist={cl} lockedSlot={<ReopenButton leadId={leadId} />} />}
       {candidature.sections.length > 0 && <DossierSectionsView sections={candidature.sections} />}
     </div>
+  );
+}
+
+// Rouvre un dossier verrouillé (permet au candidat de remplacer une pièce erronée).
+function ReopenButton({ leadId }: { leadId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const reopen = async () => {
+    setBusy(true);
+    const r = await reopenDossier(leadId);
+    if (r.ok) { toast.success("Dossier rouvert — le candidat peut à nouveau déposer des pièces."); router.refresh(); }
+    else toast.error(r.error || "Erreur");
+    setBusy(false);
+  };
+  return (
+    <button onClick={reopen} disabled={busy} className="btn-secondary py-1 px-2.5 text-[11px] shrink-0">
+      {busy ? <Loader2 size={11} className="animate-spin" /> : null} Rouvrir
+    </button>
   );
 }
 

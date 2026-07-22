@@ -5,11 +5,18 @@
 // pour garantir une présentation identique des deux côtés.
 
 import { FileText, Download, Tag, Check, Lock, Paperclip, Pencil } from "lucide-react";
-import { fileNameFromUrl, type DossierSection, type DossierChecklist } from "@/lib/candidature";
+import { fileNameFromUrl, type DossierSection, type DossierChecklist, type ChecklistItem } from "@/lib/candidature";
 
 // Carte « Pièces du dossier » : checklist fourni / manquant, barre de complétude, verrouillage.
 // Partagée entre l'onglet Candidature (CRM) et le portail candidat.
-export function ChecklistCard({ checklist, title = "Pièces du dossier" }: { checklist: DossierChecklist; title?: string }) {
+// - renderItemAction : bouton d'action par pièce (portail : Téléverser / Remplacer).
+// - lockedSlot : contenu additionnel à côté de la mention de verrouillage (CRM : « Rouvrir »).
+export function ChecklistCard({ checklist, title = "Pièces du dossier", renderItemAction, lockedSlot }: {
+  checklist: DossierChecklist;
+  title?: string;
+  renderItemAction?: (item: ChecklistItem) => React.ReactNode;
+  lockedSlot?: React.ReactNode;
+}) {
   const items = checklist.items || [];
   if (!items.length) return null;
   const provided = items.filter((i) => i.status === "PROVIDED").length;
@@ -42,23 +49,27 @@ export function ChecklistCard({ checklist, title = "Pièces du dossier" }: { che
             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">
               <Check size={10} /> Fournie
             </span>
+            {renderItemAction && <span onClick={(e) => e.preventDefault()}>{renderItemAction(it)}</span>}
           </a>
         ) : (
           <div key={it.name} className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-3 py-2.5">
             <span className="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center shrink-0"><FileText size={15} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-semibold text-gray-600 truncate">{it.label}</span>
-              <span className="block text-[11px] text-gray-400">Réclamée au candidat</span>
+              <span className="block text-[11px] text-gray-400">{renderItemAction ? "Requise pour votre dossier" : "Réclamée au candidat"}</span>
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">À fournir</span>
+            {renderItemAction
+              ? renderItemAction(it)
+              : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">À fournir</span>}
           </div>
         ))}
       </div>
       {checklist.locked && (
-        <p className="mt-3 flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
           <Lock size={13} className="text-brand-500 shrink-0" />
-          Dossier complet — les dépôts du candidat sont verrouillés.
-        </p>
+          <span className="flex-1">Dossier complet — les dépôts du candidat sont verrouillés.</span>
+          {lockedSlot}
+        </div>
       )}
     </div>
   );
