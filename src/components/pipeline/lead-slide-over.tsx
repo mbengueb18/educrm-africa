@@ -17,6 +17,7 @@ import {
   PhoneIncoming, PhoneOutgoing, Video, CheckCircle2, AlertTriangle, Briefcase,
 } from "lucide-react";
 import { getCustomFields, type CustomFieldConfig } from "@/lib/custom-fields";
+import { normalizeLabel } from "@/lib/candidature";
 import dynamic from "next/dynamic";
 // Lazy : l'éditeur email complet ne charge qu'au clic sur "Email" (déjà rendu conditionnellement)
 const ComposeEmail = dynamic(
@@ -533,10 +534,13 @@ function InfoTab({ lead, customFieldsConfig, stages, users, programs, campuses, 
   var customFields = (lead.customFields as Record<string, any>) || {};
   var mappedEntries: { label: string; value: string }[] = [];
   var unmappedEntries: { label: string; value: string }[] = [];
+  // Réponses de formulaire de candidature : masquées ici (visibles, structurées, sur la fiche → onglet Candidature).
+  var hiddenKeys = new Set<string>((lead as any).hiddenCustomKeys || []);
 
   for (var key in customFields) {
     var value = customFields[key];
     if (key.startsWith("_") || !value) continue;
+    if (hiddenKeys.has(normalizeLabel(key))) continue;
     var config = customFieldsConfig.find(function(cf) {
       return cf.key === key || cf.mappedFormFields.some(function(mf) { return mf.toLowerCase() === key.toLowerCase(); });
     });

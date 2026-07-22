@@ -3,6 +3,8 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { touchLeadLastContact } from "@/lib/lead-contact";
+import { normalizeLabel, LEGACY_PROGRAM_KEYS } from "@/lib/candidature";
+import { isInputField, type FormField } from "@/lib/forms";
 
 export async function getLeadDetail(leadId: string) {
   const session = await auth();
@@ -78,7 +80,24 @@ export async function getLeadDetail(leadId: string) {
 
   if (!lead) throw new Error("Lead introuvable");
 
-  return lead;
+  // Libellés (normalisés) des champs des formulaires soumis par ce lead : les vues qui
+  // affichent customFields (« Informations complémentaires ») les masquent — ces réponses
+  // sont présentées, structurées, dans l'onglet Candidature de la fiche.
+  const submissions = await prisma.formSubmission.findMany({
+    where: { leadId, organizationId: session.user.organizationId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { form: { select: { fields: true } } },
+  });
+  const hiddenCustomKeys = Array.from(new Set([
+    ...LEGACY_PROGRAM_KEYS,
+    ...submissions.flatMap((s) => ((s.form?.fields as FormField[]) || [])
+      .filter((f) => isInputField(f.type))
+      .flatMap((f) => [normalizeLabel(f.label || ""), normalizeLabel(f.name || "")])
+      .filter(Boolean)),
+  ]));
+
+  return { ...lead, hiddenCustomKeys };
 }
 
 // ─── Log WhatsApp message ───

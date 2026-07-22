@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 import { getCustomFields } from "@/lib/custom-fields";
-import { buildDossierSections, buildChecklist, normalizeLabel, type DossierChecklist } from "@/lib/candidature";
+import { buildDossierSections, buildChecklist, normalizeLabel, LEGACY_PROGRAM_KEYS, type DossierChecklist } from "@/lib/candidature";
 import { isInputField, type FormField } from "@/lib/forms";
 import { LeadDetailClient } from "./lead-detail-client";
 
@@ -93,12 +93,13 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         // Libellés (normalisés) des champs de TOUS les formulaires soumis par ce lead :
         // masqués de « Informations complémentaires » — y compris les clés héritées
         // d'anciennes versions du formulaire (libellés modifiés, accents, casse…).
-        fieldLabels: Array.from(new Set(
-          submissions.flatMap((s) => ((s.form?.fields as FormField[]) || [])
+        fieldLabels: Array.from(new Set([
+          ...LEGACY_PROGRAM_KEYS,
+          ...submissions.flatMap((s) => ((s.form?.fields as FormField[]) || [])
             .filter((f) => isInputField(f.type))
             .flatMap((f) => [normalizeLabel(f.label || ""), normalizeLabel(f.name || "")])
             .filter(Boolean)),
-        )),
+        ])),
       };
     }
   }

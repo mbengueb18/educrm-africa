@@ -58,6 +58,10 @@ export function normalizeLabel(s: string): string {
     .trim();
 }
 
+// Clés héritées des anciens champs « programme » (avant le champ Filière natif) : la valeur
+// vit désormais sur Lead.programId → toujours masquées de « Informations complémentaires ».
+export const LEGACY_PROGRAM_KEYS = ["programme", "programmes", "filiere", "filieres"];
+
 // Nom de fichier lisible depuis une URL d'upload (…/form-uploads/1784661369603-mrope6-Bulletin.pdf → Bulletin.pdf).
 export function fileNameFromUrl(url: string): string {
   try {
