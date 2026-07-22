@@ -1,8 +1,9 @@
 "use client";
 
-// Espace candidat — refonte en onglets : Suivi / Mon dossier / Pièces / Messages.
-// Le dossier (sections + checklist) est rendu par le MÊME socle que l'onglet Candidature
-// du CRM (DossierSectionsView / ChecklistCard) — aucune divergence possible entre les vues.
+// Espace candidat — deux onglets : Suivi / Pièces (volontairement minimal : le candidat
+// suit son avancement et complète son dossier ; les échanges passent par le conseiller).
+// La checklist des pièces est rendue par le MÊME socle que l'onglet Candidature du CRM
+// (ChecklistCard) — aucune divergence possible entre les vues.
 // Dépôt cadré : le candidat ne remplit que les cases nommées de la checklist ;
 // remplacement possible tant que le dossier est incomplet, puis verrouillage automatique.
 
@@ -10,16 +11,15 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  CheckCircle2, Calendar, MapPin, Video, FileText, Upload, MessageSquare,
-  Phone, Mail, AlertCircle, Loader2, Lock, Sparkles, GraduationCap, Download, Pencil,
+  CheckCircle2, Calendar, MapPin, Video, FileText, Upload,
+  Phone, Mail, AlertCircle, Loader2, Lock, Sparkles, GraduationCap, Pencil,
 } from "lucide-react";
-import { DossierSectionsView, ChecklistCard } from "@/components/forms/dossier-view";
-import type { DossierSection, DossierChecklist, ChecklistItem } from "@/lib/candidature";
+import { ChecklistCard } from "@/components/forms/dossier-view";
+import type { DossierChecklist, ChecklistItem } from "@/lib/candidature";
 
 export type PortalDossier = {
   formName: string;
   submittedAt: string;
-  sections: DossierSection[];
   checklist: DossierChecklist | null;
 };
 
@@ -49,11 +49,12 @@ export function CandidatePortalClient({ token, data, dossier }: { token: string;
   const lead = data.lead;
   const org = data.organization;
   const hasDossier = !!dossier;
-  const [tab, setTab] = useState<"suivi" | "dossier" | "pieces" | "messages">("suivi");
+  const [tab, setTab] = useState<"suivi" | "pieces">("suivi");
 
-  const tabs: { id: typeof tab; label: string }[] = hasDossier
-    ? [{ id: "suivi", label: "Suivi" }, { id: "dossier", label: "Mon dossier" }, { id: "pieces", label: "Pièces" }, { id: "messages", label: "Messages" }]
-    : [{ id: "suivi", label: "Suivi" }, { id: "pieces", label: "Documents" }, { id: "messages", label: "Messages" }];
+  const tabs: { id: typeof tab; label: string }[] = [
+    { id: "suivi", label: "Suivi" },
+    { id: "pieces", label: hasDossier ? "Pièces" : "Documents" },
+  ];
 
   const formatDate = (d: Date | string) =>
     new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -233,14 +234,6 @@ export function CandidatePortalClient({ token, data, dossier }: { token: string;
           </>
         )}
 
-        {/* ── Mon dossier ── */}
-        {tab === "dossier" && dossier && (
-          <>
-            <DossierPdfCard token={token} />
-            <DossierSectionsView sections={dossier.sections} />
-          </>
-        )}
-
         {/* ── Pièces ── */}
         {tab === "pieces" && (
           <>
@@ -267,83 +260,9 @@ export function CandidatePortalClient({ token, data, dossier }: { token: string;
           </>
         )}
 
-        {/* ── Messages ── */}
-        {tab === "messages" && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <MessageSquare size={18} className="text-emerald-500" /> Messages avec votre conseiller
-            </h2>
-            {lead.messages.length > 0 ? (
-              <div className="space-y-3">
-                {lead.messages.slice(0, 10).map((msg) => {
-                  let parsed = { subject: null as string | null, body: msg.content };
-                  try {
-                    const p = JSON.parse(msg.content);
-                    parsed = { subject: p.subject || null, body: p.body || msg.content };
-                  } catch {}
-                  const isFromSchool = msg.direction === "OUTBOUND";
-                  return (
-                    <div key={msg.id} className={cn(
-                      "rounded-xl p-3 max-w-[90%]",
-                      isFromSchool ? "bg-gray-50 border border-gray-100" : "bg-brand-50 border border-brand-100 ml-auto"
-                    )}>
-                      <p className="text-[10px] text-gray-400 mb-1">
-                        {isFromSchool ? "De votre conseiller" : "De vous"} • {formatRelative(msg.sentAt)}
-                      </p>
-                      {parsed.subject && <p className="text-xs font-semibold text-gray-700 mb-1">{parsed.subject}</p>}
-                      <p className="text-sm text-gray-700 line-clamp-3">{parsed.body}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <MessageSquare size={32} className="text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">Aucun message pour le moment</p>
-              </div>
-            )}
-          </div>
-        )}
-
         <p className="text-center text-xs text-gray-400 pt-2">
           Espace candidat sécurisé • Propulsé par <a href="https://talibcrm.com" className="text-brand-600 hover:underline">TalibCRM</a>
         </p>
-      </div>
-    </div>
-  );
-}
-
-// Carte de téléchargement du dossier complet en PDF (généré à la demande côté serveur).
-function DossierPdfCard({ token }: { token: string }) {
-  const [busy, setBusy] = useState(false);
-  const download = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/candidat/" + token + "/dossier-pdf", { method: "POST" });
-      const d = await res.json();
-      if (!res.ok || !d.ok) throw new Error(d.error || "Génération impossible");
-      window.open(d.url, "_blank");
-    } catch (e: any) {
-      toast.error(e.message || "Erreur lors de la génération du PDF");
-    }
-    setBusy(false);
-  };
-  return (
-    <div className="rounded-2xl shadow-sm p-5 sm:p-6 text-white" style={{ background: "linear-gradient(120deg, #1B4F72, #2E86C1)" }}>
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="w-11 h-14 rounded-lg bg-white/15 border border-white/30 flex flex-col items-center justify-center shrink-0">
-          <FileText size={18} />
-          <span className="text-[9px] font-extrabold mt-0.5">PDF</span>
-        </div>
-        <div className="flex-1 min-w-[180px]">
-          <h2 className="text-sm sm:text-base font-semibold">Votre dossier complet</h2>
-          <p className="text-xs text-white/80 mt-0.5">Toutes vos réponses et pièces réunies en un seul PDF.</p>
-        </div>
-        <button onClick={download} disabled={busy}
-          className="bg-white text-brand-700 text-xs sm:text-sm font-semibold rounded-lg px-4 py-2.5 flex items-center gap-2 hover:bg-brand-50 transition-colors disabled:opacity-60">
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          {busy ? "Génération…" : "Télécharger"}
-        </button>
       </div>
     </div>
   );
