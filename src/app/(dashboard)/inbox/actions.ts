@@ -116,85 +116,150 @@ export async function getLeadMessages(leadId: string) {
 }
 
 // ─── Get all messages (inbox) ───
+// NB : fichier "use server" → seules des fonctions async peuvent être exportées.
+const INBOX_PAGE_SIZE = 50;
+
 export async function getInboxMessages(params?: {
   channel?: string;
   search?: string;
-  limit?: number;
+  userId?: string; // "" = tous, "unassigned" = non assigné, sinon id du commercial
+  page?: number;
+  unread?: boolean; // true = uniquement les conversations avec des messages reçus non lus
 }) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  // 1. Find the most recent message per lead (only leads with messages)
-  var leadIdsWithMessages = await prisma.message.findMany({
-    where: {
-      organizationId: session.user.organizationId,
-      leadId: { not: null },
-      isCampaign: false,
-      ...(params?.channel ? { channel: params.channel as any } : {}),
-    },
-    select: { leadId: true },
-    orderBy: { sentAt: "desc" },
-    distinct: ["leadId"],
-    take: params?.limit || 100,
-  });
+  const page = Math.max(1, params?.page || 1);
+  const search = params?.search?.trim();
 
-  var leadIds = leadIdsWithMessages
-    .map(function(m) { return m.leadId; })
+  // Filtre au niveau message : une conversation (= un lead) matche si l'un de
+  // ses messages matche. Les filtres sont appliqués côté serveur pour que la
+  // pagination couvre bien TOUTES les conversations, pas seulement la page chargée.
+  const baseMsg: any = {
+    isCampaign: false,
+    ...(params?.channel ? { channel: params.channel as any } : {}),
+    // Filtre « Non lus » : la conversation doit contenir un message reçu non lu
+    ...(params?.unread ? { direction: "INBOUND", status: { not: "READ" } } : {}),
+  };
+  const where: any = {
+    organizationId: session.user.organizationId,
+    leadId: { not: null },
+    ...baseMsg,
+  };
+  // Même filtre exprimé côté Lead, pour compter les conversations via un COUNT
+  // (au lieu de rapatrier tous les groupes juste pour les compter)
+  const leadCountWhere: any = {
+    organizationId: session.user.organizationId,
+    messages: { some: baseMsg },
+  };
+  if (params?.userId) {
+    const assignedToId = params.userId === "unassigned" ? null : params.userId;
+    where.lead = { assignedToId };
+    leadCountWhere.assignedToId = assignedToId;
+  }
+  if (search) {
+    const leadFieldsOr = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
+    ];
+    where.OR = [
+      { content: { contains: search, mode: "insensitive" } },
+      { lead: { is: { OR: leadFieldsOr } } },
+    ];
+    leadCountWhere.OR = [
+      ...leadFieldsOr,
+      { messages: { some: { ...baseMsg, content: { contains: search, mode: "insensitive" } } } },
+    ];
+  }
+
+  // 1. Page de conversations triées par dernier message (style Gmail) + total
+  const [pageGroups, total] = await Promise.all([
+    prisma.message.groupBy({
+      by: ["leadId"],
+      where,
+      _max: { sentAt: true },
+      orderBy: { _max: { sentAt: "desc" } },
+      skip: (page - 1) * INBOX_PAGE_SIZE,
+      take: INBOX_PAGE_SIZE,
+    }),
+    prisma.lead.count({ where: leadCountWhere }),
+  ]);
+
+  var leadIds = pageGroups
+    .map(function(g) { return g.leadId; })
     .filter(function(id): id is string { return !!id; });
 
-  if (leadIds.length === 0) return [];
+  if (leadIds.length === 0) {
+    return { conversations: [], total, page, pageSize: INBOX_PAGE_SIZE };
+  }
 
-  // 2. Get ALL messages for those leads (not capped at 50)
-  const messages = await prisma.message.findMany({
-    where: {
-      organizationId: session.user.organizationId,
-      leadId: { in: leadIds },
-    },
-    orderBy: { sentAt: "desc" },
-    include: {
-      lead: {
-        select: {
-          id: true, firstName: true, lastName: true, email: true, phone: true,
-          whatsapp: true, score: true,
-          assignedTo: { select: { id: true, name: true } },
-          stage: { select: { id: true, name: true, color: true } },
-          pipeline: { select: { id: true, name: true } },
-          program: { select: { id: true, name: true } },
-        },
+  // 2. Charger UNIQUEMENT le dernier message de chaque conversation + les
+  // compteurs de non-lus. Le fil complet n'est chargé qu'à la sélection
+  // (getConversation) — sinon chaque page/filtre transférait des centaines
+  // de messages avec tout leur HTML.
+  const [lastMessages, unreadGroups] = await Promise.all([
+    prisma.message.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        OR: pageGroups.map(function(g) {
+          return { leadId: g.leadId, sentAt: g._max.sentAt! };
+        }),
       },
-      sentBy: { select: { id: true, name: true } },
-      attachments: { select: { id: true, filename: true, contentType: true, size: true } },
-    },
-  });
+      orderBy: { sentAt: "desc" },
+      include: {
+        lead: {
+          select: {
+            id: true, firstName: true, lastName: true, email: true, phone: true,
+            whatsapp: true, score: true,
+            assignedTo: { select: { id: true, name: true } },
+            stage: { select: { id: true, name: true, color: true } },
+            pipeline: { select: { id: true, name: true } },
+            program: { select: { id: true, name: true } },
+          },
+        },
+        sentBy: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.message.groupBy({
+      by: ["leadId"],
+      where: {
+        organizationId: session.user.organizationId,
+        leadId: { in: leadIds },
+        isCampaign: false,
+        direction: "INBOUND",
+        status: { not: "READ" },
+      },
+      _count: { _all: true },
+    }),
+  ]);
 
-  // 3. Group by lead
-  var grouped: Record<string, {
-    lead: typeof messages[0]["lead"];
-    messages: typeof messages;
-    lastMessage: typeof messages[0];
+  // 3. Assembler en conservant l'ordre de la pagination (dernier message desc)
+  var byLead: Record<string, {
+    lead: typeof lastMessages[0]["lead"];
+    lastMessage: typeof lastMessages[0];
     unreadCount: number;
   }> = {};
 
-  for (var msg of messages) {
+  for (var msg of lastMessages) {
     if (!msg.lead) continue;
-    var key = msg.lead.id;
-    if (!grouped[key]) {
-      grouped[key] = {
-        lead: msg.lead,
-        messages: [],
-        lastMessage: msg,
-        unreadCount: 0,
-      };
+    // Deux messages avec le même sentAt : on garde le premier (tri desc)
+    if (!byLead[msg.lead.id]) {
+      byLead[msg.lead.id] = { lead: msg.lead, lastMessage: msg, unreadCount: 0 };
     }
-    grouped[key].messages.push(msg);
-    if (msg.direction === "INBOUND" && msg.status !== "READ") {
-      grouped[key].unreadCount++;
+  }
+  for (var g of unreadGroups) {
+    if (g.leadId && byLead[g.leadId]) {
+      byLead[g.leadId].unreadCount = g._count._all;
     }
   }
 
-  return Object.values(grouped).sort(function(a, b) {
-    return new Date(b.lastMessage.sentAt).getTime() - new Date(a.lastMessage.sentAt).getTime();
-  });
+  const conversations = leadIds
+    .map(function(id) { return byLead[id]; })
+    .filter(Boolean);
+
+  return { conversations, total, page, pageSize: INBOX_PAGE_SIZE };
 }
 
 // ─── Liste des utilisateurs assignables (pour le filtre Inbox) ───
@@ -333,41 +398,83 @@ export async function sendWhatsAppFromInbox(leadId: string, text: string) {
 }
 
 // ─── Get full conversation for a single lead ───
+const CONVERSATION_LEAD_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+  whatsapp: true,
+  score: true,
+  pipelineId: true,
+  stage: { select: { id: true, name: true, color: true } },
+  pipeline: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true } },
+  program: { select: { id: true, name: true } },
+} as const;
+
 export async function getConversation(leadId: string) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
 
-  const lead = await prisma.lead.findFirst({
-    where: { id: leadId, organizationId: session.user.organizationId },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      whatsapp: true,
-      score: true,
-      pipelineId: true,
-      stage: { select: { id: true, name: true, color: true } },
-      pipeline: { select: { id: true, name: true } },
-      assignedTo: { select: { id: true, name: true } },
-      program: { select: { id: true, name: true } },
-    },
-  });
+  // Requêtes en parallèle : la base est distante, chaque aller-retour compte
+  const [lead, messages] = await Promise.all([
+    prisma.lead.findFirst({
+      where: { id: leadId, organizationId: session.user.organizationId },
+      select: CONVERSATION_LEAD_SELECT,
+    }),
+    prisma.message.findMany({
+      where: {
+        leadId,
+        organizationId: session.user.organizationId,
+      },
+      orderBy: { sentAt: "asc" },
+      include: {
+        sentBy: { select: { id: true, name: true } },
+        attachments: { select: { id: true, filename: true, contentType: true, size: true } },
+      },
+    }),
+  ]);
 
   if (!lead) throw new Error("Lead introuvable");
 
-  const messages = await prisma.message.findMany({
-    where: {
-      leadId,
-      organizationId: session.user.organizationId,
-    },
-    orderBy: { sentAt: "asc" },
-    include: {
-      sentBy: { select: { id: true, name: true } },
-      attachments: { select: { id: true, filename: true, contentType: true, size: true } },
-    },
-  });
+  return { lead, messages };
+}
+
+// ─── Ouvrir une conversation : fil complet + marquage « lu » en UN SEUL
+// aller-retour client→serveur (au lieu de deux server actions successives) ───
+export async function openConversation(leadId: string) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+
+  const [lead, messages] = await Promise.all([
+    prisma.lead.findFirst({
+      where: { id: leadId, organizationId: session.user.organizationId },
+      select: CONVERSATION_LEAD_SELECT,
+    }),
+    prisma.message.findMany({
+      where: {
+        leadId,
+        organizationId: session.user.organizationId,
+      },
+      orderBy: { sentAt: "asc" },
+      include: {
+        sentBy: { select: { id: true, name: true } },
+        attachments: { select: { id: true, filename: true, contentType: true, size: true } },
+      },
+    }),
+    prisma.message.updateMany({
+      where: {
+        leadId,
+        organizationId: session.user.organizationId,
+        direction: "INBOUND",
+        status: { not: "READ" },
+      },
+      data: { status: "READ" },
+    }),
+  ]);
+
+  if (!lead) throw new Error("Lead introuvable");
 
   return { lead, messages };
 }
@@ -389,8 +496,43 @@ export async function markConversationAsRead(leadId: string) {
     },
   });
 
-  revalidatePath("/inbox");
+  // Pas de revalidatePath ici : il re-rendait TOUTE la page inbox (requêtes
+  // lourdes) à chaque ouverture de conversation. Les badges sont mis à jour
+  // localement (onRead) et le badge sidebar se rafraîchit tout seul (30 s).
   return { markedAsRead: result.count };
+}
+
+// ─── Marquer une conversation comme non lue ───
+// Cas d'usage : un conseiller ouvre par erreur la conversation d'un prospect
+// suivi par un collègue → il la remet « non lue » pour que le collègue la voie.
+// On remet le dernier message INBOUND en DELIVERED (le compteur ne compte que
+// les INBOUND ≠ READ), sans toucher au reste du fil.
+export async function markConversationAsUnread(leadId: string): Promise<{ ok: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user) return { ok: false, error: "Non authentifié" };
+
+  const lastInbound = await prisma.message.findFirst({
+    where: {
+      leadId,
+      organizationId: session.user.organizationId,
+      direction: "INBOUND",
+    },
+    orderBy: { sentAt: "desc" },
+    select: { id: true },
+  });
+
+  if (!lastInbound) {
+    return { ok: false, error: "Aucun message reçu dans cette conversation" };
+  }
+
+  await prisma.message.update({
+    where: { id: lastInbound.id },
+    data: { status: "DELIVERED", readAt: null },
+  });
+
+  // Pas de revalidatePath (coûteux) : le badge de la liste est restauré
+  // localement (onUnread) et /inbox est de toute façon force-dynamic.
+  return { ok: true };
 }
 
 // ─── Compteur total de messages non lus (pour le badge sidebar) ───

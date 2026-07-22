@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import {
   Search, Mail, MessageCircle, MessageSquare, Phone, Bot,
   Inbox as InboxIcon, User as UserIcon, MessagesSquare,
+  ChevronLeft, ChevronRight, Loader2,
 } from "lucide-react";
-import { getConversation } from "./actions";
+import { getConversation, getInboxMessages, openConversation } from "./actions";
 import { ConversationClient } from "./[leadId]/conversation-client";
 
 interface Conversation {
@@ -19,7 +20,6 @@ interface Conversation {
     pipeline?: { id: string; name: string } | null;
     program?: { id: string; name: string } | null;
   };
-  messages: any[];
   lastMessage: {
     id: string;
     channel: string;
@@ -33,8 +33,11 @@ interface Conversation {
 
 interface InboxClientProps {
   conversations: Conversation[];
+  total: number;
   users: { id: string; name: string }[];
 }
+
+const PAGE_SIZE = 50;
 
 const CHANNEL_ICONS: Record<string, typeof Mail> = {
   EMAIL: Mail,
@@ -94,51 +97,83 @@ function getMessagePreview(content: string): string {
   return body.slice(0, 80);
 }
 
-export function InboxClient({ conversations: initialConversations, users }: InboxClientProps) {
+export function InboxClient({ conversations: initialConversations, total: initialTotal, users }: InboxClientProps) {
   const [conversations, setConversations] = useState(initialConversations);
+  const [total, setTotal] = useState(initialTotal);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
   const [userFilter, setUserFilter] = useState<string>("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  // "auto" = pré-sélection du volet droit (ne marque PAS lu) ; "user" = clic explicite
+  const [selectionSource, setSelectionSource] = useState<"auto" | "user">("auto");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const firstRun = useRef(true);
+  // Cache des fils déjà ouverts : ré-ouvrir une conversation est instantané
+  // (affichage immédiat + rafraîchissement en arrière-plan)
+  const threadCache = useRef<Record<string, { lead: any; messages: any[] }>>({});
   const router = useRouter();
 
+  // Après un router.refresh() (envoi de message…), le serveur renvoie la page 1
+  // sans filtre : on ne resynchronise que si l'utilisateur est bien dans cet état.
   useEffect(() => {
-    setConversations(initialConversations);
-  }, [initialConversations]);
+    if (page === 1 && !search && !channelFilter && !userFilter && !unreadOnly) {
+      setConversations(initialConversations);
+      setTotal(initialTotal);
+    }
+  }, [initialConversations, initialTotal]);
 
-  // Debounce : la recherche scanne le contenu de TOUS les messages — inutile
-  // de relancer le filtre à chaque frappe.
+  // Debounce : la recherche interroge le serveur — inutile de relancer à chaque frappe.
   useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 250);
+    const t = setTimeout(() => setSearch(searchInput), 350);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const filtered = useMemo(() => conversations.filter((c) => {
-    if (search) {
-      var q = search.toLowerCase();
-      // Recherche par nom, email, téléphone…
-      var header = (
-        c.lead.firstName + " " + c.lead.lastName + " " +
-        (c.lead.email || "") + " " + (c.lead.phone || "")
-      ).toLowerCase();
-      // …et par mot-clé dans le contenu des messages de la conversation
-      var inMessages = c.messages.some((m: any) => (m.content || "").toLowerCase().includes(q));
-      if (!header.includes(q) && !inMessages) return false;
-    }
-    if (channelFilter) {
-      if (!c.messages.some((m: any) => m.channel === channelFilter)) return false;
-    }
-    if (userFilter) {
-      if (userFilter === "unassigned") {
-        if (c.lead.assignedTo) return false;
-      } else if (c.lead.assignedTo?.id !== userFilter) {
-        return false;
-      }
-    }
-    return true;
-  }), [conversations, search, channelFilter, userFilter]);
+  // Filtres et pagination côté serveur : la liste couvre TOUTES les conversations
+  // de l'organisation (style Gmail), pas seulement les plus récentes.
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    let canceled = false;
+    setLoading(true);
+    getInboxMessages({
+      page,
+      channel: channelFilter || undefined,
+      search: search || undefined,
+      userId: userFilter || undefined,
+      unread: unreadOnly || undefined,
+    })
+      .then((res) => {
+        if (canceled) return;
+        setConversations(res.conversations as any);
+        setTotal(res.total);
+      })
+      .catch(() => {})
+      .finally(() => { if (!canceled) setLoading(false); });
+    return () => { canceled = true; };
+  }, [page, search, channelFilter, userFilter, unreadOnly]);
+
+  // Tout changement de filtre ramène à la page 1
+  function applyChannelFilter(key: string | null) {
+    setChannelFilter(key);
+    setPage(1);
+  }
+  function applyUserFilter(value: string) {
+    setUserFilter(value);
+    setPage(1);
+  }
+  function applySearch(value: string) {
+    setSearchInput(value);
+    setPage(1);
+  }
+  function toggleUnreadOnly() {
+    setUnreadOnly((v) => !v);
+    setPage(1);
+  }
+
+  const filtered = conversations;
 
   const selectedConv = useMemo(
     () => filtered.find((c) => c.lead.id === selectedLeadId) || null,
@@ -146,11 +181,12 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
   );
 
   // Auto-sélection de la 1ère conversation (peuple le volet droit sur desktop) —
-  // n'ouvre pas l'overlay mobile.
+  // n'ouvre pas l'overlay mobile et ne marque PAS la conversation comme lue.
   useEffect(() => {
     if (filtered.length === 0) { if (selectedLeadId !== null) setSelectedLeadId(null); return; }
     if (!selectedLeadId || !filtered.some((c) => c.lead.id === selectedLeadId)) {
       setSelectedLeadId(filtered[0].lead.id);
+      setSelectionSource("auto");
     }
   }, [filtered, selectedLeadId]);
 
@@ -158,9 +194,21 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
     setConversations((prev) => prev.map((c) => c.lead.id === leadId ? { ...c, unreadCount: 0 } : c));
   }
 
+  function markUnread(leadId: string) {
+    setConversations((prev) => prev.map((c) => c.lead.id === leadId ? { ...c, unreadCount: Math.max(1, c.unreadCount) } : c));
+  }
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, (page - 1) * PAGE_SIZE + filtered.length, total);
+
   function handleSelect(leadId: string) {
     setSelectedLeadId(leadId);
-    setMobileOpen(true);
+    setSelectionSource("user");
+    // Overlay plein écran UNIQUEMENT sur mobile : sur desktop il restait monté
+    // (masqué en CSS) → deux volets = double chargement du fil à chaque clic
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      setMobileOpen(true);
+    }
     markRead(leadId);
   }
 
@@ -170,7 +218,7 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
       <div className="mb-3 sm:mb-4 lg:flex-none">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Inbox</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {conversations.length} conversation{conversations.length > 1 ? "s" : ""}
+          {total} conversation{total > 1 ? "s" : ""}
         </p>
       </div>
 
@@ -186,7 +234,7 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
               placeholder="Rechercher (nom, email, mot-clé du message)..."
               className="input pl-9 text-sm py-2 w-full"
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(e) => applySearch(e.target.value)}
             />
           </div>
           <div className="relative sm:w-56 shrink-0">
@@ -194,9 +242,9 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
             <select
               className="input pl-9 text-sm py-2 w-full"
               value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
+              onChange={(e) => applyUserFilter(e.target.value)}
             >
-              <option value="">Tous les commerciaux</option>
+              <option value="">Tous les conseillers</option>
               <option value="unassigned">Non assigné</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>{u.name}</option>
@@ -205,32 +253,52 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
           </div>
         </div>
 
-        <div className="flex border-b border-gray-100 overflow-x-auto no-scrollbar shrink-0">
-          {[
-            { key: null, label: "Tous" },
-            { key: "EMAIL", label: "Email" },
-            { key: "WHATSAPP", label: "WhatsApp" },
-            { key: "SMS", label: "SMS" },
-            { key: "CHATBOT", label: "Chatbot" },
-          ].map((tab) => (
-            <button
-              key={tab.key || "all"}
-              data-tour={tab.key === "WHATSAPP" ? "inbox-whatsapp-tab" : undefined}
-              onClick={() => setChannelFilter(tab.key)}
-              className={cn(
-                "px-4 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0",
-                channelFilter === tab.key
-                  ? "text-brand-600 border-b-2 border-brand-600"
-                  : "text-gray-500 hover:text-gray-700"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center border-b border-gray-100 shrink-0">
+          {/* Onglets canaux : défilent si l'espace manque */}
+          <div className="flex overflow-x-auto no-scrollbar max-w-full">
+            {[
+              { key: null, label: "Tous" },
+              { key: "EMAIL", label: "Email" },
+              { key: "WHATSAPP", label: "WhatsApp" },
+              // SMS retiré : canal pas encore disponible dans le produit
+              { key: "CHATBOT", label: "Chatbot" },
+            ].map((tab) => (
+              <button
+                key={tab.key || "all"}
+                data-tour={tab.key === "WHATSAPP" ? "inbox-whatsapp-tab" : undefined}
+                onClick={() => applyChannelFilter(tab.key)}
+                className={cn(
+                  "px-2.5 sm:px-3 py-2.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0",
+                  channelFilter === tab.key
+                    ? "text-brand-600 border-b-2 border-brand-600"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {/* Filtre « Non lus » — hors de la zone défilante ; passe à la ligne
+              (flex-wrap) si la place manque, jamais tronqué ni ne tronque les onglets */}
+          <button
+            onClick={toggleUnreadOnly}
+            className={cn(
+              "ml-auto my-1 mr-2 pl-2.5 pr-2.5 py-1 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0",
+              unreadOnly
+                ? "bg-brand-600 text-white border-brand-600"
+                : "text-gray-500 border-gray-200 hover:text-gray-700 hover:bg-gray-50"
+            )}
+            title="N'afficher que les conversations avec des messages non lus"
+          >
+            Non lus
+          </button>
         </div>
 
         {/* Conversation list */}
-        <div className="divide-y divide-gray-50 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+        <div className={cn(
+          "divide-y divide-gray-50 lg:flex-1 lg:min-h-0 lg:overflow-y-auto",
+          loading && "opacity-50 pointer-events-none"
+        )}>
           {filtered.length > 0 ? (
             filtered.map((conv) => {
               var ChannelIcon = CHANNEL_ICONS[conv.lastMessage.channel] || Mail;
@@ -293,16 +361,47 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
             </div>
           )}
         </div>
+
+        {/* Pagination style Gmail : « 1–50 sur 2341 » */}
+        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 shrink-0 bg-white">
+          <span className="text-xs text-gray-500 flex items-center gap-2">
+            {loading && <Loader2 size={12} className="animate-spin text-brand-500" />}
+            {loading
+              ? "Chargement des conversations…"
+              : total === 0 ? "0 conversation" : `${rangeStart}–${rangeEnd} sur ${total}`}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-35 disabled:hover:bg-transparent"
+              aria-label="Page précédente"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={rangeEnd >= total || loading}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-35 disabled:hover:bg-transparent"
+              aria-label="Page suivante"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
         </div>
 
         {/* Volet droit — conversation (desktop) */}
         <div className="hidden lg:block lg:h-full lg:min-h-0">
           <div className="bg-white rounded-xl border border-gray-200 h-full overflow-hidden">
-            {selectedConv ? (
+            {selectedConv && !mobileOpen ? (
               <InboxConversationPane
                 key={selectedConv.lead.id}
                 conv={selectedConv}
+                cache={threadCache}
+                markReadOnOpen={selectionSource === "user"}
                 onRead={() => markRead(selectedConv.lead.id)}
+                onUnread={() => markUnread(selectedConv.lead.id)}
               />
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center p-10 gap-2">
@@ -321,8 +420,11 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
           <InboxConversationPane
             key={selectedConv.lead.id}
             conv={selectedConv}
+            cache={threadCache}
+            markReadOnOpen
             onBack={() => setMobileOpen(false)}
             onRead={() => markRead(selectedConv.lead.id)}
+            onUnread={() => markUnread(selectedConv.lead.id)}
           />
         </div>
       )}
@@ -330,34 +432,59 @@ export function InboxClient({ conversations: initialConversations, users }: Inbo
   );
 }
 
-// ─── Volet droit : rendu INSTANTANÉ depuis les données déjà chargées (cache) ───
-// Les messages de chaque conversation sont déjà présents dans getInboxMessages,
-// donc pas de re-fetch à la sélection. Un rechargement léger n'a lieu qu'après un envoi.
-function sortAsc(messages: any[]): any[] {
-  return [...messages].sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
-}
-
-function InboxConversationPane({ conv, onBack, onRead }: {
+// ─── Volet droit : le fil complet est chargé à la sélection (une seule
+// conversation), pour que la LISTE reste légère — getInboxMessages ne
+// transfère plus que le dernier message de chaque conversation.
+// Si le fil est déjà en cache → affichage instantané + refresh en arrière-plan.
+// Le marquage « lu » est fusionné dans le même aller-retour (openConversation).
+function InboxConversationPane({ conv, cache, onBack, onRead, onUnread, markReadOnOpen }: {
   conv: Conversation;
+  cache: { current: Record<string, { lead: any; messages: any[] }> };
   onBack?: () => void;
   onRead?: () => void;
+  onUnread?: () => void;
+  markReadOnOpen?: boolean;
 }) {
   const leadId = conv.lead.id;
-  const [lead, setLead] = useState<any>(conv.lead);
-  const [messages, setMessages] = useState<any[]>(() => sortAsc(conv.messages));
+  const cached = cache.current[leadId];
+  const [lead, setLead] = useState<any>(cached ? cached.lead : conv.lead);
+  // null = fil en cours de chargement (jamais ouvert)
+  const [messages, setMessages] = useState<any[] | null>(cached ? cached.messages : null);
 
-  // Changement de conversation → réinitialiser depuis le cache (instantané)
   useEffect(() => {
-    setLead(conv.lead);
-    setMessages(sortAsc(conv.messages));
-  }, [leadId, conv.messages]);
+    let canceled = false;
+    // Un seul POST : fil + marquage lu si sélection explicite de l'utilisateur
+    const fetcher = markReadOnOpen ? openConversation : getConversation;
+    fetcher(leadId)
+      .then((d) => {
+        cache.current[leadId] = { lead: d.lead, messages: d.messages };
+        if (!canceled) { setLead(d.lead); setMessages(d.messages); }
+        // Même si le volet a été fermé entre-temps, le serveur a bien marqué lu
+        if (markReadOnOpen && onRead) onRead();
+      })
+      .catch(() => { if (!canceled && !cache.current[leadId]) setMessages([]); });
+    return () => { canceled = true; };
+  }, [leadId, markReadOnOpen]);
 
   // Rechargement léger (une seule conversation) après un envoi → nouveau message
   const reload = () => {
     getConversation(leadId)
-      .then((d) => { setLead(d.lead); setMessages(d.messages); })
+      .then((d) => {
+        cache.current[leadId] = { lead: d.lead, messages: d.messages };
+        setLead(d.lead);
+        setMessages(d.messages);
+      })
       .catch(() => {});
   };
+
+  if (messages === null) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3">
+        <Loader2 size={22} className="animate-spin text-brand-400" />
+        <p className="text-xs text-gray-400">Chargement des échanges…</p>
+      </div>
+    );
+  }
 
   return (
     <ConversationClient
@@ -366,6 +493,8 @@ function InboxConversationPane({ conv, onBack, onRead }: {
       embedded
       onBack={onBack}
       onRead={onRead}
+      onUnread={onUnread}
+      markReadOnOpen={false}
       onMessageSent={reload}
     />
   );

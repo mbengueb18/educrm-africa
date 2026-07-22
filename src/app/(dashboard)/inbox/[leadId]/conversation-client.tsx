@@ -8,6 +8,7 @@ import {
   getWhatsAppWindowStatus,
   sendWhatsAppFromInbox,
   markConversationAsRead,
+  markConversationAsUnread,
   getApprovedTemplatesForInbox,
   sendWhatsAppTemplateFromInbox,
 } from "../actions";
@@ -61,6 +62,15 @@ interface ConversationClientProps {
   onBack?: () => void;
   /** Appelé après le marquage "lu" (pour rafraîchir le badge de la liste) */
   onRead?: () => void;
+  /** Appelé après le marquage "non lu" (pour restaurer le badge de la liste) */
+  onUnread?: () => void;
+  /**
+   * Marquer la conversation comme lue à l'ouverture (défaut true, pour la
+   * page autonome /inbox/[leadId]). L'inbox (embedded) passe TOUJOURS false :
+   * c'est le volet (openConversation) qui marque lu, en un seul aller-retour,
+   * et uniquement sur clic explicite — jamais sur l'auto-sélection.
+   */
+  markReadOnOpen?: boolean;
   /** Appelé après un envoi (embedded) pour recharger le fil du volet droit */
   onMessageSent?: () => void;
 }
@@ -158,9 +168,10 @@ function parseMessageContent(msg: Message): { subject: string | null; body: stri
 
 type ComposeChannel = "EMAIL" | "WHATSAPP";
 
-export function ConversationClient({ lead, messages, embedded, onBack, onRead, onMessageSent }: ConversationClientProps) {
+export function ConversationClient({ lead, messages, embedded, onBack, onRead, onUnread, onMessageSent, markReadOnOpen = true }: ConversationClientProps) {
   const router = useRouter();
   const [composing, setComposing] = useState(!!embedded);
+  const [markingUnread, setMarkingUnread] = useState(false);
   const [expanded, setExpanded] = useState(false); // éditeur agrandi (remplit le volet droit)
   const messagesRef = useRef<HTMLDivElement>(null);
   const [composeChannel, setComposeChannel] = useState<ComposeChannel>("EMAIL");
@@ -190,12 +201,13 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
     return () => { canceled = true; };
   }, [composing, composeChannel, lead.id]);
 
-  // ─── Marquer la conversation comme lue à l'ouverture ───
+  // ─── Marquer la conversation comme lue à l'ouverture (si demandé) ───
   useEffect(() => {
+    if (!markReadOnOpen) return;
     markConversationAsRead(lead.id)
       .then(() => { if (onRead) onRead(); })
       .catch(() => { /* Silent fail - pas critique */ });
-  }, [lead.id]);
+  }, [lead.id, markReadOnOpen]);
 
   // ─── Auto-scroll en bas du fil (mode embedded = chat) ───
   useEffect(() => {
@@ -203,6 +215,22 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [embedded, messages.length]);
+
+  // ─── Marquer comme non lu (ex : lu par erreur à la place d'un collègue) ───
+  // Optimiste : feedback immédiat, l'action serveur part en arrière-plan.
+  const handleMarkUnread = () => {
+    if (markingUnread) return;
+    setMarkingUnread(true);
+    if (onUnread) onUnread();
+    toast.success("Conversation marquée comme non lue");
+    if (embedded && onBack) onBack(); // mobile : retour à la liste, comme Gmail
+    markConversationAsUnread(lead.id)
+      .then((res) => {
+        if (!res.ok) toast.error(res.error || "Impossible de marquer comme non lu");
+      })
+      .catch(() => toast.error("Impossible de marquer comme non lu"))
+      .finally(() => setMarkingUnread(false));
+  };
 
   const handleSendWhatsApp = async (text: string) => {
     if (!text.trim()) return;
@@ -272,6 +300,14 @@ export function ConversationClient({ lead, messages, embedded, onBack, onRead, o
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleMarkUnread}
+              className="btn-secondary py-1.5 text-xs"
+              title="Marquer comme non lu (le conseiller du prospect verra la conversation comme non lue)"
+            >
+              <Mail size={13} />
+              <span className="hidden xl:inline">Non lu</span>
+            </button>
             <Link
               href={"/leads/" + lead.id}
               className="btn-secondary py-1.5 text-xs"
