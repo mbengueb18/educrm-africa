@@ -27,7 +27,7 @@ import { getLeadJourney } from "./journey-actions";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
 import { formatCFA } from "@/lib/utils";
 import { DossierSectionsView, ChecklistCard } from "@/components/forms/dossier-view";
-import { type DossierSection, type DossierChecklist } from "@/lib/candidature";
+import { normalizeLabel, type DossierSection, type DossierChecklist } from "@/lib/candidature";
 
 type Candidature = {
   formName: string;
@@ -205,7 +205,7 @@ export function LeadDetailClient({
 
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab lead={lead} customFieldsConfig={customFields} hideLabels={candidature?.fieldLabels} />}
-      {activeTab === "application" && candidature && <ApplicationTab candidature={candidature} />}
+      {activeTab === "application" && candidature && <ApplicationTab candidature={candidature} leadId={lead.id} />}
       {activeTab === "notes" && <NotesTab lead={lead} />}
       {activeTab === "ai" && <AIAssistantTab lead={lead} />}
       {activeTab === "journey" && <JourneyTab lead={lead} />}
@@ -286,10 +286,26 @@ function StageSelector({ leadId, currentStage, stages }: {
 // ─── Candidature Tab ───
 // Dossier de candidature : sections rejouées depuis le formulaire d'origine (socle partagé
 // avec le portail candidat via DossierSectionsView).
-function ApplicationTab({ candidature }: { candidature: Candidature }) {
+function ApplicationTab({ candidature, leadId }: { candidature: Candidature; leadId: string }) {
   const cl = candidature.checklist;
   const nProvided = cl ? cl.items.filter((i) => i.status === "PROVIDED").length : 0;
   const nMissing = cl ? cl.items.length - nProvided : 0;
+  const [generating, setGenerating] = useState(false);
+
+  // Génère le PDF fusionné (synthèse + pièces) côté serveur puis ouvre l'URL signée.
+  const downloadPdf = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/leads/" + leadId + "/dossier-pdf", { method: "POST" });
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error || "Génération impossible");
+      window.open(d.url, "_blank");
+    } catch (e: any) {
+      toast.error(e.message || "Erreur lors de la génération du PDF");
+    }
+    setGenerating(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
@@ -306,6 +322,10 @@ function ApplicationTab({ candidature }: { candidature: Candidature }) {
             ? <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 shrink-0">{nMissing} manquante{nMissing > 1 ? "s" : ""}</span>
             : <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 shrink-0">Dossier complet</span>
         )}
+        <button onClick={downloadPdf} disabled={generating} className="btn-primary py-1.5 px-3 text-xs shrink-0">
+          {generating ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+          {generating ? "Génération…" : "Dossier PDF"}
+        </button>
       </div>
       {cl && <ChecklistCard checklist={cl} />}
       {candidature.sections.length > 0 && <DossierSectionsView sections={candidature.sections} />}
@@ -315,16 +335,16 @@ function ApplicationTab({ candidature }: { candidature: Candidature }) {
 
 function OverviewTab({ lead, customFieldsConfig = [], hideLabels }: { lead: any; customFieldsConfig?: CustomFieldConfig[]; hideLabels?: string[] }) {
   // Informations complémentaires : champs custom (hors clés techniques préfixées par "_").
-  // Les réponses du dossier de candidature (hideLabels) sont masquées ici : elles sont
-  // présentées, structurées par sections, dans l'onglet Candidature.
-  const hidden = new Set((hideLabels || []).map((l) => l.toLowerCase()));
+  // Les réponses du dossier de candidature (hideLabels, déjà normalisés) sont masquées ici :
+  // elles sont présentées, structurées par sections, dans l'onglet Candidature.
+  const hidden = new Set(hideLabels || []);
   const customFields = (lead.customFields as Record<string, any>) || {};
   const mappedEntries: { label: string; value: string }[] = [];
   const unmappedEntries: { label: string; value: string }[] = [];
   for (const key in customFields) {
     const value = customFields[key];
     if (key.startsWith("_") || !value) continue;
-    if (hidden.has(key.toLowerCase())) continue;
+    if (hidden.has(normalizeLabel(key))) continue;
     const config = customFieldsConfig.find(
       (cf) => cf.key === key || cf.mappedFormFields.some((mf) => mf.toLowerCase() === key.toLowerCase())
     );

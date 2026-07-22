@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 import { getCustomFields } from "@/lib/custom-fields";
-import { buildDossierSections, buildChecklist, type DossierChecklist } from "@/lib/candidature";
+import { buildDossierSections, buildChecklist, normalizeLabel, type DossierChecklist } from "@/lib/candidature";
 import { isInputField, type FormField } from "@/lib/forms";
 import { LeadDetailClient } from "./lead-detail-client";
 
@@ -42,7 +42,7 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
   const currentPlanName = planInfo?.planName ?? "Essentiel";
 
   // Étapes du pipeline du lead (pour changer le statut depuis la fiche)
-  const [stages, customFields, submission] = await Promise.all([
+  const [stages, customFields, submissions] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: lead.pipelineId
         ? { pipelineId: lead.pipelineId, organizationId: session.user.organizationId }
@@ -51,15 +51,18 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
       select: { id: true, name: true, color: true },
     }),
     getCustomFields(),
-    // Dernière soumission de formulaire rattachée à ce lead → onglet Candidature
-    prisma.formSubmission.findFirst({
+    // Soumissions de formulaire rattachées à ce lead (la plus récente alimente l'onglet
+    // Candidature ; les formulaires de TOUTES servent à masquer leurs libellés de l'Aperçu).
+    prisma.formSubmission.findMany({
       where: { leadId, organizationId: session.user.organizationId },
       orderBy: { createdAt: "desc" },
+      take: 10,
       select: { data: true, checklist: true, createdAt: true, form: { select: { name: true, fields: true } } },
     }),
   ]);
 
   // Dossier de candidature : sections rejouées depuis le formulaire d'origine.
+  const submission = submissions[0] || null;
   let candidature = null;
   if (submission?.form) {
     const formFields = (submission.form.fields as FormField[]) || [];
@@ -87,9 +90,15 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         submittedAt: submission.createdAt.toISOString(),
         sections,
         checklist: checklist.items.length ? checklist : null,
-        // Libellés des champs du formulaire : masqués de « Informations complémentaires »
-        // (ils sont désormais présentés, structurés, dans l'onglet Candidature).
-        fieldLabels: formFields.filter((f) => isInputField(f.type)).map((f) => f.label || f.name),
+        // Libellés (normalisés) des champs de TOUS les formulaires soumis par ce lead :
+        // masqués de « Informations complémentaires » — y compris les clés héritées
+        // d'anciennes versions du formulaire (libellés modifiés, accents, casse…).
+        fieldLabels: Array.from(new Set(
+          submissions.flatMap((s) => ((s.form?.fields as FormField[]) || [])
+            .filter((f) => isInputField(f.type))
+            .flatMap((f) => [normalizeLabel(f.label || ""), normalizeLabel(f.name || "")])
+            .filter(Boolean)),
+        )),
       };
     }
   }

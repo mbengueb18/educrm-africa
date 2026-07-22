@@ -47,6 +47,17 @@ export function buildChecklist(fields: FormField[], data: Record<string, any>): 
   return { items, locked, ...(locked ? { lockedAt: new Date().toISOString() } : {}) };
 }
 
+// Normalisation d'un libellé pour comparaison (casse, accents, espaces) — utilisée pour
+// masquer de « Informations complémentaires » les clés issues des formulaires de candidature.
+export function normalizeLabel(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Nom de fichier lisible depuis une URL d'upload (…/form-uploads/1784661369603-mrope6-Bulletin.pdf → Bulletin.pdf).
 export function fileNameFromUrl(url: string): string {
   try {
