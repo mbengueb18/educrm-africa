@@ -26,6 +26,15 @@ import { stripHtml } from "@/lib/email-blocks";
 import { getLeadJourney } from "./journey-actions";
 import { WhatsAppButton } from "@/components/lead/whatsapp-button";
 import { formatCFA } from "@/lib/utils";
+import { DossierSectionsView } from "@/components/forms/dossier-view";
+import { type DossierSection } from "@/lib/candidature";
+
+type Candidature = {
+  formName: string;
+  submittedAt: string;
+  sections: DossierSection[];
+  fieldLabels: string[];
+};
 
 const activityIcons: Record<string, any> = {
   LEAD_CREATED: Tag,
@@ -45,6 +54,7 @@ interface LeadDetailClientProps {
   currentPlanName: string;
   stages: { id: string; name: string; color: string }[];
   customFields?: CustomFieldConfig[];
+  candidature?: Candidature | null;
 }
 
 const TABS = [
@@ -65,7 +75,8 @@ export function LeadDetailClient({
   canUseWhatsAppAPI,
   currentPlanName,
   stages,
-  customFields = [] }: LeadDetailClientProps) {
+  customFields = [],
+  candidature = null }: LeadDetailClientProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -155,7 +166,10 @@ export function LeadDetailClient({
       {/* Tabs — horizontal scroll with right edge fade + clickable scroll button on mobile */}
       <div className="relative border-b border-gray-200 mb-4 sm:mb-5 -mx-3 sm:mx-0">
         <div ref={tabsScrollRef} className="flex gap-1 overflow-x-auto no-scrollbar px-3 sm:px-0 scroll-smooth">
-          {TABS.map((tab) => {
+          {(candidature
+            ? [TABS[0], { id: "application", label: "Candidature", icon: GraduationCap }, ...TABS.slice(1)]
+            : TABS
+          ).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -189,7 +203,8 @@ export function LeadDetailClient({
       </div>
 
       {/* Tab content */}
-      {activeTab === "overview" && <OverviewTab lead={lead} customFieldsConfig={customFields} />}
+      {activeTab === "overview" && <OverviewTab lead={lead} customFieldsConfig={customFields} hideLabels={candidature?.fieldLabels} />}
+      {activeTab === "application" && candidature && <ApplicationTab candidature={candidature} />}
       {activeTab === "notes" && <NotesTab lead={lead} />}
       {activeTab === "ai" && <AIAssistantTab lead={lead} />}
       {activeTab === "journey" && <JourneyTab lead={lead} />}
@@ -267,14 +282,40 @@ function StageSelector({ leadId, currentStage, stages }: {
   );
 }
 
-function OverviewTab({ lead, customFieldsConfig = [] }: { lead: any; customFieldsConfig?: CustomFieldConfig[] }) {
-  // Informations complémentaires : champs custom (hors clés techniques préfixées par "_")
+// ─── Candidature Tab ───
+// Dossier de candidature : sections rejouées depuis le formulaire d'origine (socle partagé
+// avec le portail candidat via DossierSectionsView).
+function ApplicationTab({ candidature }: { candidature: Candidature }) {
+  const nFiles = candidature.sections.reduce((n, s) => n + s.items.filter((i) => i.kind === "file").length, 0);
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+        <span className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><GraduationCap size={18} /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-gray-900">{candidature.formName}</h3>
+          <p className="text-xs text-gray-500">
+            Soumis le {new Date(candidature.submittedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+            {nFiles > 0 && <> · {nFiles} pièce{nFiles > 1 ? "s" : ""} jointe{nFiles > 1 ? "s" : ""}</>}
+          </p>
+        </div>
+      </div>
+      <DossierSectionsView sections={candidature.sections} />
+    </div>
+  );
+}
+
+function OverviewTab({ lead, customFieldsConfig = [], hideLabels }: { lead: any; customFieldsConfig?: CustomFieldConfig[]; hideLabels?: string[] }) {
+  // Informations complémentaires : champs custom (hors clés techniques préfixées par "_").
+  // Les réponses du dossier de candidature (hideLabels) sont masquées ici : elles sont
+  // présentées, structurées par sections, dans l'onglet Candidature.
+  const hidden = new Set((hideLabels || []).map((l) => l.toLowerCase()));
   const customFields = (lead.customFields as Record<string, any>) || {};
   const mappedEntries: { label: string; value: string }[] = [];
   const unmappedEntries: { label: string; value: string }[] = [];
   for (const key in customFields) {
     const value = customFields[key];
     if (key.startsWith("_") || !value) continue;
+    if (hidden.has(key.toLowerCase())) continue;
     const config = customFieldsConfig.find(
       (cf) => cf.key === key || cf.mappedFormFields.some((mf) => mf.toLowerCase() === key.toLowerCase())
     );

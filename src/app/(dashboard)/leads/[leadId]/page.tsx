@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { getLeadDetail } from "@/app/(dashboard)/pipeline/lead-actions";
 import { getCurrentPlanInfo } from "@/lib/plans/client-helpers";
 import { getCustomFields } from "@/lib/custom-fields";
+import { buildDossierSections } from "@/lib/candidature";
+import { isInputField, type FormField } from "@/lib/forms";
 import { LeadDetailClient } from "./lead-detail-client";
 
 export const metadata: Metadata = {
@@ -40,7 +42,7 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
   const currentPlanName = planInfo?.planName ?? "Essentiel";
 
   // Étapes du pipeline du lead (pour changer le statut depuis la fiche)
-  const [stages, customFields] = await Promise.all([
+  const [stages, customFields, submission] = await Promise.all([
     prisma.pipelineStage.findMany({
       where: lead.pipelineId
         ? { pipelineId: lead.pipelineId, organizationId: session.user.organizationId }
@@ -49,7 +51,44 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
       select: { id: true, name: true, color: true },
     }),
     getCustomFields(),
+    // Dernière soumission de formulaire rattachée à ce lead → onglet Candidature
+    prisma.formSubmission.findFirst({
+      where: { leadId, organizationId: session.user.organizationId },
+      orderBy: { createdAt: "desc" },
+      select: { data: true, createdAt: true, form: { select: { name: true, fields: true } } },
+    }),
   ]);
+
+  // Dossier de candidature : sections rejouées depuis le formulaire d'origine.
+  let candidature = null;
+  if (submission?.form) {
+    const formFields = (submission.form.fields as FormField[]) || [];
+    const data = (submission.data as Record<string, any>) || {};
+    // Résolution des noms de filière (le champ « program » stocke l'id du Program)
+    const programIds = formFields
+      .filter((f) => f.type === "program")
+      .map((f) => data[f.name])
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+    const programNames: Record<string, string> = {};
+    if (programIds.length) {
+      const progs = await prisma.program.findMany({
+        where: { id: { in: programIds }, organizationId: session.user.organizationId },
+        select: { id: true, name: true },
+      });
+      progs.forEach((p) => { programNames[p.id] = p.name; });
+    }
+    const sections = buildDossierSections(formFields, data, programNames);
+    if (sections.length) {
+      candidature = {
+        formName: submission.form.name,
+        submittedAt: submission.createdAt.toISOString(),
+        sections,
+        // Libellés des champs du formulaire : masqués de « Informations complémentaires »
+        // (ils sont désormais présentés, structurés, dans l'onglet Candidature).
+        fieldLabels: formFields.filter((f) => isInputField(f.type)).map((f) => f.label || f.name),
+      };
+    }
+  }
 
   return (
     <LeadDetailClient
@@ -59,6 +98,7 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
       currentPlanName={currentPlanName}
       stages={stages}
       customFields={customFields}
+      candidature={candidature}
     />
   );
 }
