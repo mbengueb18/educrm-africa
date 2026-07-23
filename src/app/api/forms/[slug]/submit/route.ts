@@ -92,6 +92,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!isInputField(f.type)) continue;
       if (STD.has(f.name)) continue;
       if (f.type === "program" && programResolved) continue; // porté nativement par Lead.programId
+      if (f.type === "file") continue; // pièces portées par la checklist de la soumission, jamais par customFields
       const v = values[f.name];
       if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) continue;
       customFields[f.label || f.name] = Array.isArray(v) ? v.join(", ") : (f.type === "consent" ? "Oui" : String(v));

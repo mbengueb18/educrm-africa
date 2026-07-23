@@ -54,6 +54,7 @@ export function normalizeLabel(s: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
+    .replace(/[’‘]/g, "'") // apostrophes typographiques ≠ ASCII (« d’identité » vs « d'identité »)
     .replace(/\s+/g, " ")
     .trim();
 }
