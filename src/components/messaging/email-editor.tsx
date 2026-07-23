@@ -10,8 +10,9 @@ import {
   Type, Image as ImageIcon, Square, Minus, Columns2, Trash2,
   GripVertical, ChevronUp, ChevronDown, Plus, Eye, Code, Copy, X,
   Palette, Video, Heading1, Undo2, Redo2,
-  Share2, Smartphone, Monitor, Settings2, Upload, Loader2,
+  Share2, Smartphone, Monitor, Settings2, Upload, Loader2, GraduationCap,
 } from "lucide-react";
+import { FormLinkPicker, type PickedForm } from "@/components/forms/form-link-picker";
 
 // ─── Block types ───
 export interface EmailBlock {
@@ -124,6 +125,7 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72", o
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const [formPicker, setFormPicker] = useState(false);
 
   // Historique undo/redo
   const past = useRef<{ blocks: EmailBlock[]; settings: Record<string, string> }[]>([]);
@@ -229,6 +231,18 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72", o
     commit(blocks.map((b) => (b.id === id ? { ...b, ...updates } : b)));
   };
 
+  // Insère un bouton pré-rempli pointant vers un formulaire publié (partage en 1 clic).
+  const addFormButton = (f: PickedForm) => {
+    const newBlock: EmailBlock = {
+      id: genId(),
+      type: "button",
+      content: f.name,
+      styles: { ...getDefaultStyles("button", brandColor), href: f.url },
+    };
+    commit([...blocks, newBlock]);
+    setSelectedBlockId(newBlock.id);
+  };
+
   const duplicateBlock = (id: string) => {
     const idx = blocks.findIndex((b) => b.id === id);
     if (idx < 0) return;
@@ -302,6 +316,8 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72", o
           <ToolbarButton icon={ChevronDown} label="Espace" onClick={() => addBlock("spacer")} />
           <ToolbarButton icon={Share2} label="Réseaux" onClick={() => addBlock("social")} />
           <ToolbarButton icon={AlignCenter} label="Footer" onClick={() => addBlock("footer")} />
+          <Sep />
+          <ToolbarButton icon={GraduationCap} label="Formulaire" onClick={() => setFormPicker(true)} />
         </div>
 
         <div className="flex items-center gap-1">
@@ -494,6 +510,8 @@ export function EmailEditor({ initialBlocks, onChange, brandColor = "#1B4F72", o
         ))}
         <span className="text-[10px] text-gray-300 ml-auto">Sélectionnez un texte puis insérez</span>
       </div>
+
+      {formPicker && <FormLinkPicker utmSource="email" onSelect={addFormButton} onClose={() => setFormPicker(false)} />}
     </div>
   );
 }

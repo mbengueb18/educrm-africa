@@ -83,6 +83,66 @@ export async function sendWhatsAppTemplate(opts: SendTemplateOptions): Promise<W
 }
 
 // ─── Envoyer un message texte libre (fenêtre 24h ouverte) ───
+// Envoie un vrai message « document » WhatsApp (le destinataire reçoit le fichier dans la
+// conversation). Le lien doit être téléchargeable par Meta au moment de l'envoi → pour un
+// bucket privé, passer une URL signée.
+export async function sendWhatsAppDocument(opts: {
+  organizationId: string;
+  toPhoneNumber: string;
+  link: string;
+  filename: string;
+  caption?: string;
+}): Promise<WhatsAppSendResult> {
+  const integration = await prisma.whatsAppIntegration.findUnique({
+    where: { organizationId: opts.organizationId },
+  });
+
+  if (!integration || !integration.isActive) {
+    return { success: false, error: "WhatsApp Cloud API non configuré" };
+  }
+
+  const cleanedNumber = opts.toPhoneNumber.replace(/[\s+\-()]/g, "");
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${integration.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${integration.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: cleanedNumber,
+          type: "document",
+          document: {
+            link: opts.link,
+            filename: opts.filename,
+            ...(opts.caption ? { caption: opts.caption } : {}),
+          },
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error?.message || "Erreur Meta API",
+      };
+    }
+
+    return {
+      success: true,
+      messageId: data.messages?.[0]?.id,
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function sendWhatsAppText(opts: SendTextOptions): Promise<WhatsAppSendResult> {
   const integration = await prisma.whatsAppIntegration.findUnique({
     where: { organizationId: opts.organizationId },

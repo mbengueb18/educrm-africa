@@ -18,8 +18,11 @@ import {
   ArrowLeft, Send, Mail, MessageCircle, MessageSquare, Phone, Bot,
   Paperclip, Download, Clock, AlertTriangle, Loader2, Sparkles,
   ChevronRight, X, ExternalLink, FileText, Tag, Globe, Search,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, GraduationCap,
 } from "lucide-react";
+import { FormLinkPicker } from "@/components/forms/form-link-picker";
+import { LibraryDocPicker, type PickedDoc } from "@/components/documents/library-doc-picker";
+import { sendLibraryDocumentToLead } from "@/app/(dashboard)/leads/[leadId]/whatsapp-actions";
 
 interface Lead {
   id: string;
@@ -583,6 +586,23 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
   const [templateSearch, setTemplateSearch] = useState("");
   const [sendingTemplate, setSendingTemplate] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<any | null>(null);
+  const [formPicker, setFormPicker] = useState(false);
+  const [docPicker, setDocPicker] = useState(false);
+  const [sendingDoc, setSendingDoc] = useState(false);
+  const [pendingDoc, setPendingDoc] = useState<PickedDoc | null>(null); // doc choisi, en attente du message d'accompagnement
+  const [docCaption, setDocCaption] = useState("");
+
+  const sendDoc = async () => {
+    if (!pendingDoc) return;
+    setSendingDoc(true);
+    const r = await sendLibraryDocumentToLead(lead.id, pendingDoc.id, docCaption);
+    if (r.ok) {
+      toast.success("« " + pendingDoc.name + " » envoyé à " + prenom);
+      setPendingDoc(null); setDocCaption("");
+      router.refresh();
+    } else toast.error(r.error || "Erreur lors de l'envoi du document");
+    setSendingDoc(false);
+  };
 
   const phone = (lead.phone || "").replace(/\D/g, "");
   const prenom = lead.firstName;
@@ -672,13 +692,74 @@ function WhatsAppComposerInline({ lead, status, text, setText, sending, onSend }
 
       {/* Texte libre — UNIQUEMENT si fenêtre ouverte */}
       {status.isOpen && (
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={`Écrivez votre message à ${prenom}...`}
-          className="input text-sm w-full min-h-[80px] max-h-[200px] resize-y"
-          rows={3}
+        <>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={`Écrivez votre message à ${prenom}...`}
+            className="input text-sm w-full min-h-[80px] max-h-[200px] resize-y"
+            rows={3}
+          />
+          <div className="flex items-center gap-4 -mt-1">
+            <button
+              type="button"
+              onClick={() => setFormPicker(true)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+            >
+              <GraduationCap size={12} /> Insérer un formulaire
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocPicker(true)}
+              disabled={sendingDoc}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-50"
+            >
+              {sendingDoc ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+              {sendingDoc ? "Envoi du document…" : "Envoyer un document"}
+            </button>
+          </div>
+        </>
+      )}
+      {formPicker && (
+        <FormLinkPicker
+          utmSource="whatsapp"
+          onClose={() => setFormPicker(false)}
+          onSelect={(f) => setText(text + (text.trim() ? "\n" : "") + f.name + " : " + f.url)}
         />
+      )}
+      {docPicker && (
+        <LibraryDocPicker
+          onClose={() => setDocPicker(false)}
+          onSelect={(d) => { setPendingDoc(d); setDocCaption(""); }}
+        />
+      )}
+
+      {/* Document sélectionné : message d'accompagnement (caption sous le fichier) avant envoi */}
+      {pendingDoc && (
+        <div className="bg-brand-50/60 border border-brand-100 rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0"><FileText size={15} /></span>
+            <span className="text-xs font-semibold text-gray-800 truncate flex-1">{pendingDoc.name}</span>
+            <button onClick={() => { setPendingDoc(null); setDocCaption(""); }} disabled={sendingDoc}
+              className="p-1 rounded text-gray-400 hover:bg-white"><X size={14} /></button>
+          </div>
+          <textarea
+            value={docCaption}
+            onChange={(e) => setDocCaption(e.target.value)}
+            placeholder="Message d'accompagnement (optionnel) — affiché sous le document…"
+            className="input text-sm w-full min-h-[56px] resize-y bg-white"
+            rows={2}
+            maxLength={1024}
+          />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setPendingDoc(null); setDocCaption(""); }} disabled={sendingDoc}
+              className="btn-secondary py-1.5 px-3 text-xs">Annuler</button>
+            <button onClick={sendDoc} disabled={sendingDoc} className="btn-primary py-1.5 px-3 text-xs">
+              {sendingDoc ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {sendingDoc ? "Envoi…" : "Envoyer le document"}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Bouton sélecteur de templates */}
